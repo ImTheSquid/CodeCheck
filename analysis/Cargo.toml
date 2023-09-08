@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 antlr-rust = "0.3.0-beta"
+anyhow = "1.0.75"
+thiserror = "1.0.48"
