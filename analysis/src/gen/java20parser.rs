@@ -5,6 +5,7 @@
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+#![allow(unused_braces)]
 use antlr_rust::PredictionContextCache;
 use antlr_rust::parser::{Parser, BaseParser, ParserRecog, ParserNodeType};
 use antlr_rust::token_stream::TokenStream;
@@ -541,7 +542,7 @@ use std::any::{Any,TypeId};
 
 
 type BaseParserType<'input, I> =
-	BaseParser<'input,Java20ParserExt, I, Java20ParserContextType , dyn Java20ParserListener<'input> + 'input >;
+	BaseParser<'input,Java20ParserExt<'input>, I, Java20ParserContextType , dyn Java20ParserListener<'input> + 'input >;
 
 type TokenType<'input> = <LocalTokenFactory<'input> as TokenFactory<'input>>::Tok;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
@@ -573,7 +574,7 @@ where
     }
 
     pub fn with_strategy(input: I, strategy: H) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
 		let interpreter = Arc::new(ParserATNSimulator::new(
 			_ATN.clone(),
 			_decision_to_DFA.clone(),
@@ -584,6 +585,7 @@ where
 				input,
 				Arc::clone(&interpreter),
 				Java20ParserExt{
+					_pd: Default::default(),
 				}
 			),
 			interpreter,
@@ -621,6 +623,8 @@ pub trait Java20ParserContext<'input>:
 	ParserRuleContext<'input, TF=LocalTokenFactory<'input>, Ctx=Java20ParserContextType>
 {}
 
+antlr_rust::coerce_from!{ 'input : Java20ParserContext<'input> }
+
 impl<'input, 'x, T> VisitableDyn<T> for dyn Java20ParserContext<'input> + 'input
 where
     T: Java20ParserVisitor<'input> + 'x,
@@ -633,14 +637,12 @@ where
 impl<'input> Java20ParserContext<'input> for TerminalNode<'input,Java20ParserContextType> {}
 impl<'input> Java20ParserContext<'input> for ErrorNode<'input,Java20ParserContextType> {}
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn Java20ParserContext<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn Java20ParserContext<'input> + 'input }
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn Java20ParserListener<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn Java20ParserListener<'input> + 'input }
 
 pub struct Java20ParserContextType;
-antlr_rust::type_id!{Java20ParserContextType}
+antlr_rust::tid!{Java20ParserContextType}
 
 impl<'input> ParserNodeType<'input> for Java20ParserContextType{
 	type TF = LocalTokenFactory<'input>;
@@ -669,20 +671,21 @@ where
     }
 }
 
-pub struct Java20ParserExt{
+pub struct Java20ParserExt<'input>{
+	_pd: PhantomData<&'input str>,
 }
 
-impl Java20ParserExt{
+impl<'input> Java20ParserExt<'input>{
 }
+antlr_rust::tid! { Java20ParserExt<'a> }
 
-
-impl<'input> TokenAware<'input> for Java20ParserExt{
+impl<'input> TokenAware<'input> for Java20ParserExt<'input>{
 	type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for Java20ParserExt{}
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for Java20ParserExt<'input>{}
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for Java20ParserExt{
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for Java20ParserExt<'input>{
 	fn get_grammar_file_name(&self) -> & str{ "Java20Parser.g4"}
 
    	fn get_rule_names(&self) -> &[& str] {&ruleNames}
@@ -856,14 +859,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StartContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StartContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_start(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_start(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_start(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_start(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StartContext<'input>{
@@ -878,7 +881,7 @@ impl<'input> CustomRuleContext<'input> for StartContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_start }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_start }
 }
-antlr_rust::type_id!{StartContextExt<'a>}
+antlr_rust::tid!{StartContextExt<'a>}
 
 impl<'input> StartContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StartContextAll<'input>> {
@@ -917,7 +920,7 @@ where
 		let mut _localctx = StartContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 0, RULE_start);
         let mut _localctx: Rc<StartContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -930,7 +933,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -959,14 +963,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LiteralContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LiteralContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_literal(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_literal(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_literal(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_literal(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LiteralContext<'input>{
@@ -981,7 +985,7 @@ impl<'input> CustomRuleContext<'input> for LiteralContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literal }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literal }
 }
-antlr_rust::type_id!{LiteralContextExt<'a>}
+antlr_rust::tid!{LiteralContextExt<'a>}
 
 impl<'input> LiteralContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LiteralContextAll<'input>> {
@@ -1047,8 +1051,8 @@ where
 		let mut _localctx = LiteralContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 2, RULE_literal);
         let mut _localctx: Rc<LiteralContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1065,7 +1069,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1094,14 +1099,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeIdentifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeIdentifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeIdentifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeIdentifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeIdentifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeIdentifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeIdentifierContext<'input>{
@@ -1116,7 +1121,7 @@ impl<'input> CustomRuleContext<'input> for TypeIdentifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeIdentifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeIdentifier }
 }
-antlr_rust::type_id!{TypeIdentifierContextExt<'a>}
+antlr_rust::tid!{TypeIdentifierContextExt<'a>}
 
 impl<'input> TypeIdentifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeIdentifierContextAll<'input>> {
@@ -1152,7 +1157,7 @@ where
 		let mut _localctx = TypeIdentifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 4, RULE_typeIdentifier);
         let mut _localctx: Rc<TypeIdentifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1161,7 +1166,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1190,14 +1196,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnqualifiedMethodIdentifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnqualifiedMethodIdentifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unqualifiedMethodIdentifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unqualifiedMethodIdentifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unqualifiedMethodIdentifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unqualifiedMethodIdentifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnqualifiedMethodIdentifierContext<'input>{
@@ -1212,7 +1218,7 @@ impl<'input> CustomRuleContext<'input> for UnqualifiedMethodIdentifierContextExt
 	fn get_rule_index(&self) -> usize { RULE_unqualifiedMethodIdentifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unqualifiedMethodIdentifier }
 }
-antlr_rust::type_id!{UnqualifiedMethodIdentifierContextExt<'a>}
+antlr_rust::tid!{UnqualifiedMethodIdentifierContextExt<'a>}
 
 impl<'input> UnqualifiedMethodIdentifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnqualifiedMethodIdentifierContextAll<'input>> {
@@ -1248,7 +1254,7 @@ where
 		let mut _localctx = UnqualifiedMethodIdentifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 6, RULE_unqualifiedMethodIdentifier);
         let mut _localctx: Rc<UnqualifiedMethodIdentifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1257,7 +1263,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1286,14 +1293,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PrimitiveTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PrimitiveTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_primitiveType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_primitiveType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_primitiveType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_primitiveType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PrimitiveTypeContext<'input>{
@@ -1308,7 +1315,7 @@ impl<'input> CustomRuleContext<'input> for PrimitiveTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primitiveType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primitiveType }
 }
-antlr_rust::type_id!{PrimitiveTypeContextExt<'a>}
+antlr_rust::tid!{PrimitiveTypeContextExt<'a>}
 
 impl<'input> PrimitiveTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimitiveTypeContextAll<'input>> {
@@ -1353,8 +1360,8 @@ where
 		let mut _localctx = PrimitiveTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 8, RULE_primitiveType);
         let mut _localctx: Rc<PrimitiveTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1400,7 +1407,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1429,14 +1437,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for NumericTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for NumericTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_numericType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_numericType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_numericType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_numericType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for NumericTypeContext<'input>{
@@ -1451,7 +1459,7 @@ impl<'input> CustomRuleContext<'input> for NumericTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_numericType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_numericType }
 }
-antlr_rust::type_id!{NumericTypeContextExt<'a>}
+antlr_rust::tid!{NumericTypeContextExt<'a>}
 
 impl<'input> NumericTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NumericTypeContextAll<'input>> {
@@ -1488,7 +1496,7 @@ where
 		let mut _localctx = NumericTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 10, RULE_numericType);
         let mut _localctx: Rc<NumericTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(511);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -1519,7 +1527,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1548,14 +1557,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for IntegralTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for IntegralTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_integralType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_integralType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_integralType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_integralType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for IntegralTypeContext<'input>{
@@ -1570,7 +1579,7 @@ impl<'input> CustomRuleContext<'input> for IntegralTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_integralType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_integralType }
 }
-antlr_rust::type_id!{IntegralTypeContextExt<'a>}
+antlr_rust::tid!{IntegralTypeContextExt<'a>}
 
 impl<'input> IntegralTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IntegralTypeContextAll<'input>> {
@@ -1626,15 +1635,15 @@ where
 		let mut _localctx = IntegralTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 12, RULE_integralType);
         let mut _localctx: Rc<IntegralTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(513);
 			_la = recog.base.input.la(1);
-			if { !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BYTE) | (1usize << CHAR) | (1usize << INT) | (1usize << LONG) | (1usize << SHORT))) != 0)) } {
+			if { !(_la==BYTE || _la==CHAR || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (INT - 44)) | (1usize << (LONG - 44)) | (1usize << (SHORT - 44)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -1644,7 +1653,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1673,14 +1683,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FloatingPointTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FloatingPointTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_floatingPointType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_floatingPointType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_floatingPointType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_floatingPointType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FloatingPointTypeContext<'input>{
@@ -1695,7 +1705,7 @@ impl<'input> CustomRuleContext<'input> for FloatingPointTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_floatingPointType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_floatingPointType }
 }
-antlr_rust::type_id!{FloatingPointTypeContextExt<'a>}
+antlr_rust::tid!{FloatingPointTypeContextExt<'a>}
 
 impl<'input> FloatingPointTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FloatingPointTypeContextAll<'input>> {
@@ -1736,8 +1746,8 @@ where
 		let mut _localctx = FloatingPointTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 14, RULE_floatingPointType);
         let mut _localctx: Rc<FloatingPointTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1754,7 +1764,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1783,14 +1794,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ReferenceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ReferenceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_referenceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_referenceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_referenceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_referenceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ReferenceTypeContext<'input>{
@@ -1805,7 +1816,7 @@ impl<'input> CustomRuleContext<'input> for ReferenceTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_referenceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_referenceType }
 }
-antlr_rust::type_id!{ReferenceTypeContextExt<'a>}
+antlr_rust::tid!{ReferenceTypeContextExt<'a>}
 
 impl<'input> ReferenceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ReferenceTypeContextAll<'input>> {
@@ -1845,7 +1856,7 @@ where
 		let mut _localctx = ReferenceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 16, RULE_referenceType);
         let mut _localctx: Rc<ReferenceTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(520);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -1885,7 +1896,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1914,14 +1926,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CoitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CoitContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_coit(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_coit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_coit(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_coit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CoitContext<'input>{
@@ -1936,7 +1948,7 @@ impl<'input> CustomRuleContext<'input> for CoitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_coit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_coit }
 }
-antlr_rust::type_id!{CoitContextExt<'a>}
+antlr_rust::tid!{CoitContextExt<'a>}
 
 impl<'input> CoitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CoitContextAll<'input>> {
@@ -1987,8 +1999,8 @@ where
 		let mut _localctx = CoitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 18, RULE_coit);
         let mut _localctx: Rc<CoitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2045,7 +2057,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2074,14 +2087,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassOrInterfaceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassOrInterfaceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classOrInterfaceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classOrInterfaceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classOrInterfaceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classOrInterfaceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassOrInterfaceTypeContext<'input>{
@@ -2096,7 +2109,7 @@ impl<'input> CustomRuleContext<'input> for ClassOrInterfaceTypeContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_classOrInterfaceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classOrInterfaceType }
 }
-antlr_rust::type_id!{ClassOrInterfaceTypeContextExt<'a>}
+antlr_rust::tid!{ClassOrInterfaceTypeContextExt<'a>}
 
 impl<'input> ClassOrInterfaceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassOrInterfaceTypeContextAll<'input>> {
@@ -2150,8 +2163,8 @@ where
 		let mut _localctx = ClassOrInterfaceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 20, RULE_classOrInterfaceType);
         let mut _localctx: Rc<ClassOrInterfaceTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2222,7 +2235,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2251,14 +2265,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassTypeContext<'input>{
@@ -2273,7 +2287,7 @@ impl<'input> CustomRuleContext<'input> for ClassTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classType }
 }
-antlr_rust::type_id!{ClassTypeContextExt<'a>}
+antlr_rust::tid!{ClassTypeContextExt<'a>}
 
 impl<'input> ClassTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassTypeContextAll<'input>> {
@@ -2327,8 +2341,8 @@ where
 		let mut _localctx = ClassTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 22, RULE_classType);
         let mut _localctx: Rc<ClassTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(588);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2466,7 +2480,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2495,14 +2510,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceTypeContext<'input>{
@@ -2517,7 +2532,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfaceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceType }
 }
-antlr_rust::type_id!{InterfaceTypeContextExt<'a>}
+antlr_rust::tid!{InterfaceTypeContextExt<'a>}
 
 impl<'input> InterfaceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceTypeContextAll<'input>> {
@@ -2551,7 +2566,7 @@ where
 		let mut _localctx = InterfaceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 24, RULE_interfaceType);
         let mut _localctx: Rc<InterfaceTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2561,7 +2576,8 @@ where
 			recog.classType()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2590,14 +2606,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeVariableContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeVariableContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeVariable(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeVariable(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeVariable(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeVariable(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeVariableContext<'input>{
@@ -2612,7 +2628,7 @@ impl<'input> CustomRuleContext<'input> for TypeVariableContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeVariable }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeVariable }
 }
-antlr_rust::type_id!{TypeVariableContextExt<'a>}
+antlr_rust::tid!{TypeVariableContextExt<'a>}
 
 impl<'input> TypeVariableContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeVariableContextAll<'input>> {
@@ -2652,8 +2668,8 @@ where
 		let mut _localctx = TypeVariableContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 26, RULE_typeVariable);
         let mut _localctx: Rc<TypeVariableContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2679,7 +2695,8 @@ where
 			recog.typeIdentifier()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2708,14 +2725,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayTypeContext<'input>{
@@ -2730,7 +2747,7 @@ impl<'input> CustomRuleContext<'input> for ArrayTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_arrayType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayType }
 }
-antlr_rust::type_id!{ArrayTypeContextExt<'a>}
+antlr_rust::tid!{ArrayTypeContextExt<'a>}
 
 impl<'input> ArrayTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayTypeContextAll<'input>> {
@@ -2773,7 +2790,7 @@ where
 		let mut _localctx = ArrayTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 28, RULE_arrayType);
         let mut _localctx: Rc<ArrayTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(609);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2825,7 +2842,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2854,14 +2872,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for DimsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for DimsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dims(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_dims(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dims(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_dims(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for DimsContext<'input>{
@@ -2876,7 +2894,7 @@ impl<'input> CustomRuleContext<'input> for DimsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dims }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dims }
 }
-antlr_rust::type_id!{DimsContextExt<'a>}
+antlr_rust::tid!{DimsContextExt<'a>}
 
 impl<'input> DimsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DimsContextAll<'input>> {
@@ -2931,8 +2949,8 @@ where
 		let mut _localctx = DimsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 30, RULE_dims);
         let mut _localctx: Rc<DimsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -2997,7 +3015,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(22,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3026,14 +3045,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeParameterContext<'input>{
@@ -3048,7 +3067,7 @@ impl<'input> CustomRuleContext<'input> for TypeParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeParameter }
 }
-antlr_rust::type_id!{TypeParameterContextExt<'a>}
+antlr_rust::tid!{TypeParameterContextExt<'a>}
 
 impl<'input> TypeParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeParameterContextAll<'input>> {
@@ -3091,8 +3110,8 @@ where
 		let mut _localctx = TypeParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 32, RULE_typeParameter);
         let mut _localctx: Rc<TypeParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3130,7 +3149,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3159,14 +3179,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeParameterModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeParameterModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeParameterModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeParameterModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeParameterModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeParameterModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeParameterModifierContext<'input>{
@@ -3181,7 +3201,7 @@ impl<'input> CustomRuleContext<'input> for TypeParameterModifierContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_typeParameterModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeParameterModifier }
 }
-antlr_rust::type_id!{TypeParameterModifierContextExt<'a>}
+antlr_rust::tid!{TypeParameterModifierContextExt<'a>}
 
 impl<'input> TypeParameterModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeParameterModifierContextAll<'input>> {
@@ -3215,7 +3235,7 @@ where
 		let mut _localctx = TypeParameterModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 34, RULE_typeParameterModifier);
         let mut _localctx: Rc<TypeParameterModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3225,7 +3245,8 @@ where
 			recog.annotation()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3254,14 +3275,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeBoundContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeBoundContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeBound(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeBound(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeBound(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeBound(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeBoundContext<'input>{
@@ -3276,7 +3297,7 @@ impl<'input> CustomRuleContext<'input> for TypeBoundContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeBound }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeBound }
 }
-antlr_rust::type_id!{TypeBoundContextExt<'a>}
+antlr_rust::tid!{TypeBoundContextExt<'a>}
 
 impl<'input> TypeBoundContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeBoundContextAll<'input>> {
@@ -3324,8 +3345,8 @@ where
 		let mut _localctx = TypeBoundContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 36, RULE_typeBound);
         let mut _localctx: Rc<TypeBoundContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3373,7 +3394,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3402,14 +3424,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AdditionalBoundContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AdditionalBoundContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_additionalBound(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_additionalBound(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_additionalBound(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_additionalBound(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AdditionalBoundContext<'input>{
@@ -3424,7 +3446,7 @@ impl<'input> CustomRuleContext<'input> for AdditionalBoundContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_additionalBound }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_additionalBound }
 }
-antlr_rust::type_id!{AdditionalBoundContextExt<'a>}
+antlr_rust::tid!{AdditionalBoundContextExt<'a>}
 
 impl<'input> AdditionalBoundContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AdditionalBoundContextAll<'input>> {
@@ -3463,7 +3485,7 @@ where
 		let mut _localctx = AdditionalBoundContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 38, RULE_additionalBound);
         let mut _localctx: Rc<AdditionalBoundContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3476,7 +3498,8 @@ where
 			recog.interfaceType()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3505,14 +3528,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeArgumentsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeArgumentsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeArguments(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeArguments(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeArguments(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeArguments(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeArgumentsContext<'input>{
@@ -3527,7 +3550,7 @@ impl<'input> CustomRuleContext<'input> for TypeArgumentsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeArguments }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeArguments }
 }
-antlr_rust::type_id!{TypeArgumentsContextExt<'a>}
+antlr_rust::tid!{TypeArgumentsContextExt<'a>}
 
 impl<'input> TypeArgumentsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeArgumentsContextAll<'input>> {
@@ -3571,7 +3594,7 @@ where
 		let mut _localctx = TypeArgumentsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 40, RULE_typeArguments);
         let mut _localctx: Rc<TypeArgumentsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3587,7 +3610,8 @@ where
 			recog.base.match_token(GT,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3616,14 +3640,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeArgumentListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeArgumentListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeArgumentList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeArgumentList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeArgumentList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeArgumentList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeArgumentListContext<'input>{
@@ -3638,7 +3662,7 @@ impl<'input> CustomRuleContext<'input> for TypeArgumentListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeArgumentList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeArgumentList }
 }
-antlr_rust::type_id!{TypeArgumentListContextExt<'a>}
+antlr_rust::tid!{TypeArgumentListContextExt<'a>}
 
 impl<'input> TypeArgumentListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeArgumentListContextAll<'input>> {
@@ -3684,8 +3708,8 @@ where
 		let mut _localctx = TypeArgumentListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 42, RULE_typeArgumentList);
         let mut _localctx: Rc<TypeArgumentListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3714,7 +3738,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3743,14 +3768,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeArgumentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeArgumentContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeArgument(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeArgument(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeArgument(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeArgument(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeArgumentContext<'input>{
@@ -3765,7 +3790,7 @@ impl<'input> CustomRuleContext<'input> for TypeArgumentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeArgument }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeArgument }
 }
-antlr_rust::type_id!{TypeArgumentContextExt<'a>}
+antlr_rust::tid!{TypeArgumentContextExt<'a>}
 
 impl<'input> TypeArgumentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeArgumentContextAll<'input>> {
@@ -3802,7 +3827,7 @@ where
 		let mut _localctx = TypeArgumentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 44, RULE_typeArgument);
         let mut _localctx: Rc<TypeArgumentContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(672);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -3831,7 +3856,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3860,14 +3886,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for WildcardContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for WildcardContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_wildcard(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_wildcard(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_wildcard(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_wildcard(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for WildcardContext<'input>{
@@ -3882,7 +3908,7 @@ impl<'input> CustomRuleContext<'input> for WildcardContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_wildcard }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_wildcard }
 }
-antlr_rust::type_id!{WildcardContextExt<'a>}
+antlr_rust::tid!{WildcardContextExt<'a>}
 
 impl<'input> WildcardContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<WildcardContextAll<'input>> {
@@ -3927,8 +3953,8 @@ where
 		let mut _localctx = WildcardContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 46, RULE_wildcard);
         let mut _localctx: Rc<WildcardContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3965,7 +3991,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3994,14 +4021,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for WildcardBoundsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for WildcardBoundsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_wildcardBounds(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_wildcardBounds(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_wildcardBounds(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_wildcardBounds(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for WildcardBoundsContext<'input>{
@@ -4016,7 +4043,7 @@ impl<'input> CustomRuleContext<'input> for WildcardBoundsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_wildcardBounds }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_wildcardBounds }
 }
-antlr_rust::type_id!{WildcardBoundsContextExt<'a>}
+antlr_rust::tid!{WildcardBoundsContextExt<'a>}
 
 impl<'input> WildcardBoundsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<WildcardBoundsContextAll<'input>> {
@@ -4060,7 +4087,7 @@ where
 		let mut _localctx = WildcardBoundsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 48, RULE_wildcardBounds);
         let mut _localctx: Rc<WildcardBoundsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(688);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4097,7 +4124,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4126,14 +4154,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ModuleNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ModuleNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_moduleName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_moduleName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_moduleName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_moduleName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ModuleNameContext<'input>{
@@ -4148,7 +4176,7 @@ impl<'input> CustomRuleContext<'input> for ModuleNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_moduleName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_moduleName }
 }
-antlr_rust::type_id!{ModuleNameContextExt<'a>}
+antlr_rust::tid!{ModuleNameContextExt<'a>}
 
 impl<'input> ModuleNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ModuleNameContextAll<'input>> {
@@ -4192,8 +4220,8 @@ where
 		let mut _localctx = ModuleNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 50, RULE_moduleName);
         let mut _localctx: Rc<ModuleNameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4217,7 +4245,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4246,14 +4275,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PackageNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PackageNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_packageName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_packageName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_packageName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_packageName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PackageNameContext<'input>{
@@ -4268,7 +4297,7 @@ impl<'input> CustomRuleContext<'input> for PackageNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_packageName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_packageName }
 }
-antlr_rust::type_id!{PackageNameContextExt<'a>}
+antlr_rust::tid!{PackageNameContextExt<'a>}
 
 impl<'input> PackageNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PackageNameContextAll<'input>> {
@@ -4312,7 +4341,7 @@ where
 		let mut _localctx = PackageNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 52, RULE_packageName);
         let mut _localctx: Rc<PackageNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4338,7 +4367,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4367,14 +4397,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeNameContext<'input>{
@@ -4389,7 +4419,7 @@ impl<'input> CustomRuleContext<'input> for TypeNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeName }
 }
-antlr_rust::type_id!{TypeNameContextExt<'a>}
+antlr_rust::tid!{TypeNameContextExt<'a>}
 
 impl<'input> TypeNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeNameContextAll<'input>> {
@@ -4431,7 +4461,7 @@ where
 		let mut _localctx = TypeNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 54, RULE_typeName);
         let mut _localctx: Rc<TypeNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4458,7 +4488,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4487,14 +4518,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PackageOrTypeNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PackageOrTypeNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_packageOrTypeName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_packageOrTypeName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_packageOrTypeName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_packageOrTypeName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PackageOrTypeNameContext<'input>{
@@ -4509,7 +4540,7 @@ impl<'input> CustomRuleContext<'input> for PackageOrTypeNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_packageOrTypeName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_packageOrTypeName }
 }
-antlr_rust::type_id!{PackageOrTypeNameContextExt<'a>}
+antlr_rust::tid!{PackageOrTypeNameContextExt<'a>}
 
 impl<'input> PackageOrTypeNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PackageOrTypeNameContextAll<'input>> {
@@ -4553,7 +4584,7 @@ where
 		let mut _localctx = PackageOrTypeNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 56, RULE_packageOrTypeName);
         let mut _localctx: Rc<PackageOrTypeNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4579,7 +4610,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4608,14 +4640,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExpressionNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExpressionNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expressionName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_expressionName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expressionName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_expressionName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExpressionNameContext<'input>{
@@ -4630,7 +4662,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expressionName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expressionName }
 }
-antlr_rust::type_id!{ExpressionNameContextExt<'a>}
+antlr_rust::tid!{ExpressionNameContextExt<'a>}
 
 impl<'input> ExpressionNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionNameContextAll<'input>> {
@@ -4674,7 +4706,7 @@ where
 		let mut _localctx = ExpressionNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 58, RULE_expressionName);
         let mut _localctx: Rc<ExpressionNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4700,7 +4732,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4729,14 +4762,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodNameContext<'input>{
@@ -4751,7 +4784,7 @@ impl<'input> CustomRuleContext<'input> for MethodNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodName }
 }
-antlr_rust::type_id!{MethodNameContextExt<'a>}
+antlr_rust::tid!{MethodNameContextExt<'a>}
 
 impl<'input> MethodNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodNameContextAll<'input>> {
@@ -4785,7 +4818,7 @@ where
 		let mut _localctx = MethodNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 60, RULE_methodName);
         let mut _localctx: Rc<MethodNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4795,7 +4828,8 @@ where
 			recog.unqualifiedMethodIdentifier()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4824,14 +4858,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AmbiguousNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AmbiguousNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_ambiguousName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_ambiguousName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_ambiguousName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_ambiguousName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AmbiguousNameContext<'input>{
@@ -4846,7 +4880,7 @@ impl<'input> CustomRuleContext<'input> for AmbiguousNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_ambiguousName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_ambiguousName }
 }
-antlr_rust::type_id!{AmbiguousNameContextExt<'a>}
+antlr_rust::tid!{AmbiguousNameContextExt<'a>}
 
 impl<'input> AmbiguousNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AmbiguousNameContextAll<'input>> {
@@ -4890,7 +4924,7 @@ where
 		let mut _localctx = AmbiguousNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 62, RULE_ambiguousName);
         let mut _localctx: Rc<AmbiguousNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4916,7 +4950,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4945,14 +4980,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CompilationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CompilationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compilationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_compilationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compilationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_compilationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CompilationUnitContext<'input>{
@@ -4967,7 +5002,7 @@ impl<'input> CustomRuleContext<'input> for CompilationUnitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_compilationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compilationUnit }
 }
-antlr_rust::type_id!{CompilationUnitContextExt<'a>}
+antlr_rust::tid!{CompilationUnitContextExt<'a>}
 
 impl<'input> CompilationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CompilationUnitContextAll<'input>> {
@@ -5004,7 +5039,7 @@ where
 		let mut _localctx = CompilationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 64, RULE_compilationUnit);
         let mut _localctx: Rc<CompilationUnitContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(726);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5033,7 +5068,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5062,14 +5098,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for OrdinaryCompilationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for OrdinaryCompilationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_ordinaryCompilationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_ordinaryCompilationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_ordinaryCompilationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_ordinaryCompilationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for OrdinaryCompilationUnitContext<'input>{
@@ -5084,7 +5120,7 @@ impl<'input> CustomRuleContext<'input> for OrdinaryCompilationUnitContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_ordinaryCompilationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_ordinaryCompilationUnit }
 }
-antlr_rust::type_id!{OrdinaryCompilationUnitContextExt<'a>}
+antlr_rust::tid!{OrdinaryCompilationUnitContextExt<'a>}
 
 impl<'input> OrdinaryCompilationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OrdinaryCompilationUnitContextAll<'input>> {
@@ -5130,8 +5166,8 @@ where
 		let mut _localctx = OrdinaryCompilationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 66, RULE_ordinaryCompilationUnit);
         let mut _localctx: Rc<OrdinaryCompilationUnitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5169,7 +5205,7 @@ where
 			recog.base.set_state(740);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << CLASS) | (1usize << ENUM) | (1usize << FINAL) | (1usize << INTERFACE) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==SEMI || _la==AT {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << CLASS))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)))) != 0) || _la==SEMI || _la==AT {
 				{
 				{
 				/*InvokeRule topLevelClassOrInterfaceDeclaration*/
@@ -5183,7 +5219,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5212,14 +5249,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ModularCompilationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ModularCompilationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_modularCompilationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_modularCompilationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_modularCompilationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_modularCompilationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ModularCompilationUnitContext<'input>{
@@ -5234,7 +5271,7 @@ impl<'input> CustomRuleContext<'input> for ModularCompilationUnitContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_modularCompilationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_modularCompilationUnit }
 }
-antlr_rust::type_id!{ModularCompilationUnitContextExt<'a>}
+antlr_rust::tid!{ModularCompilationUnitContextExt<'a>}
 
 impl<'input> ModularCompilationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ModularCompilationUnitContextAll<'input>> {
@@ -5274,8 +5311,8 @@ where
 		let mut _localctx = ModularCompilationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 68, RULE_modularCompilationUnit);
         let mut _localctx: Rc<ModularCompilationUnitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5301,7 +5338,8 @@ where
 			recog.moduleDeclaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5330,14 +5368,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PackageDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PackageDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_packageDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_packageDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_packageDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_packageDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PackageDeclarationContext<'input>{
@@ -5352,7 +5390,7 @@ impl<'input> CustomRuleContext<'input> for PackageDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_packageDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_packageDeclaration }
 }
-antlr_rust::type_id!{PackageDeclarationContextExt<'a>}
+antlr_rust::tid!{PackageDeclarationContextExt<'a>}
 
 impl<'input> PackageDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PackageDeclarationContextAll<'input>> {
@@ -5417,8 +5455,8 @@ where
 		let mut _localctx = PackageDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 70, RULE_packageDeclaration);
         let mut _localctx: Rc<PackageDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5467,7 +5505,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5496,14 +5535,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PackageModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PackageModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_packageModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_packageModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_packageModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_packageModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PackageModifierContext<'input>{
@@ -5518,7 +5557,7 @@ impl<'input> CustomRuleContext<'input> for PackageModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_packageModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_packageModifier }
 }
-antlr_rust::type_id!{PackageModifierContextExt<'a>}
+antlr_rust::tid!{PackageModifierContextExt<'a>}
 
 impl<'input> PackageModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PackageModifierContextAll<'input>> {
@@ -5552,7 +5591,7 @@ where
 		let mut _localctx = PackageModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 72, RULE_packageModifier);
         let mut _localctx: Rc<PackageModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5562,7 +5601,8 @@ where
 			recog.annotation()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5591,14 +5631,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ImportDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ImportDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_importDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_importDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_importDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_importDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ImportDeclarationContext<'input>{
@@ -5613,7 +5653,7 @@ impl<'input> CustomRuleContext<'input> for ImportDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_importDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_importDeclaration }
 }
-antlr_rust::type_id!{ImportDeclarationContextExt<'a>}
+antlr_rust::tid!{ImportDeclarationContextExt<'a>}
 
 impl<'input> ImportDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ImportDeclarationContextAll<'input>> {
@@ -5656,7 +5696,7 @@ where
 		let mut _localctx = ImportDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 74, RULE_importDeclaration);
         let mut _localctx: Rc<ImportDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(774);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5707,7 +5747,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5736,14 +5777,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SingleTypeImportDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SingleTypeImportDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_singleTypeImportDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_singleTypeImportDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_singleTypeImportDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_singleTypeImportDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SingleTypeImportDeclarationContext<'input>{
@@ -5758,7 +5799,7 @@ impl<'input> CustomRuleContext<'input> for SingleTypeImportDeclarationContextExt
 	fn get_rule_index(&self) -> usize { RULE_singleTypeImportDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_singleTypeImportDeclaration }
 }
-antlr_rust::type_id!{SingleTypeImportDeclarationContextExt<'a>}
+antlr_rust::tid!{SingleTypeImportDeclarationContextExt<'a>}
 
 impl<'input> SingleTypeImportDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SingleTypeImportDeclarationContextAll<'input>> {
@@ -5802,7 +5843,7 @@ where
 		let mut _localctx = SingleTypeImportDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 76, RULE_singleTypeImportDeclaration);
         let mut _localctx: Rc<SingleTypeImportDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5818,7 +5859,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5847,14 +5889,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeImportOnDemandDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeImportOnDemandDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeImportOnDemandDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeImportOnDemandDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeImportOnDemandDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeImportOnDemandDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeImportOnDemandDeclarationContext<'input>{
@@ -5869,7 +5911,7 @@ impl<'input> CustomRuleContext<'input> for TypeImportOnDemandDeclarationContextE
 	fn get_rule_index(&self) -> usize { RULE_typeImportOnDemandDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeImportOnDemandDeclaration }
 }
-antlr_rust::type_id!{TypeImportOnDemandDeclarationContextExt<'a>}
+antlr_rust::tid!{TypeImportOnDemandDeclarationContextExt<'a>}
 
 impl<'input> TypeImportOnDemandDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeImportOnDemandDeclarationContextAll<'input>> {
@@ -5923,7 +5965,7 @@ where
 		let mut _localctx = TypeImportOnDemandDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 78, RULE_typeImportOnDemandDeclaration);
         let mut _localctx: Rc<TypeImportOnDemandDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5945,7 +5987,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5974,14 +6017,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SingleStaticImportDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SingleStaticImportDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_singleStaticImportDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_singleStaticImportDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_singleStaticImportDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_singleStaticImportDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SingleStaticImportDeclarationContext<'input>{
@@ -5996,7 +6039,7 @@ impl<'input> CustomRuleContext<'input> for SingleStaticImportDeclarationContextE
 	fn get_rule_index(&self) -> usize { RULE_singleStaticImportDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_singleStaticImportDeclaration }
 }
-antlr_rust::type_id!{SingleStaticImportDeclarationContextExt<'a>}
+antlr_rust::tid!{SingleStaticImportDeclarationContextExt<'a>}
 
 impl<'input> SingleStaticImportDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SingleStaticImportDeclarationContextAll<'input>> {
@@ -6055,7 +6098,7 @@ where
 		let mut _localctx = SingleStaticImportDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 80, RULE_singleStaticImportDeclaration);
         let mut _localctx: Rc<SingleStaticImportDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6080,7 +6123,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6109,14 +6153,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StaticImportOnDemandDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StaticImportOnDemandDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_staticImportOnDemandDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_staticImportOnDemandDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_staticImportOnDemandDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_staticImportOnDemandDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StaticImportOnDemandDeclarationContext<'input>{
@@ -6131,7 +6175,7 @@ impl<'input> CustomRuleContext<'input> for StaticImportOnDemandDeclarationContex
 	fn get_rule_index(&self) -> usize { RULE_staticImportOnDemandDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_staticImportOnDemandDeclaration }
 }
-antlr_rust::type_id!{StaticImportOnDemandDeclarationContextExt<'a>}
+antlr_rust::tid!{StaticImportOnDemandDeclarationContextExt<'a>}
 
 impl<'input> StaticImportOnDemandDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StaticImportOnDemandDeclarationContextAll<'input>> {
@@ -6190,7 +6234,7 @@ where
 		let mut _localctx = StaticImportOnDemandDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 82, RULE_staticImportOnDemandDeclaration);
         let mut _localctx: Rc<StaticImportOnDemandDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6215,7 +6259,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6244,14 +6289,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TopLevelClassOrInterfaceDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TopLevelClassOrInterfaceDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_topLevelClassOrInterfaceDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_topLevelClassOrInterfaceDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_topLevelClassOrInterfaceDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_topLevelClassOrInterfaceDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TopLevelClassOrInterfaceDeclarationContext<'input>{
@@ -6266,7 +6311,7 @@ impl<'input> CustomRuleContext<'input> for TopLevelClassOrInterfaceDeclarationCo
 	fn get_rule_index(&self) -> usize { RULE_topLevelClassOrInterfaceDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_topLevelClassOrInterfaceDeclaration }
 }
-antlr_rust::type_id!{TopLevelClassOrInterfaceDeclarationContextExt<'a>}
+antlr_rust::tid!{TopLevelClassOrInterfaceDeclarationContextExt<'a>}
 
 impl<'input> TopLevelClassOrInterfaceDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TopLevelClassOrInterfaceDeclarationContextAll<'input>> {
@@ -6308,7 +6353,7 @@ where
 		let mut _localctx = TopLevelClassOrInterfaceDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 84, RULE_topLevelClassOrInterfaceDeclaration);
         let mut _localctx: Rc<TopLevelClassOrInterfaceDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(803);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6347,7 +6392,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6376,14 +6422,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ModuleDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ModuleDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_moduleDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_moduleDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_moduleDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_moduleDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ModuleDeclarationContext<'input>{
@@ -6398,7 +6444,7 @@ impl<'input> CustomRuleContext<'input> for ModuleDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_moduleDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_moduleDeclaration }
 }
-antlr_rust::type_id!{ModuleDeclarationContextExt<'a>}
+antlr_rust::tid!{ModuleDeclarationContextExt<'a>}
 
 impl<'input> ModuleDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ModuleDeclarationContextAll<'input>> {
@@ -6479,8 +6525,8 @@ where
 		let mut _localctx = ModuleDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 86, RULE_moduleDeclaration);
         let mut _localctx: Rc<ModuleDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6559,7 +6605,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6588,14 +6635,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ModuleDirectiveContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ModuleDirectiveContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_moduleDirective(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_moduleDirective(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_moduleDirective(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_moduleDirective(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ModuleDirectiveContext<'input>{
@@ -6610,7 +6657,7 @@ impl<'input> CustomRuleContext<'input> for ModuleDirectiveContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_moduleDirective }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_moduleDirective }
 }
-antlr_rust::type_id!{ModuleDirectiveContextExt<'a>}
+antlr_rust::tid!{ModuleDirectiveContextExt<'a>}
 
 impl<'input> ModuleDirectiveContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ModuleDirectiveContextAll<'input>> {
@@ -6711,8 +6758,8 @@ where
 		let mut _localctx = ModuleDirectiveContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 88, RULE_moduleDirective);
         let mut _localctx: Rc<ModuleDirectiveContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(889);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6919,7 +6966,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6948,14 +6996,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RequiresModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RequiresModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_requiresModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_requiresModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_requiresModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_requiresModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RequiresModifierContext<'input>{
@@ -6970,7 +7018,7 @@ impl<'input> CustomRuleContext<'input> for RequiresModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_requiresModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_requiresModifier }
 }
-antlr_rust::type_id!{RequiresModifierContextExt<'a>}
+antlr_rust::tid!{RequiresModifierContextExt<'a>}
 
 impl<'input> RequiresModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RequiresModifierContextAll<'input>> {
@@ -7011,8 +7059,8 @@ where
 		let mut _localctx = RequiresModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 90, RULE_requiresModifier);
         let mut _localctx: Rc<RequiresModifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7029,7 +7077,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7058,14 +7107,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassDeclarationContext<'input>{
@@ -7080,7 +7129,7 @@ impl<'input> CustomRuleContext<'input> for ClassDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classDeclaration }
 }
-antlr_rust::type_id!{ClassDeclarationContextExt<'a>}
+antlr_rust::tid!{ClassDeclarationContextExt<'a>}
 
 impl<'input> ClassDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassDeclarationContextAll<'input>> {
@@ -7120,7 +7169,7 @@ where
 		let mut _localctx = ClassDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 92, RULE_classDeclaration);
         let mut _localctx: Rc<ClassDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(896);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -7160,7 +7209,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7189,14 +7239,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for NormalClassDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for NormalClassDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_normalClassDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_normalClassDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_normalClassDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_normalClassDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for NormalClassDeclarationContext<'input>{
@@ -7211,7 +7261,7 @@ impl<'input> CustomRuleContext<'input> for NormalClassDeclarationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_normalClassDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_normalClassDeclaration }
 }
-antlr_rust::type_id!{NormalClassDeclarationContextExt<'a>}
+antlr_rust::tid!{NormalClassDeclarationContextExt<'a>}
 
 impl<'input> NormalClassDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NormalClassDeclarationContextAll<'input>> {
@@ -7271,8 +7321,8 @@ where
 		let mut _localctx = NormalClassDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 94, RULE_normalClassDeclaration);
         let mut _localctx: Rc<NormalClassDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7280,7 +7330,7 @@ where
 			recog.base.set_state(901);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << FINAL) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==AT {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (STRICTFP - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule classModifier*/
@@ -7353,7 +7403,8 @@ where
 			recog.classBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7382,14 +7433,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassModifierContext<'input>{
@@ -7404,7 +7455,7 @@ impl<'input> CustomRuleContext<'input> for ClassModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classModifier }
 }
-antlr_rust::type_id!{ClassModifierContextExt<'a>}
+antlr_rust::tid!{ClassModifierContextExt<'a>}
 
 impl<'input> ClassModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassModifierContextAll<'input>> {
@@ -7483,7 +7534,7 @@ where
 		let mut _localctx = ClassModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 96, RULE_classModifier);
         let mut _localctx: Rc<ClassModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(930);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -7601,7 +7652,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7630,14 +7682,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeParametersContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeParametersContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeParameters(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeParameters(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeParameters(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeParameters(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeParametersContext<'input>{
@@ -7652,7 +7704,7 @@ impl<'input> CustomRuleContext<'input> for TypeParametersContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeParameters }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeParameters }
 }
-antlr_rust::type_id!{TypeParametersContextExt<'a>}
+antlr_rust::tid!{TypeParametersContextExt<'a>}
 
 impl<'input> TypeParametersContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeParametersContextAll<'input>> {
@@ -7696,7 +7748,7 @@ where
 		let mut _localctx = TypeParametersContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 98, RULE_typeParameters);
         let mut _localctx: Rc<TypeParametersContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7712,7 +7764,8 @@ where
 			recog.base.match_token(GT,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7741,14 +7794,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeParameterListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeParameterListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeParameterList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeParameterList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeParameterList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeParameterList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeParameterListContext<'input>{
@@ -7763,7 +7816,7 @@ impl<'input> CustomRuleContext<'input> for TypeParameterListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeParameterList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeParameterList }
 }
-antlr_rust::type_id!{TypeParameterListContextExt<'a>}
+antlr_rust::tid!{TypeParameterListContextExt<'a>}
 
 impl<'input> TypeParameterListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeParameterListContextAll<'input>> {
@@ -7809,8 +7862,8 @@ where
 		let mut _localctx = TypeParameterListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 100, RULE_typeParameterList);
         let mut _localctx: Rc<TypeParameterListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7839,7 +7892,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7868,14 +7922,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassExtendsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassExtendsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classExtends(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classExtends(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classExtends(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classExtends(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassExtendsContext<'input>{
@@ -7890,7 +7944,7 @@ impl<'input> CustomRuleContext<'input> for ClassExtendsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classExtends }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classExtends }
 }
-antlr_rust::type_id!{ClassExtendsContextExt<'a>}
+antlr_rust::tid!{ClassExtendsContextExt<'a>}
 
 impl<'input> ClassExtendsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassExtendsContextAll<'input>> {
@@ -7929,7 +7983,7 @@ where
 		let mut _localctx = ClassExtendsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 102, RULE_classExtends);
         let mut _localctx: Rc<ClassExtendsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7942,7 +7996,8 @@ where
 			recog.classType()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7971,14 +8026,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassImplementsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassImplementsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classImplements(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classImplements(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classImplements(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classImplements(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassImplementsContext<'input>{
@@ -7993,7 +8048,7 @@ impl<'input> CustomRuleContext<'input> for ClassImplementsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classImplements }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classImplements }
 }
-antlr_rust::type_id!{ClassImplementsContextExt<'a>}
+antlr_rust::tid!{ClassImplementsContextExt<'a>}
 
 impl<'input> ClassImplementsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassImplementsContextAll<'input>> {
@@ -8032,7 +8087,7 @@ where
 		let mut _localctx = ClassImplementsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 104, RULE_classImplements);
         let mut _localctx: Rc<ClassImplementsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8045,7 +8100,8 @@ where
 			recog.interfaceTypeList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8074,14 +8130,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceTypeListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceTypeListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceTypeList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceTypeList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceTypeList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceTypeList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceTypeListContext<'input>{
@@ -8096,7 +8152,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceTypeListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfaceTypeList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceTypeList }
 }
-antlr_rust::type_id!{InterfaceTypeListContextExt<'a>}
+antlr_rust::tid!{InterfaceTypeListContextExt<'a>}
 
 impl<'input> InterfaceTypeListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceTypeListContextAll<'input>> {
@@ -8142,8 +8198,8 @@ where
 		let mut _localctx = InterfaceTypeListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 106, RULE_interfaceTypeList);
         let mut _localctx: Rc<InterfaceTypeListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8172,7 +8228,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8201,14 +8258,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassPermitsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassPermitsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classPermits(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classPermits(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classPermits(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classPermits(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassPermitsContext<'input>{
@@ -8223,7 +8280,7 @@ impl<'input> CustomRuleContext<'input> for ClassPermitsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classPermits }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classPermits }
 }
-antlr_rust::type_id!{ClassPermitsContextExt<'a>}
+antlr_rust::tid!{ClassPermitsContextExt<'a>}
 
 impl<'input> ClassPermitsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassPermitsContextAll<'input>> {
@@ -8274,8 +8331,8 @@ where
 		let mut _localctx = ClassPermitsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 108, RULE_classPermits);
         let mut _localctx: Rc<ClassPermitsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8307,7 +8364,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8336,14 +8394,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassBodyContext<'input>{
@@ -8358,7 +8416,7 @@ impl<'input> CustomRuleContext<'input> for ClassBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classBody }
 }
-antlr_rust::type_id!{ClassBodyContextExt<'a>}
+antlr_rust::tid!{ClassBodyContextExt<'a>}
 
 impl<'input> ClassBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassBodyContextAll<'input>> {
@@ -8405,8 +8463,8 @@ where
 		let mut _localctx = ClassBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 110, RULE_classBody);
         let mut _localctx: Rc<ClassBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8417,7 +8475,7 @@ where
 			recog.base.set_state(971);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NATIVE) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SYNCHRONIZED) | (1usize << TRANSIENT))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NATIVE - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (TRANSIENT - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)))) != 0) || _la==Identifier {
 				{
 				{
 				/*InvokeRule classBodyDeclaration*/
@@ -8434,7 +8492,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8463,14 +8522,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassBodyDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassBodyDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classBodyDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classBodyDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classBodyDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classBodyDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassBodyDeclarationContext<'input>{
@@ -8485,7 +8544,7 @@ impl<'input> CustomRuleContext<'input> for ClassBodyDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_classBodyDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classBodyDeclaration }
 }
-antlr_rust::type_id!{ClassBodyDeclarationContextExt<'a>}
+antlr_rust::tid!{ClassBodyDeclarationContextExt<'a>}
 
 impl<'input> ClassBodyDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassBodyDeclarationContextAll<'input>> {
@@ -8528,7 +8587,7 @@ where
 		let mut _localctx = ClassBodyDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 112, RULE_classBodyDeclaration);
         let mut _localctx: Rc<ClassBodyDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(980);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8579,7 +8638,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8608,14 +8668,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassMemberDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassMemberDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classMemberDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classMemberDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classMemberDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classMemberDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassMemberDeclarationContext<'input>{
@@ -8630,7 +8690,7 @@ impl<'input> CustomRuleContext<'input> for ClassMemberDeclarationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_classMemberDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classMemberDeclaration }
 }
-antlr_rust::type_id!{ClassMemberDeclarationContextExt<'a>}
+antlr_rust::tid!{ClassMemberDeclarationContextExt<'a>}
 
 impl<'input> ClassMemberDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassMemberDeclarationContextAll<'input>> {
@@ -8678,7 +8738,7 @@ where
 		let mut _localctx = ClassMemberDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 114, RULE_classMemberDeclaration);
         let mut _localctx: Rc<ClassMemberDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(987);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8739,7 +8799,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8768,14 +8829,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FieldDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FieldDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_fieldDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_fieldDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_fieldDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_fieldDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FieldDeclarationContext<'input>{
@@ -8790,7 +8851,7 @@ impl<'input> CustomRuleContext<'input> for FieldDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_fieldDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_fieldDeclaration }
 }
-antlr_rust::type_id!{FieldDeclarationContextExt<'a>}
+antlr_rust::tid!{FieldDeclarationContextExt<'a>}
 
 impl<'input> FieldDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FieldDeclarationContextAll<'input>> {
@@ -8838,8 +8899,8 @@ where
 		let mut _localctx = FieldDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 116, RULE_fieldDeclaration);
         let mut _localctx: Rc<FieldDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8847,7 +8908,7 @@ where
 			recog.base.set_state(992);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (TRANSIENT - 35)) | (1usize << (VOLATILE - 35)) | (1usize << (AT - 35)))) != 0) {
+			while ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (TRANSIENT - 35)) | (1usize << (VOLATILE - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule fieldModifier*/
@@ -8872,7 +8933,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8901,14 +8963,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FieldModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FieldModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_fieldModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_fieldModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_fieldModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_fieldModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FieldModifierContext<'input>{
@@ -8923,7 +8985,7 @@ impl<'input> CustomRuleContext<'input> for FieldModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_fieldModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_fieldModifier }
 }
-antlr_rust::type_id!{FieldModifierContextExt<'a>}
+antlr_rust::tid!{FieldModifierContextExt<'a>}
 
 impl<'input> FieldModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FieldModifierContextAll<'input>> {
@@ -8992,7 +9054,7 @@ where
 		let mut _localctx = FieldModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 118, RULE_fieldModifier);
         let mut _localctx: Rc<FieldModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1007);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9088,7 +9150,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9117,14 +9180,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableDeclaratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableDeclaratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableDeclaratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableDeclaratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableDeclaratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableDeclaratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableDeclaratorListContext<'input>{
@@ -9139,7 +9202,7 @@ impl<'input> CustomRuleContext<'input> for VariableDeclaratorListContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_variableDeclaratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableDeclaratorList }
 }
-antlr_rust::type_id!{VariableDeclaratorListContextExt<'a>}
+antlr_rust::tid!{VariableDeclaratorListContextExt<'a>}
 
 impl<'input> VariableDeclaratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableDeclaratorListContextAll<'input>> {
@@ -9185,7 +9248,7 @@ where
 		let mut _localctx = VariableDeclaratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 120, RULE_variableDeclaratorList);
         let mut _localctx: Rc<VariableDeclaratorListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -9217,7 +9280,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(73,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9246,14 +9310,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableDeclaratorContext<'input>{
@@ -9268,7 +9332,7 @@ impl<'input> CustomRuleContext<'input> for VariableDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_variableDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableDeclarator }
 }
-antlr_rust::type_id!{VariableDeclaratorContextExt<'a>}
+antlr_rust::tid!{VariableDeclaratorContextExt<'a>}
 
 impl<'input> VariableDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableDeclaratorContextAll<'input>> {
@@ -9310,7 +9374,7 @@ where
 		let mut _localctx = VariableDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 122, RULE_variableDeclarator);
         let mut _localctx: Rc<VariableDeclaratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9337,7 +9401,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9366,14 +9431,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableDeclaratorIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableDeclaratorIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableDeclaratorId(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableDeclaratorId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableDeclaratorId(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableDeclaratorId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableDeclaratorIdContext<'input>{
@@ -9388,7 +9453,7 @@ impl<'input> CustomRuleContext<'input> for VariableDeclaratorIdContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_variableDeclaratorId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableDeclaratorId }
 }
-antlr_rust::type_id!{VariableDeclaratorIdContextExt<'a>}
+antlr_rust::tid!{VariableDeclaratorIdContextExt<'a>}
 
 impl<'input> VariableDeclaratorIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableDeclaratorIdContextAll<'input>> {
@@ -9427,7 +9492,7 @@ where
 		let mut _localctx = VariableDeclaratorIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 124, RULE_variableDeclaratorId);
         let mut _localctx: Rc<VariableDeclaratorIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9450,7 +9515,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9479,14 +9545,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableInitializerContext<'input>{
@@ -9501,7 +9567,7 @@ impl<'input> CustomRuleContext<'input> for VariableInitializerContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_variableInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableInitializer }
 }
-antlr_rust::type_id!{VariableInitializerContextExt<'a>}
+antlr_rust::tid!{VariableInitializerContextExt<'a>}
 
 impl<'input> VariableInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableInitializerContextAll<'input>> {
@@ -9538,7 +9604,7 @@ where
 		let mut _localctx = VariableInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 126, RULE_variableInitializer);
         let mut _localctx: Rc<VariableInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1028);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9572,7 +9638,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9601,14 +9668,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannTypeContext<'input>{
@@ -9623,7 +9690,7 @@ impl<'input> CustomRuleContext<'input> for UnannTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannType }
 }
-antlr_rust::type_id!{UnannTypeContextExt<'a>}
+antlr_rust::tid!{UnannTypeContextExt<'a>}
 
 impl<'input> UnannTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannTypeContextAll<'input>> {
@@ -9660,7 +9727,7 @@ where
 		let mut _localctx = UnannTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 128, RULE_unannType);
         let mut _localctx: Rc<UnannTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1032);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9689,7 +9756,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9718,14 +9786,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannPrimitiveTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannPrimitiveTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannPrimitiveType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannPrimitiveType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannPrimitiveType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannPrimitiveType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannPrimitiveTypeContext<'input>{
@@ -9740,7 +9808,7 @@ impl<'input> CustomRuleContext<'input> for UnannPrimitiveTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannPrimitiveType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannPrimitiveType }
 }
-antlr_rust::type_id!{UnannPrimitiveTypeContextExt<'a>}
+antlr_rust::tid!{UnannPrimitiveTypeContextExt<'a>}
 
 impl<'input> UnannPrimitiveTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannPrimitiveTypeContextAll<'input>> {
@@ -9779,7 +9847,7 @@ where
 		let mut _localctx = UnannPrimitiveTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 130, RULE_unannPrimitiveType);
         let mut _localctx: Rc<UnannPrimitiveTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1036);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9809,7 +9877,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9838,14 +9907,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannReferenceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannReferenceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannReferenceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannReferenceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannReferenceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannReferenceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannReferenceTypeContext<'input>{
@@ -9860,7 +9929,7 @@ impl<'input> CustomRuleContext<'input> for UnannReferenceTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannReferenceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannReferenceType }
 }
-antlr_rust::type_id!{UnannReferenceTypeContextExt<'a>}
+antlr_rust::tid!{UnannReferenceTypeContextExt<'a>}
 
 impl<'input> UnannReferenceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannReferenceTypeContextAll<'input>> {
@@ -9900,7 +9969,7 @@ where
 		let mut _localctx = UnannReferenceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 132, RULE_unannReferenceType);
         let mut _localctx: Rc<UnannReferenceTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1041);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9940,7 +10009,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9969,14 +10039,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannClassOrInterfaceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannClassOrInterfaceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannClassOrInterfaceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannClassOrInterfaceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannClassOrInterfaceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannClassOrInterfaceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannClassOrInterfaceTypeContext<'input>{
@@ -9991,7 +10061,7 @@ impl<'input> CustomRuleContext<'input> for UnannClassOrInterfaceTypeContextExt<'
 	fn get_rule_index(&self) -> usize { RULE_unannClassOrInterfaceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannClassOrInterfaceType }
 }
-antlr_rust::type_id!{UnannClassOrInterfaceTypeContextExt<'a>}
+antlr_rust::tid!{UnannClassOrInterfaceTypeContextExt<'a>}
 
 impl<'input> UnannClassOrInterfaceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannClassOrInterfaceTypeContextAll<'input>> {
@@ -10045,8 +10115,8 @@ where
 		let mut _localctx = UnannClassOrInterfaceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 134, RULE_unannClassOrInterfaceType);
         let mut _localctx: Rc<UnannClassOrInterfaceTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10117,7 +10187,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10146,14 +10217,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UCOITContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UCOITContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_uCOIT(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_uCOIT(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_uCOIT(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_uCOIT(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UCOITContext<'input>{
@@ -10168,7 +10239,7 @@ impl<'input> CustomRuleContext<'input> for UCOITContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_uCOIT }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_uCOIT }
 }
-antlr_rust::type_id!{UCOITContextExt<'a>}
+antlr_rust::tid!{UCOITContextExt<'a>}
 
 impl<'input> UCOITContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UCOITContextAll<'input>> {
@@ -10219,8 +10290,8 @@ where
 		let mut _localctx = UCOITContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 136, RULE_uCOIT);
         let mut _localctx: Rc<UCOITContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10277,7 +10348,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10306,14 +10378,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannClassTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannClassTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannClassType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannClassType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannClassType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannClassType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannClassTypeContext<'input>{
@@ -10328,7 +10400,7 @@ impl<'input> CustomRuleContext<'input> for UnannClassTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannClassType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannClassType }
 }
-antlr_rust::type_id!{UnannClassTypeContextExt<'a>}
+antlr_rust::tid!{UnannClassTypeContextExt<'a>}
 
 impl<'input> UnannClassTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannClassTypeContextAll<'input>> {
@@ -10382,8 +10454,8 @@ where
 		let mut _localctx = UnannClassTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 138, RULE_unannClassType);
         let mut _localctx: Rc<UnannClassTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1093);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10478,7 +10550,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10507,14 +10580,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannInterfaceTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannInterfaceTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannInterfaceType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannInterfaceType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannInterfaceType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannInterfaceType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannInterfaceTypeContext<'input>{
@@ -10529,7 +10602,7 @@ impl<'input> CustomRuleContext<'input> for UnannInterfaceTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannInterfaceType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannInterfaceType }
 }
-antlr_rust::type_id!{UnannInterfaceTypeContextExt<'a>}
+antlr_rust::tid!{UnannInterfaceTypeContextExt<'a>}
 
 impl<'input> UnannInterfaceTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannInterfaceTypeContextAll<'input>> {
@@ -10563,7 +10636,7 @@ where
 		let mut _localctx = UnannInterfaceTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 140, RULE_unannInterfaceType);
         let mut _localctx: Rc<UnannInterfaceTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10573,7 +10646,8 @@ where
 			recog.unannClassType()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10602,14 +10676,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannTypeVariableContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannTypeVariableContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannTypeVariable(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannTypeVariable(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannTypeVariable(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannTypeVariable(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannTypeVariableContext<'input>{
@@ -10624,7 +10698,7 @@ impl<'input> CustomRuleContext<'input> for UnannTypeVariableContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannTypeVariable }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannTypeVariable }
 }
-antlr_rust::type_id!{UnannTypeVariableContextExt<'a>}
+antlr_rust::tid!{UnannTypeVariableContextExt<'a>}
 
 impl<'input> UnannTypeVariableContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannTypeVariableContextAll<'input>> {
@@ -10658,7 +10732,7 @@ where
 		let mut _localctx = UnannTypeVariableContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 142, RULE_unannTypeVariable);
         let mut _localctx: Rc<UnannTypeVariableContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10668,7 +10742,8 @@ where
 			recog.typeIdentifier()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10697,14 +10772,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnannArrayTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnannArrayTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unannArrayType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unannArrayType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unannArrayType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unannArrayType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnannArrayTypeContext<'input>{
@@ -10719,7 +10794,7 @@ impl<'input> CustomRuleContext<'input> for UnannArrayTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unannArrayType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unannArrayType }
 }
-antlr_rust::type_id!{UnannArrayTypeContextExt<'a>}
+antlr_rust::tid!{UnannArrayTypeContextExt<'a>}
 
 impl<'input> UnannArrayTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnannArrayTypeContextAll<'input>> {
@@ -10762,7 +10837,7 @@ where
 		let mut _localctx = UnannArrayTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 144, RULE_unannArrayType);
         let mut _localctx: Rc<UnannArrayTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10804,7 +10879,8 @@ where
 			recog.dims()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10833,14 +10909,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodDeclarationContext<'input>{
@@ -10855,7 +10931,7 @@ impl<'input> CustomRuleContext<'input> for MethodDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodDeclaration }
 }
-antlr_rust::type_id!{MethodDeclarationContextExt<'a>}
+antlr_rust::tid!{MethodDeclarationContextExt<'a>}
 
 impl<'input> MethodDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodDeclarationContextAll<'input>> {
@@ -10898,8 +10974,8 @@ where
 		let mut _localctx = MethodDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 146, RULE_methodDeclaration);
         let mut _localctx: Rc<MethodDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10907,7 +10983,7 @@ where
 			recog.base.set_state(1109);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << ABSTRACT) | (1usize << FINAL) | (1usize << NATIVE) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SYNCHRONIZED))) != 0) || _la==AT {
+			while _la==ABSTRACT || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (NATIVE - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (STRICTFP - 35)) | (1usize << (SYNCHRONIZED - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule methodModifier*/
@@ -10929,7 +11005,8 @@ where
 			recog.methodBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10958,14 +11035,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodModifierContext<'input>{
@@ -10980,7 +11057,7 @@ impl<'input> CustomRuleContext<'input> for MethodModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodModifier }
 }
-antlr_rust::type_id!{MethodModifierContextExt<'a>}
+antlr_rust::tid!{MethodModifierContextExt<'a>}
 
 impl<'input> MethodModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodModifierContextAll<'input>> {
@@ -11059,7 +11136,7 @@ where
 		let mut _localctx = MethodModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 148, RULE_methodModifier);
         let mut _localctx: Rc<MethodModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1125);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11177,7 +11254,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11206,14 +11284,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodHeaderContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodHeaderContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodHeader(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodHeader(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodHeader(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodHeader(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodHeaderContext<'input>{
@@ -11228,7 +11306,7 @@ impl<'input> CustomRuleContext<'input> for MethodHeaderContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodHeader }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodHeader }
 }
-antlr_rust::type_id!{MethodHeaderContextExt<'a>}
+antlr_rust::tid!{MethodHeaderContextExt<'a>}
 
 impl<'input> MethodHeaderContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodHeaderContextAll<'input>> {
@@ -11277,8 +11355,8 @@ where
 		let mut _localctx = MethodHeaderContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 150, RULE_methodHeader);
         let mut _localctx: Rc<MethodHeaderContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11332,7 +11410,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11361,14 +11440,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ResultContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ResultContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_result(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_result(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_result(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_result(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ResultContext<'input>{
@@ -11383,7 +11462,7 @@ impl<'input> CustomRuleContext<'input> for ResultContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_result }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_result }
 }
-antlr_rust::type_id!{ResultContextExt<'a>}
+antlr_rust::tid!{ResultContextExt<'a>}
 
 impl<'input> ResultContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ResultContextAll<'input>> {
@@ -11422,7 +11501,7 @@ where
 		let mut _localctx = ResultContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 152, RULE_result);
         let mut _localctx: Rc<ResultContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1143);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11452,7 +11531,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11481,14 +11561,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodDeclaratorContext<'input>{
@@ -11503,7 +11583,7 @@ impl<'input> CustomRuleContext<'input> for MethodDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodDeclarator }
 }
-antlr_rust::type_id!{MethodDeclaratorContextExt<'a>}
+antlr_rust::tid!{MethodDeclaratorContextExt<'a>}
 
 impl<'input> MethodDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodDeclaratorContextAll<'input>> {
@@ -11563,8 +11643,8 @@ where
 		let mut _localctx = MethodDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 154, RULE_methodDeclarator);
         let mut _localctx: Rc<MethodDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11595,7 +11675,7 @@ where
 			recog.base.set_state(1153);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << SHORT))) != 0) || _la==AT || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (FLOAT - 35)) | (1usize << (INT - 35)) | (1usize << (LONG - 35)) | (1usize << (SHORT - 35)))) != 0) || _la==AT || _la==Identifier {
 				{
 				/*InvokeRule formalParameterList*/
 				recog.base.set_state(1152);
@@ -11620,7 +11700,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11649,14 +11730,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ReceiverParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ReceiverParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_receiverParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_receiverParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_receiverParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_receiverParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ReceiverParameterContext<'input>{
@@ -11671,7 +11752,7 @@ impl<'input> CustomRuleContext<'input> for ReceiverParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_receiverParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_receiverParameter }
 }
-antlr_rust::type_id!{ReceiverParameterContextExt<'a>}
+antlr_rust::tid!{ReceiverParameterContextExt<'a>}
 
 impl<'input> ReceiverParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ReceiverParameterContextAll<'input>> {
@@ -11726,8 +11807,8 @@ where
 		let mut _localctx = ReceiverParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 156, RULE_receiverParameter);
         let mut _localctx: Rc<ReceiverParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11770,7 +11851,8 @@ where
 			recog.base.match_token(THIS,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11799,14 +11881,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FormalParameterListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FormalParameterListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_formalParameterList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_formalParameterList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_formalParameterList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_formalParameterList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FormalParameterListContext<'input>{
@@ -11821,7 +11903,7 @@ impl<'input> CustomRuleContext<'input> for FormalParameterListContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_formalParameterList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_formalParameterList }
 }
-antlr_rust::type_id!{FormalParameterListContextExt<'a>}
+antlr_rust::tid!{FormalParameterListContextExt<'a>}
 
 impl<'input> FormalParameterListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FormalParameterListContextAll<'input>> {
@@ -11867,8 +11949,8 @@ where
 		let mut _localctx = FormalParameterListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 158, RULE_formalParameterList);
         let mut _localctx: Rc<FormalParameterListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11897,7 +11979,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11926,14 +12009,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FormalParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FormalParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_formalParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_formalParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_formalParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_formalParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FormalParameterContext<'input>{
@@ -11948,7 +12031,7 @@ impl<'input> CustomRuleContext<'input> for FormalParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_formalParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_formalParameter }
 }
-antlr_rust::type_id!{FormalParameterContextExt<'a>}
+antlr_rust::tid!{FormalParameterContextExt<'a>}
 
 impl<'input> FormalParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FormalParameterContextAll<'input>> {
@@ -11994,8 +12077,8 @@ where
 		let mut _localctx = FormalParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 160, RULE_formalParameter);
         let mut _localctx: Rc<FormalParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1190);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12044,7 +12127,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12073,14 +12157,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableArityParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableArityParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableArityParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableArityParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableArityParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableArityParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableArityParameterContext<'input>{
@@ -12095,7 +12179,7 @@ impl<'input> CustomRuleContext<'input> for VariableArityParameterContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_variableArityParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableArityParameter }
 }
-antlr_rust::type_id!{VariableArityParameterContextExt<'a>}
+antlr_rust::tid!{VariableArityParameterContextExt<'a>}
 
 impl<'input> VariableArityParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableArityParameterContextAll<'input>> {
@@ -12151,8 +12235,8 @@ where
 		let mut _localctx = VariableArityParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 162, RULE_variableArityParameter);
         let mut _localctx: Rc<VariableArityParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12200,7 +12284,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12229,14 +12314,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableModifierContext<'input>{
@@ -12251,7 +12336,7 @@ impl<'input> CustomRuleContext<'input> for VariableModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_variableModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableModifier }
 }
-antlr_rust::type_id!{VariableModifierContextExt<'a>}
+antlr_rust::tid!{VariableModifierContextExt<'a>}
 
 impl<'input> VariableModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableModifierContextAll<'input>> {
@@ -12290,7 +12375,7 @@ where
 		let mut _localctx = VariableModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 164, RULE_variableModifier);
         let mut _localctx: Rc<VariableModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1210);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12320,7 +12405,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12349,14 +12435,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ThrowsTContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ThrowsTContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_throwsT(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_throwsT(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_throwsT(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_throwsT(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ThrowsTContext<'input>{
@@ -12371,7 +12457,7 @@ impl<'input> CustomRuleContext<'input> for ThrowsTContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_throwsT }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_throwsT }
 }
-antlr_rust::type_id!{ThrowsTContextExt<'a>}
+antlr_rust::tid!{ThrowsTContextExt<'a>}
 
 impl<'input> ThrowsTContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ThrowsTContextAll<'input>> {
@@ -12410,7 +12496,7 @@ where
 		let mut _localctx = ThrowsTContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 166, RULE_throwsT);
         let mut _localctx: Rc<ThrowsTContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12423,7 +12509,8 @@ where
 			recog.exceptionTypeList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12452,14 +12539,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExceptionTypeListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExceptionTypeListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exceptionTypeList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_exceptionTypeList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exceptionTypeList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_exceptionTypeList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExceptionTypeListContext<'input>{
@@ -12474,7 +12561,7 @@ impl<'input> CustomRuleContext<'input> for ExceptionTypeListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_exceptionTypeList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exceptionTypeList }
 }
-antlr_rust::type_id!{ExceptionTypeListContextExt<'a>}
+antlr_rust::tid!{ExceptionTypeListContextExt<'a>}
 
 impl<'input> ExceptionTypeListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExceptionTypeListContextAll<'input>> {
@@ -12520,8 +12607,8 @@ where
 		let mut _localctx = ExceptionTypeListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 168, RULE_exceptionTypeList);
         let mut _localctx: Rc<ExceptionTypeListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12550,7 +12637,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12579,14 +12667,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExceptionTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExceptionTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exceptionType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_exceptionType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exceptionType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_exceptionType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExceptionTypeContext<'input>{
@@ -12601,7 +12689,7 @@ impl<'input> CustomRuleContext<'input> for ExceptionTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_exceptionType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exceptionType }
 }
-antlr_rust::type_id!{ExceptionTypeContextExt<'a>}
+antlr_rust::tid!{ExceptionTypeContextExt<'a>}
 
 impl<'input> ExceptionTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExceptionTypeContextAll<'input>> {
@@ -12638,7 +12726,7 @@ where
 		let mut _localctx = ExceptionTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 170, RULE_exceptionType);
         let mut _localctx: Rc<ExceptionTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1225);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12667,7 +12755,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12696,14 +12785,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodBodyContext<'input>{
@@ -12718,7 +12807,7 @@ impl<'input> CustomRuleContext<'input> for MethodBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodBody }
 }
-antlr_rust::type_id!{MethodBodyContextExt<'a>}
+antlr_rust::tid!{MethodBodyContextExt<'a>}
 
 impl<'input> MethodBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodBodyContextAll<'input>> {
@@ -12757,7 +12846,7 @@ where
 		let mut _localctx = MethodBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 172, RULE_methodBody);
         let mut _localctx: Rc<MethodBodyContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1229);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12787,7 +12876,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12816,14 +12906,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InstanceInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InstanceInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_instanceInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_instanceInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_instanceInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_instanceInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InstanceInitializerContext<'input>{
@@ -12838,7 +12928,7 @@ impl<'input> CustomRuleContext<'input> for InstanceInitializerContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_instanceInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_instanceInitializer }
 }
-antlr_rust::type_id!{InstanceInitializerContextExt<'a>}
+antlr_rust::tid!{InstanceInitializerContextExt<'a>}
 
 impl<'input> InstanceInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InstanceInitializerContextAll<'input>> {
@@ -12872,7 +12962,7 @@ where
 		let mut _localctx = InstanceInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 174, RULE_instanceInitializer);
         let mut _localctx: Rc<InstanceInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12882,7 +12972,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12911,14 +13002,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StaticInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StaticInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_staticInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_staticInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_staticInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_staticInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StaticInitializerContext<'input>{
@@ -12933,7 +13024,7 @@ impl<'input> CustomRuleContext<'input> for StaticInitializerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_staticInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_staticInitializer }
 }
-antlr_rust::type_id!{StaticInitializerContextExt<'a>}
+antlr_rust::tid!{StaticInitializerContextExt<'a>}
 
 impl<'input> StaticInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StaticInitializerContextAll<'input>> {
@@ -12972,7 +13063,7 @@ where
 		let mut _localctx = StaticInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 176, RULE_staticInitializer);
         let mut _localctx: Rc<StaticInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12985,7 +13076,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13014,14 +13106,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstructorDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstructorDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constructorDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constructorDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constructorDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constructorDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstructorDeclarationContext<'input>{
@@ -13036,7 +13128,7 @@ impl<'input> CustomRuleContext<'input> for ConstructorDeclarationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_constructorDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constructorDeclaration }
 }
-antlr_rust::type_id!{ConstructorDeclarationContextExt<'a>}
+antlr_rust::tid!{ConstructorDeclarationContextExt<'a>}
 
 impl<'input> ConstructorDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstructorDeclarationContextAll<'input>> {
@@ -13082,8 +13174,8 @@ where
 		let mut _localctx = ConstructorDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 178, RULE_constructorDeclaration);
         let mut _localctx: Rc<ConstructorDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13091,7 +13183,7 @@ where
 			recog.base.set_state(1239);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PROTECTED - 50)) | (1usize << (PUBLIC - 50)) | (1usize << (AT - 50)))) != 0) {
+			while ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PROTECTED - 50)) | (1usize << (PUBLIC - 50)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule constructorModifier*/
@@ -13125,7 +13217,8 @@ where
 			recog.constructorBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13154,14 +13247,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstructorModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstructorModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constructorModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constructorModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constructorModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constructorModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstructorModifierContext<'input>{
@@ -13176,7 +13269,7 @@ impl<'input> CustomRuleContext<'input> for ConstructorModifierContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_constructorModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constructorModifier }
 }
-antlr_rust::type_id!{ConstructorModifierContextExt<'a>}
+antlr_rust::tid!{ConstructorModifierContextExt<'a>}
 
 impl<'input> ConstructorModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstructorModifierContextAll<'input>> {
@@ -13225,7 +13318,7 @@ where
 		let mut _localctx = ConstructorModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 180, RULE_constructorModifier);
         let mut _localctx: Rc<ConstructorModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1252);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13277,7 +13370,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13306,14 +13400,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstructorDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstructorDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constructorDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constructorDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constructorDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constructorDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstructorDeclaratorContext<'input>{
@@ -13328,7 +13422,7 @@ impl<'input> CustomRuleContext<'input> for ConstructorDeclaratorContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_constructorDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constructorDeclarator }
 }
-antlr_rust::type_id!{ConstructorDeclaratorContextExt<'a>}
+antlr_rust::tid!{ConstructorDeclaratorContextExt<'a>}
 
 impl<'input> ConstructorDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstructorDeclaratorContextAll<'input>> {
@@ -13386,8 +13480,8 @@ where
 		let mut _localctx = ConstructorDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 182, RULE_constructorDeclarator);
         let mut _localctx: Rc<ConstructorDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13431,7 +13525,7 @@ where
 			recog.base.set_state(1265);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << SHORT))) != 0) || _la==AT || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (FLOAT - 35)) | (1usize << (INT - 35)) | (1usize << (LONG - 35)) | (1usize << (SHORT - 35)))) != 0) || _la==AT || _la==Identifier {
 				{
 				/*InvokeRule formalParameterList*/
 				recog.base.set_state(1264);
@@ -13444,7 +13538,8 @@ where
 			recog.base.match_token(RPAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13473,14 +13568,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SimpleTypeNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SimpleTypeNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleTypeName(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_simpleTypeName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleTypeName(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_simpleTypeName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SimpleTypeNameContext<'input>{
@@ -13495,7 +13590,7 @@ impl<'input> CustomRuleContext<'input> for SimpleTypeNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simpleTypeName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleTypeName }
 }
-antlr_rust::type_id!{SimpleTypeNameContextExt<'a>}
+antlr_rust::tid!{SimpleTypeNameContextExt<'a>}
 
 impl<'input> SimpleTypeNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleTypeNameContextAll<'input>> {
@@ -13529,7 +13624,7 @@ where
 		let mut _localctx = SimpleTypeNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 184, RULE_simpleTypeName);
         let mut _localctx: Rc<SimpleTypeNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13539,7 +13634,8 @@ where
 			recog.typeIdentifier()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13568,14 +13664,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstructorBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstructorBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constructorBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constructorBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constructorBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constructorBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstructorBodyContext<'input>{
@@ -13590,7 +13686,7 @@ impl<'input> CustomRuleContext<'input> for ConstructorBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_constructorBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constructorBody }
 }
-antlr_rust::type_id!{ConstructorBodyContextExt<'a>}
+antlr_rust::tid!{ConstructorBodyContextExt<'a>}
 
 impl<'input> ConstructorBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstructorBodyContextAll<'input>> {
@@ -13637,8 +13733,8 @@ where
 		let mut _localctx = ConstructorBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 186, RULE_constructorBody);
         let mut _localctx: Rc<ConstructorBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13663,7 +13759,7 @@ where
 			recog.base.set_state(1276);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << FOR) | (1usize << IF) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NEW) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << RETURN) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << SYNCHRONIZED) | (1usize << THIS) | (1usize << THROW))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (TRY - 64)) | (1usize << (VOID - 64)) | (1usize << (WHILE - 64)) | (1usize << (IntegerLiteral - 64)) | (1usize << (FloatingPointLiteral - 64)) | (1usize << (BooleanLiteral - 64)) | (1usize << (CharacterLiteral - 64)) | (1usize << (StringLiteral - 64)) | (1usize << (TextBlock - 64)) | (1usize << (NullLiteral - 64)) | (1usize << (LPAREN - 64)) | (1usize << (LBRACE - 64)) | (1usize << (SEMI - 64)) | (1usize << (AT - 64)) | (1usize << (INC - 64)) | (1usize << (DEC - 64)) | (1usize << (Identifier - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (FOR - 33)) | (1usize << (IF - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NEW - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (RETURN - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SUPER - 33)) | (1usize << (SWITCH - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (THIS - 33)) | (1usize << (THROW - 33)) | (1usize << (TRY - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (WHILE - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule blockStatements*/
 				recog.base.set_state(1275);
@@ -13676,7 +13772,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13705,14 +13802,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExplicitConstructorInvocationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExplicitConstructorInvocationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_explicitConstructorInvocation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_explicitConstructorInvocation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_explicitConstructorInvocation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_explicitConstructorInvocation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExplicitConstructorInvocationContext<'input>{
@@ -13727,7 +13824,7 @@ impl<'input> CustomRuleContext<'input> for ExplicitConstructorInvocationContextE
 	fn get_rule_index(&self) -> usize { RULE_explicitConstructorInvocation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_explicitConstructorInvocation }
 }
-antlr_rust::type_id!{ExplicitConstructorInvocationContextExt<'a>}
+antlr_rust::tid!{ExplicitConstructorInvocationContextExt<'a>}
 
 impl<'input> ExplicitConstructorInvocationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExplicitConstructorInvocationContextAll<'input>> {
@@ -13800,8 +13897,8 @@ where
 		let mut _localctx = ExplicitConstructorInvocationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 188, RULE_explicitConstructorInvocation);
         let mut _localctx: Rc<ExplicitConstructorInvocationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1306);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13839,7 +13936,7 @@ where
 					recog.base.set_state(1286);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(1285);
@@ -13908,7 +14005,7 @@ where
 					recog.base.set_state(1301);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(1300);
@@ -13928,7 +14025,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13957,14 +14055,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumDeclarationContext<'input>{
@@ -13979,7 +14077,7 @@ impl<'input> CustomRuleContext<'input> for EnumDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumDeclaration }
 }
-antlr_rust::type_id!{EnumDeclarationContextExt<'a>}
+antlr_rust::tid!{EnumDeclarationContextExt<'a>}
 
 impl<'input> EnumDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumDeclarationContextAll<'input>> {
@@ -14030,8 +14128,8 @@ where
 		let mut _localctx = EnumDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 190, RULE_enumDeclaration);
         let mut _localctx: Rc<EnumDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14039,7 +14137,7 @@ where
 			recog.base.set_state(1311);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << FINAL) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==AT {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (STRICTFP - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule classModifier*/
@@ -14076,7 +14174,8 @@ where
 			recog.enumBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14105,14 +14204,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumBodyContext<'input>{
@@ -14127,7 +14226,7 @@ impl<'input> CustomRuleContext<'input> for EnumBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumBody }
 }
-antlr_rust::type_id!{EnumBodyContextExt<'a>}
+antlr_rust::tid!{EnumBodyContextExt<'a>}
 
 impl<'input> EnumBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumBodyContextAll<'input>> {
@@ -14179,8 +14278,8 @@ where
 		let mut _localctx = EnumBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 192, RULE_enumBody);
         let mut _localctx: Rc<EnumBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14227,7 +14326,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14256,14 +14356,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumConstantListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumConstantListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumConstantList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumConstantList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumConstantList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumConstantList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumConstantListContext<'input>{
@@ -14278,7 +14378,7 @@ impl<'input> CustomRuleContext<'input> for EnumConstantListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumConstantList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumConstantList }
 }
-antlr_rust::type_id!{EnumConstantListContextExt<'a>}
+antlr_rust::tid!{EnumConstantListContextExt<'a>}
 
 impl<'input> EnumConstantListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumConstantListContextAll<'input>> {
@@ -14324,7 +14424,7 @@ where
 		let mut _localctx = EnumConstantListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 194, RULE_enumConstantList);
         let mut _localctx: Rc<EnumConstantListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -14356,7 +14456,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(132,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14385,14 +14486,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumConstantContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumConstantContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumConstant(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumConstant(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumConstant(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumConstant(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumConstantContext<'input>{
@@ -14407,7 +14508,7 @@ impl<'input> CustomRuleContext<'input> for EnumConstantContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumConstant }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumConstant }
 }
-antlr_rust::type_id!{EnumConstantContextExt<'a>}
+antlr_rust::tid!{EnumConstantContextExt<'a>}
 
 impl<'input> EnumConstantContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumConstantContextAll<'input>> {
@@ -14465,8 +14566,8 @@ where
 		let mut _localctx = EnumConstantContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 196, RULE_enumConstant);
         let mut _localctx: Rc<EnumConstantContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14501,7 +14602,7 @@ where
 				recog.base.set_state(1350);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 					{
 					/*InvokeRule argumentList*/
 					recog.base.set_state(1349);
@@ -14529,7 +14630,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14558,14 +14660,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumConstantModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumConstantModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumConstantModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumConstantModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumConstantModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumConstantModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumConstantModifierContext<'input>{
@@ -14580,7 +14682,7 @@ impl<'input> CustomRuleContext<'input> for EnumConstantModifierContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_enumConstantModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumConstantModifier }
 }
-antlr_rust::type_id!{EnumConstantModifierContextExt<'a>}
+antlr_rust::tid!{EnumConstantModifierContextExt<'a>}
 
 impl<'input> EnumConstantModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumConstantModifierContextAll<'input>> {
@@ -14614,7 +14716,7 @@ where
 		let mut _localctx = EnumConstantModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 198, RULE_enumConstantModifier);
         let mut _localctx: Rc<EnumConstantModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14624,7 +14726,8 @@ where
 			recog.annotation()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14653,14 +14756,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnumBodyDeclarationsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnumBodyDeclarationsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumBodyDeclarations(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enumBodyDeclarations(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumBodyDeclarations(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enumBodyDeclarations(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnumBodyDeclarationsContext<'input>{
@@ -14675,7 +14778,7 @@ impl<'input> CustomRuleContext<'input> for EnumBodyDeclarationsContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_enumBodyDeclarations }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumBodyDeclarations }
 }
-antlr_rust::type_id!{EnumBodyDeclarationsContextExt<'a>}
+antlr_rust::tid!{EnumBodyDeclarationsContextExt<'a>}
 
 impl<'input> EnumBodyDeclarationsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumBodyDeclarationsContextAll<'input>> {
@@ -14717,8 +14820,8 @@ where
 		let mut _localctx = EnumBodyDeclarationsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 200, RULE_enumBodyDeclarations);
         let mut _localctx: Rc<EnumBodyDeclarationsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14729,7 +14832,7 @@ where
 			recog.base.set_state(1364);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NATIVE) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SYNCHRONIZED) | (1usize << TRANSIENT))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NATIVE - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (TRANSIENT - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)))) != 0) || _la==Identifier {
 				{
 				{
 				/*InvokeRule classBodyDeclaration*/
@@ -14743,7 +14846,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14772,14 +14876,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordDeclarationContext<'input>{
@@ -14794,7 +14898,7 @@ impl<'input> CustomRuleContext<'input> for RecordDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_recordDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordDeclaration }
 }
-antlr_rust::type_id!{RecordDeclarationContextExt<'a>}
+antlr_rust::tid!{RecordDeclarationContextExt<'a>}
 
 impl<'input> RecordDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordDeclarationContextAll<'input>> {
@@ -14851,8 +14955,8 @@ where
 		let mut _localctx = RecordDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 202, RULE_recordDeclaration);
         let mut _localctx: Rc<RecordDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14860,7 +14964,7 @@ where
 			recog.base.set_state(1370);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << FINAL) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==AT {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PRIVATE - 35)) | (1usize << (PROTECTED - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (STRICTFP - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule classModifier*/
@@ -14913,7 +15017,8 @@ where
 			recog.recordBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14942,14 +15047,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordHeaderContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordHeaderContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordHeader(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordHeader(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordHeader(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordHeader(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordHeaderContext<'input>{
@@ -14964,7 +15069,7 @@ impl<'input> CustomRuleContext<'input> for RecordHeaderContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_recordHeader }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordHeader }
 }
-antlr_rust::type_id!{RecordHeaderContextExt<'a>}
+antlr_rust::tid!{RecordHeaderContextExt<'a>}
 
 impl<'input> RecordHeaderContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordHeaderContextAll<'input>> {
@@ -15008,8 +15113,8 @@ where
 		let mut _localctx = RecordHeaderContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 204, RULE_recordHeader);
         let mut _localctx: Rc<RecordHeaderContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15020,7 +15125,7 @@ where
 			recog.base.set_state(1386);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << SHORT))) != 0) || _la==AT || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (SHORT - 37)))) != 0) || _la==AT || _la==Identifier {
 				{
 				/*InvokeRule recordComponentList*/
 				recog.base.set_state(1385);
@@ -15033,7 +15138,8 @@ where
 			recog.base.match_token(RPAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15062,14 +15168,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordComponentListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordComponentListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordComponentList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordComponentList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordComponentList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordComponentList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordComponentListContext<'input>{
@@ -15084,7 +15190,7 @@ impl<'input> CustomRuleContext<'input> for RecordComponentListContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_recordComponentList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordComponentList }
 }
-antlr_rust::type_id!{RecordComponentListContextExt<'a>}
+antlr_rust::tid!{RecordComponentListContextExt<'a>}
 
 impl<'input> RecordComponentListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordComponentListContextAll<'input>> {
@@ -15130,8 +15236,8 @@ where
 		let mut _localctx = RecordComponentListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 206, RULE_recordComponentList);
         let mut _localctx: Rc<RecordComponentListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15160,7 +15266,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15189,14 +15296,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordComponentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordComponentContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordComponent(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordComponent(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordComponent(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordComponent(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordComponentContext<'input>{
@@ -15211,7 +15318,7 @@ impl<'input> CustomRuleContext<'input> for RecordComponentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_recordComponent }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordComponent }
 }
-antlr_rust::type_id!{RecordComponentContextExt<'a>}
+antlr_rust::tid!{RecordComponentContextExt<'a>}
 
 impl<'input> RecordComponentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordComponentContextAll<'input>> {
@@ -15259,8 +15366,8 @@ where
 		let mut _localctx = RecordComponentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 208, RULE_recordComponent);
         let mut _localctx: Rc<RecordComponentContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1408);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -15308,7 +15415,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15337,14 +15445,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableArityRecordComponentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableArityRecordComponentContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableArityRecordComponent(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableArityRecordComponent(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableArityRecordComponent(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableArityRecordComponent(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableArityRecordComponentContext<'input>{
@@ -15359,7 +15467,7 @@ impl<'input> CustomRuleContext<'input> for VariableArityRecordComponentContextEx
 	fn get_rule_index(&self) -> usize { RULE_variableArityRecordComponent }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableArityRecordComponent }
 }
-antlr_rust::type_id!{VariableArityRecordComponentContextExt<'a>}
+antlr_rust::tid!{VariableArityRecordComponentContextExt<'a>}
 
 impl<'input> VariableArityRecordComponentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableArityRecordComponentContextAll<'input>> {
@@ -15415,8 +15523,8 @@ where
 		let mut _localctx = VariableArityRecordComponentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 210, RULE_variableArityRecordComponent);
         let mut _localctx: Rc<VariableArityRecordComponentContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15464,7 +15572,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15493,14 +15602,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordComponentModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordComponentModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordComponentModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordComponentModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordComponentModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordComponentModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordComponentModifierContext<'input>{
@@ -15515,7 +15624,7 @@ impl<'input> CustomRuleContext<'input> for RecordComponentModifierContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_recordComponentModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordComponentModifier }
 }
-antlr_rust::type_id!{RecordComponentModifierContextExt<'a>}
+antlr_rust::tid!{RecordComponentModifierContextExt<'a>}
 
 impl<'input> RecordComponentModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordComponentModifierContextAll<'input>> {
@@ -15549,7 +15658,7 @@ where
 		let mut _localctx = RecordComponentModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 212, RULE_recordComponentModifier);
         let mut _localctx: Rc<RecordComponentModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15559,7 +15668,8 @@ where
 			recog.annotation()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15588,14 +15698,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordBodyContext<'input>{
@@ -15610,7 +15720,7 @@ impl<'input> CustomRuleContext<'input> for RecordBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_recordBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordBody }
 }
-antlr_rust::type_id!{RecordBodyContextExt<'a>}
+antlr_rust::tid!{RecordBodyContextExt<'a>}
 
 impl<'input> RecordBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordBodyContextAll<'input>> {
@@ -15657,8 +15767,8 @@ where
 		let mut _localctx = RecordBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 214, RULE_recordBody);
         let mut _localctx: Rc<RecordBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15669,7 +15779,7 @@ where
 			recog.base.set_state(1432);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NATIVE) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SYNCHRONIZED) | (1usize << TRANSIENT))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NATIVE - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (TRANSIENT - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (VOLATILE - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)))) != 0) || _la==Identifier {
 				{
 				{
 				/*InvokeRule recordBodyDeclaration*/
@@ -15686,7 +15796,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15715,14 +15826,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RecordBodyDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RecordBodyDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_recordBodyDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_recordBodyDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_recordBodyDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_recordBodyDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RecordBodyDeclarationContext<'input>{
@@ -15737,7 +15848,7 @@ impl<'input> CustomRuleContext<'input> for RecordBodyDeclarationContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_recordBodyDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_recordBodyDeclaration }
 }
-antlr_rust::type_id!{RecordBodyDeclarationContextExt<'a>}
+antlr_rust::tid!{RecordBodyDeclarationContextExt<'a>}
 
 impl<'input> RecordBodyDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RecordBodyDeclarationContextAll<'input>> {
@@ -15774,7 +15885,7 @@ where
 		let mut _localctx = RecordBodyDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 216, RULE_recordBodyDeclaration);
         let mut _localctx: Rc<RecordBodyDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1439);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -15803,7 +15914,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15832,14 +15944,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CompactConstructorDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CompactConstructorDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compactConstructorDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_compactConstructorDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compactConstructorDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_compactConstructorDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CompactConstructorDeclarationContext<'input>{
@@ -15854,7 +15966,7 @@ impl<'input> CustomRuleContext<'input> for CompactConstructorDeclarationContextE
 	fn get_rule_index(&self) -> usize { RULE_compactConstructorDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compactConstructorDeclaration }
 }
-antlr_rust::type_id!{CompactConstructorDeclarationContextExt<'a>}
+antlr_rust::tid!{CompactConstructorDeclarationContextExt<'a>}
 
 impl<'input> CompactConstructorDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CompactConstructorDeclarationContextAll<'input>> {
@@ -15897,8 +16009,8 @@ where
 		let mut _localctx = CompactConstructorDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 218, RULE_compactConstructorDeclaration);
         let mut _localctx: Rc<CompactConstructorDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15906,7 +16018,7 @@ where
 			recog.base.set_state(1444);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PROTECTED - 50)) | (1usize << (PUBLIC - 50)) | (1usize << (AT - 50)))) != 0) {
+			while ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PROTECTED - 50)) | (1usize << (PUBLIC - 50)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule constructorModifier*/
@@ -15928,7 +16040,8 @@ where
 			recog.constructorBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15957,14 +16070,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceDeclarationContext<'input>{
@@ -15979,7 +16092,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_interfaceDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceDeclaration }
 }
-antlr_rust::type_id!{InterfaceDeclarationContextExt<'a>}
+antlr_rust::tid!{InterfaceDeclarationContextExt<'a>}
 
 impl<'input> InterfaceDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceDeclarationContextAll<'input>> {
@@ -16016,7 +16129,7 @@ where
 		let mut _localctx = InterfaceDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 220, RULE_interfaceDeclaration);
         let mut _localctx: Rc<InterfaceDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1452);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -16045,7 +16158,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16074,14 +16188,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for NormalInterfaceDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for NormalInterfaceDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_normalInterfaceDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_normalInterfaceDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_normalInterfaceDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_normalInterfaceDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for NormalInterfaceDeclarationContext<'input>{
@@ -16096,7 +16210,7 @@ impl<'input> CustomRuleContext<'input> for NormalInterfaceDeclarationContextExt<
 	fn get_rule_index(&self) -> usize { RULE_normalInterfaceDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_normalInterfaceDeclaration }
 }
-antlr_rust::type_id!{NormalInterfaceDeclarationContextExt<'a>}
+antlr_rust::tid!{NormalInterfaceDeclarationContextExt<'a>}
 
 impl<'input> NormalInterfaceDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NormalInterfaceDeclarationContextAll<'input>> {
@@ -16153,8 +16267,8 @@ where
 		let mut _localctx = NormalInterfaceDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 222, RULE_normalInterfaceDeclaration);
         let mut _localctx: Rc<NormalInterfaceDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16162,7 +16276,7 @@ where
 			recog.base.set_state(1457);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==AT {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << SEALED) | (1usize << ABSTRACT))) != 0) || ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PROTECTED - 50)) | (1usize << (PUBLIC - 50)) | (1usize << (STATIC - 50)) | (1usize << (STRICTFP - 50)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule interfaceModifier*/
@@ -16223,7 +16337,8 @@ where
 			recog.interfaceBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16252,14 +16367,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceModifierContext<'input>{
@@ -16274,7 +16389,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfaceModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceModifier }
 }
-antlr_rust::type_id!{InterfaceModifierContextExt<'a>}
+antlr_rust::tid!{InterfaceModifierContextExt<'a>}
 
 impl<'input> InterfaceModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceModifierContextAll<'input>> {
@@ -16348,7 +16463,7 @@ where
 		let mut _localctx = InterfaceModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 224, RULE_interfaceModifier);
         let mut _localctx: Rc<InterfaceModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1482);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -16455,7 +16570,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16484,14 +16600,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceExtendsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceExtendsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceExtends(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceExtends(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceExtends(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceExtends(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceExtendsContext<'input>{
@@ -16506,7 +16622,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceExtendsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfaceExtends }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceExtends }
 }
-antlr_rust::type_id!{InterfaceExtendsContextExt<'a>}
+antlr_rust::tid!{InterfaceExtendsContextExt<'a>}
 
 impl<'input> InterfaceExtendsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceExtendsContextAll<'input>> {
@@ -16545,7 +16661,7 @@ where
 		let mut _localctx = InterfaceExtendsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 226, RULE_interfaceExtends);
         let mut _localctx: Rc<InterfaceExtendsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16558,7 +16674,8 @@ where
 			recog.interfaceTypeList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16587,14 +16704,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfacePermitsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfacePermitsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfacePermits(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfacePermits(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfacePermits(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfacePermits(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfacePermitsContext<'input>{
@@ -16609,7 +16726,7 @@ impl<'input> CustomRuleContext<'input> for InterfacePermitsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfacePermits }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfacePermits }
 }
-antlr_rust::type_id!{InterfacePermitsContextExt<'a>}
+antlr_rust::tid!{InterfacePermitsContextExt<'a>}
 
 impl<'input> InterfacePermitsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfacePermitsContextAll<'input>> {
@@ -16660,8 +16777,8 @@ where
 		let mut _localctx = InterfacePermitsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 228, RULE_interfacePermits);
         let mut _localctx: Rc<InterfacePermitsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16693,7 +16810,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16722,14 +16840,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceBodyContext<'input>{
@@ -16744,7 +16862,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_interfaceBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceBody }
 }
-antlr_rust::type_id!{InterfaceBodyContextExt<'a>}
+antlr_rust::tid!{InterfaceBodyContextExt<'a>}
 
 impl<'input> InterfaceBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceBodyContextAll<'input>> {
@@ -16791,8 +16909,8 @@ where
 		let mut _localctx = InterfaceBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 230, RULE_interfaceBody);
         let mut _localctx: Rc<InterfaceBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16803,7 +16921,7 @@ where
 			recog.base.set_state(1500);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DEFAULT) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DEFAULT) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)) | (1usize << (LT - 65)))) != 0) || _la==Identifier {
 				{
 				{
 				/*InvokeRule interfaceMemberDeclaration*/
@@ -16820,7 +16938,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16849,14 +16968,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceMemberDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceMemberDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceMemberDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceMemberDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceMemberDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceMemberDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceMemberDeclarationContext<'input>{
@@ -16871,7 +16990,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceMemberDeclarationContextExt<
 	fn get_rule_index(&self) -> usize { RULE_interfaceMemberDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceMemberDeclaration }
 }
-antlr_rust::type_id!{InterfaceMemberDeclarationContextExt<'a>}
+antlr_rust::tid!{InterfaceMemberDeclarationContextExt<'a>}
 
 impl<'input> InterfaceMemberDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceMemberDeclarationContextAll<'input>> {
@@ -16919,7 +17038,7 @@ where
 		let mut _localctx = InterfaceMemberDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 232, RULE_interfaceMemberDeclaration);
         let mut _localctx: Rc<InterfaceMemberDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1510);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -16980,7 +17099,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17009,14 +17129,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstantDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstantDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constantDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constantDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constantDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constantDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstantDeclarationContext<'input>{
@@ -17031,7 +17151,7 @@ impl<'input> CustomRuleContext<'input> for ConstantDeclarationContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_constantDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constantDeclaration }
 }
-antlr_rust::type_id!{ConstantDeclarationContextExt<'a>}
+antlr_rust::tid!{ConstantDeclarationContextExt<'a>}
 
 impl<'input> ConstantDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstantDeclarationContextAll<'input>> {
@@ -17079,8 +17199,8 @@ where
 		let mut _localctx = ConstantDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 234, RULE_constantDeclaration);
         let mut _localctx: Rc<ConstantDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17088,7 +17208,7 @@ where
 			recog.base.set_state(1515);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)) | (1usize << (AT - 35)))) != 0) {
+			while ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (PUBLIC - 35)) | (1usize << (STATIC - 35)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule constantModifier*/
@@ -17113,7 +17233,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17142,14 +17263,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstantModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstantModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constantModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constantModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constantModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constantModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstantModifierContext<'input>{
@@ -17164,7 +17285,7 @@ impl<'input> CustomRuleContext<'input> for ConstantModifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_constantModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constantModifier }
 }
-antlr_rust::type_id!{ConstantModifierContextExt<'a>}
+antlr_rust::tid!{ConstantModifierContextExt<'a>}
 
 impl<'input> ConstantModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstantModifierContextAll<'input>> {
@@ -17213,7 +17334,7 @@ where
 		let mut _localctx = ConstantModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 236, RULE_constantModifier);
         let mut _localctx: Rc<ConstantModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1526);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -17265,7 +17386,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17294,14 +17416,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceMethodDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceMethodDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceMethodDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceMethodDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceMethodDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceMethodDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceMethodDeclarationContext<'input>{
@@ -17316,7 +17438,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceMethodDeclarationContextExt<
 	fn get_rule_index(&self) -> usize { RULE_interfaceMethodDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceMethodDeclaration }
 }
-antlr_rust::type_id!{InterfaceMethodDeclarationContextExt<'a>}
+antlr_rust::tid!{InterfaceMethodDeclarationContextExt<'a>}
 
 impl<'input> InterfaceMethodDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceMethodDeclarationContextAll<'input>> {
@@ -17359,8 +17481,8 @@ where
 		let mut _localctx = InterfaceMethodDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 238, RULE_interfaceMethodDeclaration);
         let mut _localctx: Rc<InterfaceMethodDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17368,7 +17490,7 @@ where
 			recog.base.set_state(1531);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << ABSTRACT) | (1usize << DEFAULT) | (1usize << PRIVATE) | (1usize << PUBLIC) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || _la==AT {
+			while _la==ABSTRACT || _la==DEFAULT || ((((_la - 50)) & !0x3f) == 0 && ((1usize << (_la - 50)) & ((1usize << (PRIVATE - 50)) | (1usize << (PUBLIC - 50)) | (1usize << (STATIC - 50)) | (1usize << (STRICTFP - 50)))) != 0) || _la==AT {
 				{
 				{
 				/*InvokeRule interfaceMethodModifier*/
@@ -17390,7 +17512,8 @@ where
 			recog.methodBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17419,14 +17542,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InterfaceMethodModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InterfaceMethodModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_interfaceMethodModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_interfaceMethodModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_interfaceMethodModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_interfaceMethodModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InterfaceMethodModifierContext<'input>{
@@ -17441,7 +17564,7 @@ impl<'input> CustomRuleContext<'input> for InterfaceMethodModifierContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_interfaceMethodModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_interfaceMethodModifier }
 }
-antlr_rust::type_id!{InterfaceMethodModifierContextExt<'a>}
+antlr_rust::tid!{InterfaceMethodModifierContextExt<'a>}
 
 impl<'input> InterfaceMethodModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InterfaceMethodModifierContextAll<'input>> {
@@ -17505,7 +17628,7 @@ where
 		let mut _localctx = InterfaceMethodModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 240, RULE_interfaceMethodModifier);
         let mut _localctx: Rc<InterfaceMethodModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1544);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -17590,7 +17713,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17619,14 +17743,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationInterfaceDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationInterfaceDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotationInterfaceDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotationInterfaceDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotationInterfaceDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotationInterfaceDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationInterfaceDeclarationContext<'input>{
@@ -17641,7 +17765,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationInterfaceDeclarationContext
 	fn get_rule_index(&self) -> usize { RULE_annotationInterfaceDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotationInterfaceDeclaration }
 }
-antlr_rust::type_id!{AnnotationInterfaceDeclarationContextExt<'a>}
+antlr_rust::tid!{AnnotationInterfaceDeclarationContextExt<'a>}
 
 impl<'input> AnnotationInterfaceDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationInterfaceDeclarationContextAll<'input>> {
@@ -17694,7 +17818,7 @@ where
 		let mut _localctx = AnnotationInterfaceDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 242, RULE_annotationInterfaceDeclaration);
         let mut _localctx: Rc<AnnotationInterfaceDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -17733,7 +17857,8 @@ where
 			recog.annotationInterfaceBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17762,14 +17887,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationInterfaceBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationInterfaceBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotationInterfaceBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotationInterfaceBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotationInterfaceBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotationInterfaceBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationInterfaceBodyContext<'input>{
@@ -17784,7 +17909,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationInterfaceBodyContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_annotationInterfaceBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotationInterfaceBody }
 }
-antlr_rust::type_id!{AnnotationInterfaceBodyContextExt<'a>}
+antlr_rust::tid!{AnnotationInterfaceBodyContextExt<'a>}
 
 impl<'input> AnnotationInterfaceBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationInterfaceBodyContextAll<'input>> {
@@ -17831,8 +17956,8 @@ where
 		let mut _localctx = AnnotationInterfaceBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 244, RULE_annotationInterfaceBody);
         let mut _localctx: Rc<AnnotationInterfaceBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17843,7 +17968,7 @@ where
 			recog.base.set_state(1561);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP))) != 0) || ((((_la - 82)) & !0x3f) == 0 && ((1usize << (_la - 82)) & ((1usize << (SEMI - 82)) | (1usize << (AT - 82)) | (1usize << (Identifier - 82)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << ABSTRACT) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)))) != 0) || _la==SEMI || _la==AT || _la==Identifier {
 				{
 				{
 				/*InvokeRule annotationInterfaceMemberDeclaration*/
@@ -17860,7 +17985,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17889,14 +18015,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationInterfaceMemberDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationInterfaceMemberDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotationInterfaceMemberDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotationInterfaceMemberDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotationInterfaceMemberDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotationInterfaceMemberDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationInterfaceMemberDeclarationContext<'input>{
@@ -17911,7 +18037,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationInterfaceMemberDeclarationC
 	fn get_rule_index(&self) -> usize { RULE_annotationInterfaceMemberDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotationInterfaceMemberDeclaration }
 }
-antlr_rust::type_id!{AnnotationInterfaceMemberDeclarationContextExt<'a>}
+antlr_rust::tid!{AnnotationInterfaceMemberDeclarationContextExt<'a>}
 
 impl<'input> AnnotationInterfaceMemberDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationInterfaceMemberDeclarationContextAll<'input>> {
@@ -17959,7 +18085,7 @@ where
 		let mut _localctx = AnnotationInterfaceMemberDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 246, RULE_annotationInterfaceMemberDeclaration);
         let mut _localctx: Rc<AnnotationInterfaceMemberDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1571);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -18020,7 +18146,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18049,14 +18176,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationInterfaceElementDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationInterfaceElementDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotationInterfaceElementDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotationInterfaceElementDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotationInterfaceElementDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotationInterfaceElementDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationInterfaceElementDeclarationContext<'input>{
@@ -18071,7 +18198,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationInterfaceElementDeclaration
 	fn get_rule_index(&self) -> usize { RULE_annotationInterfaceElementDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotationInterfaceElementDeclaration }
 }
-antlr_rust::type_id!{AnnotationInterfaceElementDeclarationContextExt<'a>}
+antlr_rust::tid!{AnnotationInterfaceElementDeclarationContextExt<'a>}
 
 impl<'input> AnnotationInterfaceElementDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationInterfaceElementDeclarationContextAll<'input>> {
@@ -18137,8 +18264,8 @@ where
 		let mut _localctx = AnnotationInterfaceElementDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 248, RULE_annotationInterfaceElementDeclaration);
         let mut _localctx: Rc<AnnotationInterfaceElementDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18200,7 +18327,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18229,14 +18357,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationInterfaceElementModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationInterfaceElementModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotationInterfaceElementModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotationInterfaceElementModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotationInterfaceElementModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotationInterfaceElementModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationInterfaceElementModifierContext<'input>{
@@ -18251,7 +18379,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationInterfaceElementModifierCon
 	fn get_rule_index(&self) -> usize { RULE_annotationInterfaceElementModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotationInterfaceElementModifier }
 }
-antlr_rust::type_id!{AnnotationInterfaceElementModifierContextExt<'a>}
+antlr_rust::tid!{AnnotationInterfaceElementModifierContextExt<'a>}
 
 impl<'input> AnnotationInterfaceElementModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationInterfaceElementModifierContextAll<'input>> {
@@ -18295,7 +18423,7 @@ where
 		let mut _localctx = AnnotationInterfaceElementModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 250, RULE_annotationInterfaceElementModifier);
         let mut _localctx: Rc<AnnotationInterfaceElementModifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1594);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -18336,7 +18464,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18365,14 +18494,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for DefaultValueContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for DefaultValueContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_defaultValue(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_defaultValue(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_defaultValue(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_defaultValue(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for DefaultValueContext<'input>{
@@ -18387,7 +18516,7 @@ impl<'input> CustomRuleContext<'input> for DefaultValueContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_defaultValue }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_defaultValue }
 }
-antlr_rust::type_id!{DefaultValueContextExt<'a>}
+antlr_rust::tid!{DefaultValueContextExt<'a>}
 
 impl<'input> DefaultValueContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DefaultValueContextAll<'input>> {
@@ -18426,7 +18555,7 @@ where
 		let mut _localctx = DefaultValueContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 252, RULE_defaultValue);
         let mut _localctx: Rc<DefaultValueContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18439,7 +18568,8 @@ where
 			recog.elementValue()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18468,14 +18598,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AnnotationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AnnotationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annotation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_annotation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annotation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_annotation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AnnotationContext<'input>{
@@ -18490,7 +18620,7 @@ impl<'input> CustomRuleContext<'input> for AnnotationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_annotation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annotation }
 }
-antlr_rust::type_id!{AnnotationContextExt<'a>}
+antlr_rust::tid!{AnnotationContextExt<'a>}
 
 impl<'input> AnnotationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnotationContextAll<'input>> {
@@ -18530,7 +18660,7 @@ where
 		let mut _localctx = AnnotationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 254, RULE_annotation);
         let mut _localctx: Rc<AnnotationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1602);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -18570,7 +18700,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18599,14 +18730,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for NormalAnnotationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for NormalAnnotationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_normalAnnotation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_normalAnnotation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_normalAnnotation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_normalAnnotation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for NormalAnnotationContext<'input>{
@@ -18621,7 +18752,7 @@ impl<'input> CustomRuleContext<'input> for NormalAnnotationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_normalAnnotation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_normalAnnotation }
 }
-antlr_rust::type_id!{NormalAnnotationContextExt<'a>}
+antlr_rust::tid!{NormalAnnotationContextExt<'a>}
 
 impl<'input> NormalAnnotationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NormalAnnotationContextAll<'input>> {
@@ -18673,8 +18804,8 @@ where
 		let mut _localctx = NormalAnnotationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 256, RULE_normalAnnotation);
         let mut _localctx: Rc<NormalAnnotationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18705,7 +18836,8 @@ where
 			recog.base.match_token(RPAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18734,14 +18866,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ElementValuePairListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ElementValuePairListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elementValuePairList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_elementValuePairList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elementValuePairList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_elementValuePairList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ElementValuePairListContext<'input>{
@@ -18756,7 +18888,7 @@ impl<'input> CustomRuleContext<'input> for ElementValuePairListContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_elementValuePairList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elementValuePairList }
 }
-antlr_rust::type_id!{ElementValuePairListContextExt<'a>}
+antlr_rust::tid!{ElementValuePairListContextExt<'a>}
 
 impl<'input> ElementValuePairListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElementValuePairListContextAll<'input>> {
@@ -18802,8 +18934,8 @@ where
 		let mut _localctx = ElementValuePairListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 258, RULE_elementValuePairList);
         let mut _localctx: Rc<ElementValuePairListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18832,7 +18964,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18861,14 +18994,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ElementValuePairContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ElementValuePairContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elementValuePair(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_elementValuePair(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elementValuePair(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_elementValuePair(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ElementValuePairContext<'input>{
@@ -18883,7 +19016,7 @@ impl<'input> CustomRuleContext<'input> for ElementValuePairContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_elementValuePair }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elementValuePair }
 }
-antlr_rust::type_id!{ElementValuePairContextExt<'a>}
+antlr_rust::tid!{ElementValuePairContextExt<'a>}
 
 impl<'input> ElementValuePairContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElementValuePairContextAll<'input>> {
@@ -18927,7 +19060,7 @@ where
 		let mut _localctx = ElementValuePairContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 260, RULE_elementValuePair);
         let mut _localctx: Rc<ElementValuePairContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18943,7 +19076,8 @@ where
 			recog.elementValue()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18972,14 +19106,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ElementValueContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ElementValueContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elementValue(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_elementValue(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elementValue(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_elementValue(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ElementValueContext<'input>{
@@ -18994,7 +19128,7 @@ impl<'input> CustomRuleContext<'input> for ElementValueContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_elementValue }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elementValue }
 }
-antlr_rust::type_id!{ElementValueContextExt<'a>}
+antlr_rust::tid!{ElementValueContextExt<'a>}
 
 impl<'input> ElementValueContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElementValueContextAll<'input>> {
@@ -19034,7 +19168,7 @@ where
 		let mut _localctx = ElementValueContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 262, RULE_elementValue);
         let mut _localctx: Rc<ElementValueContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1627);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -19074,7 +19208,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19103,14 +19238,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ElementValueArrayInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ElementValueArrayInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elementValueArrayInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_elementValueArrayInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elementValueArrayInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_elementValueArrayInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ElementValueArrayInitializerContext<'input>{
@@ -19125,7 +19260,7 @@ impl<'input> CustomRuleContext<'input> for ElementValueArrayInitializerContextEx
 	fn get_rule_index(&self) -> usize { RULE_elementValueArrayInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elementValueArrayInitializer }
 }
-antlr_rust::type_id!{ElementValueArrayInitializerContextExt<'a>}
+antlr_rust::tid!{ElementValueArrayInitializerContextExt<'a>}
 
 impl<'input> ElementValueArrayInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElementValueArrayInitializerContextAll<'input>> {
@@ -19174,8 +19309,8 @@ where
 		let mut _localctx = ElementValueArrayInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 264, RULE_elementValueArrayInitializer);
         let mut _localctx: Rc<ElementValueArrayInitializerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19186,7 +19321,7 @@ where
 			recog.base.set_state(1631);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (LBRACE - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (LBRACE - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule elementValueList*/
 				recog.base.set_state(1630);
@@ -19210,7 +19345,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19239,14 +19375,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ElementValueListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ElementValueListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elementValueList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_elementValueList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elementValueList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_elementValueList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ElementValueListContext<'input>{
@@ -19261,7 +19397,7 @@ impl<'input> CustomRuleContext<'input> for ElementValueListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_elementValueList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elementValueList }
 }
-antlr_rust::type_id!{ElementValueListContextExt<'a>}
+antlr_rust::tid!{ElementValueListContextExt<'a>}
 
 impl<'input> ElementValueListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElementValueListContextAll<'input>> {
@@ -19307,7 +19443,7 @@ where
 		let mut _localctx = ElementValueListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 266, RULE_elementValueList);
         let mut _localctx: Rc<ElementValueListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -19339,7 +19475,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(176,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19368,14 +19505,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MarkerAnnotationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MarkerAnnotationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_markerAnnotation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_markerAnnotation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_markerAnnotation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_markerAnnotation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MarkerAnnotationContext<'input>{
@@ -19390,7 +19527,7 @@ impl<'input> CustomRuleContext<'input> for MarkerAnnotationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_markerAnnotation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_markerAnnotation }
 }
-antlr_rust::type_id!{MarkerAnnotationContextExt<'a>}
+antlr_rust::tid!{MarkerAnnotationContextExt<'a>}
 
 impl<'input> MarkerAnnotationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MarkerAnnotationContextAll<'input>> {
@@ -19429,7 +19566,7 @@ where
 		let mut _localctx = MarkerAnnotationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 268, RULE_markerAnnotation);
         let mut _localctx: Rc<MarkerAnnotationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19442,7 +19579,8 @@ where
 			recog.typeName()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19471,14 +19609,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SingleElementAnnotationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SingleElementAnnotationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_singleElementAnnotation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_singleElementAnnotation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_singleElementAnnotation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_singleElementAnnotation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SingleElementAnnotationContext<'input>{
@@ -19493,7 +19631,7 @@ impl<'input> CustomRuleContext<'input> for SingleElementAnnotationContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_singleElementAnnotation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_singleElementAnnotation }
 }
-antlr_rust::type_id!{SingleElementAnnotationContextExt<'a>}
+antlr_rust::tid!{SingleElementAnnotationContextExt<'a>}
 
 impl<'input> SingleElementAnnotationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SingleElementAnnotationContextAll<'input>> {
@@ -19545,7 +19683,7 @@ where
 		let mut _localctx = SingleElementAnnotationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 270, RULE_singleElementAnnotation);
         let mut _localctx: Rc<SingleElementAnnotationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19568,7 +19706,8 @@ where
 			recog.base.match_token(RPAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19597,14 +19736,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayInitializerContext<'input>{
@@ -19619,7 +19758,7 @@ impl<'input> CustomRuleContext<'input> for ArrayInitializerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_arrayInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayInitializer }
 }
-antlr_rust::type_id!{ArrayInitializerContextExt<'a>}
+antlr_rust::tid!{ArrayInitializerContextExt<'a>}
 
 impl<'input> ArrayInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayInitializerContextAll<'input>> {
@@ -19668,8 +19807,8 @@ where
 		let mut _localctx = ArrayInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 272, RULE_arrayInitializer);
         let mut _localctx: Rc<ArrayInitializerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19680,7 +19819,7 @@ where
 			recog.base.set_state(1657);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (LBRACE - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (LBRACE - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule variableInitializerList*/
 				recog.base.set_state(1656);
@@ -19704,7 +19843,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19733,14 +19873,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableInitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableInitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableInitializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableInitializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableInitializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableInitializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableInitializerListContext<'input>{
@@ -19755,7 +19895,7 @@ impl<'input> CustomRuleContext<'input> for VariableInitializerListContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_variableInitializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableInitializerList }
 }
-antlr_rust::type_id!{VariableInitializerListContextExt<'a>}
+antlr_rust::tid!{VariableInitializerListContextExt<'a>}
 
 impl<'input> VariableInitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableInitializerListContextAll<'input>> {
@@ -19801,7 +19941,7 @@ where
 		let mut _localctx = VariableInitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 274, RULE_variableInitializerList);
         let mut _localctx: Rc<VariableInitializerListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -19833,7 +19973,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(179,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19862,14 +20003,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_block(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_block(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_block(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_block(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BlockContext<'input>{
@@ -19884,7 +20025,7 @@ impl<'input> CustomRuleContext<'input> for BlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_block }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_block }
 }
-antlr_rust::type_id!{BlockContextExt<'a>}
+antlr_rust::tid!{BlockContextExt<'a>}
 
 impl<'input> BlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockContextAll<'input>> {
@@ -19928,8 +20069,8 @@ where
 		let mut _localctx = BlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 276, RULE_block);
         let mut _localctx: Rc<BlockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19940,7 +20081,7 @@ where
 			recog.base.set_state(1674);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << FOR) | (1usize << IF) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NEW) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << RETURN) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << SYNCHRONIZED) | (1usize << THIS) | (1usize << THROW))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (TRY - 64)) | (1usize << (VOID - 64)) | (1usize << (WHILE - 64)) | (1usize << (IntegerLiteral - 64)) | (1usize << (FloatingPointLiteral - 64)) | (1usize << (BooleanLiteral - 64)) | (1usize << (CharacterLiteral - 64)) | (1usize << (StringLiteral - 64)) | (1usize << (TextBlock - 64)) | (1usize << (NullLiteral - 64)) | (1usize << (LPAREN - 64)) | (1usize << (LBRACE - 64)) | (1usize << (SEMI - 64)) | (1usize << (AT - 64)) | (1usize << (INC - 64)) | (1usize << (DEC - 64)) | (1usize << (Identifier - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (FOR - 33)) | (1usize << (IF - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NEW - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (RETURN - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SUPER - 33)) | (1usize << (SWITCH - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (THIS - 33)) | (1usize << (THROW - 33)) | (1usize << (TRY - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (WHILE - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule blockStatements*/
 				recog.base.set_state(1673);
@@ -19953,7 +20094,8 @@ where
 			recog.base.match_token(RBRACE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19982,14 +20124,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BlockStatementsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BlockStatementsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_blockStatements(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_blockStatements(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_blockStatements(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_blockStatements(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BlockStatementsContext<'input>{
@@ -20004,7 +20146,7 @@ impl<'input> CustomRuleContext<'input> for BlockStatementsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_blockStatements }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_blockStatements }
 }
-antlr_rust::type_id!{BlockStatementsContextExt<'a>}
+antlr_rust::tid!{BlockStatementsContextExt<'a>}
 
 impl<'input> BlockStatementsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockStatementsContextAll<'input>> {
@@ -20041,8 +20183,8 @@ where
 		let mut _localctx = BlockStatementsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 278, RULE_blockStatements);
         let mut _localctx: Rc<BlockStatementsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20054,7 +20196,7 @@ where
 			recog.base.set_state(1682);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE) | (1usize << ENUM) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << FOR) | (1usize << IF) | (1usize << INT) | (1usize << INTERFACE) | (1usize << LONG) | (1usize << NEW) | (1usize << PRIVATE) | (1usize << PROTECTED) | (1usize << PUBLIC) | (1usize << RETURN) | (1usize << SHORT) | (1usize << STATIC) | (1usize << STRICTFP) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << SYNCHRONIZED) | (1usize << THIS) | (1usize << THROW))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (TRY - 64)) | (1usize << (VOID - 64)) | (1usize << (WHILE - 64)) | (1usize << (IntegerLiteral - 64)) | (1usize << (FloatingPointLiteral - 64)) | (1usize << (BooleanLiteral - 64)) | (1usize << (CharacterLiteral - 64)) | (1usize << (StringLiteral - 64)) | (1usize << (TextBlock - 64)) | (1usize << (NullLiteral - 64)) | (1usize << (LPAREN - 64)) | (1usize << (LBRACE - 64)) | (1usize << (SEMI - 64)) | (1usize << (AT - 64)) | (1usize << (INC - 64)) | (1usize << (DEC - 64)) | (1usize << (Identifier - 64)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << NONSEALED) | (1usize << RECORD) | (1usize << SEALED) | (1usize << VAR) | (1usize << YIELD) | (1usize << ABSTRACT) | (1usize << ASSERT) | (1usize << BOOLEAN) | (1usize << BREAK) | (1usize << BYTE) | (1usize << CHAR) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DO) | (1usize << DOUBLE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (ENUM - 33)) | (1usize << (FINAL - 33)) | (1usize << (FLOAT - 33)) | (1usize << (FOR - 33)) | (1usize << (IF - 33)) | (1usize << (INT - 33)) | (1usize << (INTERFACE - 33)) | (1usize << (LONG - 33)) | (1usize << (NEW - 33)) | (1usize << (PRIVATE - 33)) | (1usize << (PROTECTED - 33)) | (1usize << (PUBLIC - 33)) | (1usize << (RETURN - 33)) | (1usize << (SHORT - 33)) | (1usize << (STATIC - 33)) | (1usize << (STRICTFP - 33)) | (1usize << (SUPER - 33)) | (1usize << (SWITCH - 33)) | (1usize << (SYNCHRONIZED - 33)) | (1usize << (THIS - 33)) | (1usize << (THROW - 33)) | (1usize << (TRY - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (WHILE - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (LBRACE - 65)) | (1usize << (SEMI - 65)) | (1usize << (AT - 65)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				{
 				/*InvokeRule blockStatement*/
@@ -20068,7 +20210,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20097,14 +20240,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BlockStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BlockStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_blockStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_blockStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_blockStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_blockStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BlockStatementContext<'input>{
@@ -20119,7 +20262,7 @@ impl<'input> CustomRuleContext<'input> for BlockStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_blockStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_blockStatement }
 }
-antlr_rust::type_id!{BlockStatementContextExt<'a>}
+antlr_rust::tid!{BlockStatementContextExt<'a>}
 
 impl<'input> BlockStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockStatementContextAll<'input>> {
@@ -20159,7 +20302,7 @@ where
 		let mut _localctx = BlockStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 280, RULE_blockStatement);
         let mut _localctx: Rc<BlockStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1688);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20199,7 +20342,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20228,14 +20372,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LocalClassOrInterfaceDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LocalClassOrInterfaceDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_localClassOrInterfaceDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_localClassOrInterfaceDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_localClassOrInterfaceDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_localClassOrInterfaceDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LocalClassOrInterfaceDeclarationContext<'input>{
@@ -20250,7 +20394,7 @@ impl<'input> CustomRuleContext<'input> for LocalClassOrInterfaceDeclarationConte
 	fn get_rule_index(&self) -> usize { RULE_localClassOrInterfaceDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_localClassOrInterfaceDeclaration }
 }
-antlr_rust::type_id!{LocalClassOrInterfaceDeclarationContextExt<'a>}
+antlr_rust::tid!{LocalClassOrInterfaceDeclarationContextExt<'a>}
 
 impl<'input> LocalClassOrInterfaceDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LocalClassOrInterfaceDeclarationContextAll<'input>> {
@@ -20287,7 +20431,7 @@ where
 		let mut _localctx = LocalClassOrInterfaceDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 282, RULE_localClassOrInterfaceDeclaration);
         let mut _localctx: Rc<LocalClassOrInterfaceDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1692);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20316,7 +20460,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20345,14 +20490,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LocalVariableDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LocalVariableDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_localVariableDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_localVariableDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_localVariableDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_localVariableDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LocalVariableDeclarationContext<'input>{
@@ -20367,7 +20512,7 @@ impl<'input> CustomRuleContext<'input> for LocalVariableDeclarationContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_localVariableDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_localVariableDeclaration }
 }
-antlr_rust::type_id!{LocalVariableDeclarationContextExt<'a>}
+antlr_rust::tid!{LocalVariableDeclarationContextExt<'a>}
 
 impl<'input> LocalVariableDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LocalVariableDeclarationContextAll<'input>> {
@@ -20410,8 +20555,8 @@ where
 		let mut _localctx = LocalVariableDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 284, RULE_localVariableDeclaration);
         let mut _localctx: Rc<LocalVariableDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20451,7 +20596,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20480,14 +20626,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LocalVariableTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LocalVariableTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_localVariableType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_localVariableType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_localVariableType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_localVariableType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LocalVariableTypeContext<'input>{
@@ -20502,7 +20648,7 @@ impl<'input> CustomRuleContext<'input> for LocalVariableTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_localVariableType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_localVariableType }
 }
-antlr_rust::type_id!{LocalVariableTypeContextExt<'a>}
+antlr_rust::tid!{LocalVariableTypeContextExt<'a>}
 
 impl<'input> LocalVariableTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LocalVariableTypeContextAll<'input>> {
@@ -20541,7 +20687,7 @@ where
 		let mut _localctx = LocalVariableTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 286, RULE_localVariableType);
         let mut _localctx: Rc<LocalVariableTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1706);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20571,7 +20717,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20600,14 +20747,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LocalVariableDeclarationStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LocalVariableDeclarationStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_localVariableDeclarationStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_localVariableDeclarationStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_localVariableDeclarationStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_localVariableDeclarationStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LocalVariableDeclarationStatementContext<'input>{
@@ -20622,7 +20769,7 @@ impl<'input> CustomRuleContext<'input> for LocalVariableDeclarationStatementCont
 	fn get_rule_index(&self) -> usize { RULE_localVariableDeclarationStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_localVariableDeclarationStatement }
 }
-antlr_rust::type_id!{LocalVariableDeclarationStatementContextExt<'a>}
+antlr_rust::tid!{LocalVariableDeclarationStatementContextExt<'a>}
 
 impl<'input> LocalVariableDeclarationStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LocalVariableDeclarationStatementContextAll<'input>> {
@@ -20661,7 +20808,7 @@ where
 		let mut _localctx = LocalVariableDeclarationStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 288, RULE_localVariableDeclarationStatement);
         let mut _localctx: Rc<LocalVariableDeclarationStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20674,7 +20821,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20703,14 +20851,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_statement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_statement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StatementContext<'input>{
@@ -20725,7 +20873,7 @@ impl<'input> CustomRuleContext<'input> for StatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_statement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statement }
 }
-antlr_rust::type_id!{StatementContextExt<'a>}
+antlr_rust::tid!{StatementContextExt<'a>}
 
 impl<'input> StatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementContextAll<'input>> {
@@ -20774,7 +20922,7 @@ where
 		let mut _localctx = StatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 290, RULE_statement);
         let mut _localctx: Rc<StatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1717);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20847,7 +20995,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20876,14 +21025,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_statementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_statementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StatementNoShortIfContext<'input>{
@@ -20898,7 +21047,7 @@ impl<'input> CustomRuleContext<'input> for StatementNoShortIfContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_statementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statementNoShortIf }
 }
-antlr_rust::type_id!{StatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{StatementNoShortIfContextExt<'a>}
 
 impl<'input> StatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementNoShortIfContextAll<'input>> {
@@ -20944,7 +21093,7 @@ where
 		let mut _localctx = StatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 292, RULE_statementNoShortIf);
         let mut _localctx: Rc<StatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1724);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21006,7 +21155,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21035,14 +21185,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StatementWithoutTrailingSubstatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StatementWithoutTrailingSubstatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statementWithoutTrailingSubstatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_statementWithoutTrailingSubstatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statementWithoutTrailingSubstatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_statementWithoutTrailingSubstatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StatementWithoutTrailingSubstatementContext<'input>{
@@ -21057,7 +21207,7 @@ impl<'input> CustomRuleContext<'input> for StatementWithoutTrailingSubstatementC
 	fn get_rule_index(&self) -> usize { RULE_statementWithoutTrailingSubstatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statementWithoutTrailingSubstatement }
 }
-antlr_rust::type_id!{StatementWithoutTrailingSubstatementContextExt<'a>}
+antlr_rust::tid!{StatementWithoutTrailingSubstatementContextExt<'a>}
 
 impl<'input> StatementWithoutTrailingSubstatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementWithoutTrailingSubstatementContextAll<'input>> {
@@ -21127,7 +21277,7 @@ where
 		let mut _localctx = StatementWithoutTrailingSubstatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 294, RULE_statementWithoutTrailingSubstatement);
         let mut _localctx: Rc<StatementWithoutTrailingSubstatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1739);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21293,7 +21443,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21322,14 +21473,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EmptyStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EmptyStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_emptyStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_emptyStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_emptyStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_emptyStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EmptyStatementContext<'input>{
@@ -21344,7 +21495,7 @@ impl<'input> CustomRuleContext<'input> for EmptyStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_emptyStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_emptyStatement }
 }
-antlr_rust::type_id!{EmptyStatementContextExt<'a>}
+antlr_rust::tid!{EmptyStatementContextExt<'a>}
 
 impl<'input> EmptyStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EmptyStatementContextAll<'input>> {
@@ -21380,7 +21531,7 @@ where
 		let mut _localctx = EmptyStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 296, RULE_emptyStatement);
         let mut _localctx: Rc<EmptyStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21389,7 +21540,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21418,14 +21570,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LabeledStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LabeledStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_labeledStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_labeledStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_labeledStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_labeledStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LabeledStatementContext<'input>{
@@ -21440,7 +21592,7 @@ impl<'input> CustomRuleContext<'input> for LabeledStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_labeledStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_labeledStatement }
 }
-antlr_rust::type_id!{LabeledStatementContextExt<'a>}
+antlr_rust::tid!{LabeledStatementContextExt<'a>}
 
 impl<'input> LabeledStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LabeledStatementContextAll<'input>> {
@@ -21484,7 +21636,7 @@ where
 		let mut _localctx = LabeledStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 298, RULE_labeledStatement);
         let mut _localctx: Rc<LabeledStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21500,7 +21652,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21529,14 +21682,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LabeledStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LabeledStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_labeledStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_labeledStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_labeledStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_labeledStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LabeledStatementNoShortIfContext<'input>{
@@ -21551,7 +21704,7 @@ impl<'input> CustomRuleContext<'input> for LabeledStatementNoShortIfContextExt<'
 	fn get_rule_index(&self) -> usize { RULE_labeledStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_labeledStatementNoShortIf }
 }
-antlr_rust::type_id!{LabeledStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{LabeledStatementNoShortIfContextExt<'a>}
 
 impl<'input> LabeledStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LabeledStatementNoShortIfContextAll<'input>> {
@@ -21595,7 +21748,7 @@ where
 		let mut _localctx = LabeledStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 300, RULE_labeledStatementNoShortIf);
         let mut _localctx: Rc<LabeledStatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21611,7 +21764,8 @@ where
 			recog.statementNoShortIf()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21640,14 +21794,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExpressionStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExpressionStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expressionStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_expressionStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expressionStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_expressionStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExpressionStatementContext<'input>{
@@ -21662,7 +21816,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionStatementContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_expressionStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expressionStatement }
 }
-antlr_rust::type_id!{ExpressionStatementContextExt<'a>}
+antlr_rust::tid!{ExpressionStatementContextExt<'a>}
 
 impl<'input> ExpressionStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionStatementContextAll<'input>> {
@@ -21701,7 +21855,7 @@ where
 		let mut _localctx = ExpressionStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 302, RULE_expressionStatement);
         let mut _localctx: Rc<ExpressionStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21714,7 +21868,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21743,14 +21898,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StatementExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StatementExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statementExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_statementExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statementExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_statementExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StatementExpressionContext<'input>{
@@ -21765,7 +21920,7 @@ impl<'input> CustomRuleContext<'input> for StatementExpressionContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_statementExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statementExpression }
 }
-antlr_rust::type_id!{StatementExpressionContextExt<'a>}
+antlr_rust::tid!{StatementExpressionContextExt<'a>}
 
 impl<'input> StatementExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementExpressionContextAll<'input>> {
@@ -21817,7 +21972,7 @@ where
 		let mut _localctx = StatementExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 304, RULE_statementExpression);
         let mut _localctx: Rc<StatementExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1761);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21901,7 +22056,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21930,14 +22086,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for IfThenStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for IfThenStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_ifThenStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_ifThenStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_ifThenStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_ifThenStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for IfThenStatementContext<'input>{
@@ -21952,7 +22108,7 @@ impl<'input> CustomRuleContext<'input> for IfThenStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_ifThenStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_ifThenStatement }
 }
-antlr_rust::type_id!{IfThenStatementContextExt<'a>}
+antlr_rust::tid!{IfThenStatementContextExt<'a>}
 
 impl<'input> IfThenStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IfThenStatementContextAll<'input>> {
@@ -22004,7 +22160,7 @@ where
 		let mut _localctx = IfThenStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 306, RULE_ifThenStatement);
         let mut _localctx: Rc<IfThenStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22027,7 +22183,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22056,14 +22213,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for IfThenElseStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for IfThenElseStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_ifThenElseStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_ifThenElseStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_ifThenElseStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_ifThenElseStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for IfThenElseStatementContext<'input>{
@@ -22078,7 +22235,7 @@ impl<'input> CustomRuleContext<'input> for IfThenElseStatementContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_ifThenElseStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_ifThenElseStatement }
 }
-antlr_rust::type_id!{IfThenElseStatementContextExt<'a>}
+antlr_rust::tid!{IfThenElseStatementContextExt<'a>}
 
 impl<'input> IfThenElseStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IfThenElseStatementContextAll<'input>> {
@@ -22138,7 +22295,7 @@ where
 		let mut _localctx = IfThenElseStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 308, RULE_ifThenElseStatement);
         let mut _localctx: Rc<IfThenElseStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22168,7 +22325,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22197,14 +22355,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for IfThenElseStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for IfThenElseStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_ifThenElseStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_ifThenElseStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_ifThenElseStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_ifThenElseStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for IfThenElseStatementNoShortIfContext<'input>{
@@ -22219,7 +22377,7 @@ impl<'input> CustomRuleContext<'input> for IfThenElseStatementNoShortIfContextEx
 	fn get_rule_index(&self) -> usize { RULE_ifThenElseStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_ifThenElseStatementNoShortIf }
 }
-antlr_rust::type_id!{IfThenElseStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{IfThenElseStatementNoShortIfContextExt<'a>}
 
 impl<'input> IfThenElseStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IfThenElseStatementNoShortIfContextAll<'input>> {
@@ -22279,7 +22437,7 @@ where
 		let mut _localctx = IfThenElseStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 310, RULE_ifThenElseStatementNoShortIf);
         let mut _localctx: Rc<IfThenElseStatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22309,7 +22467,8 @@ where
 			recog.statementNoShortIf()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22338,14 +22497,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AssertStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AssertStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assertStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_assertStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assertStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_assertStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AssertStatementContext<'input>{
@@ -22360,7 +22519,7 @@ impl<'input> CustomRuleContext<'input> for AssertStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assertStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assertStatement }
 }
-antlr_rust::type_id!{AssertStatementContextExt<'a>}
+antlr_rust::tid!{AssertStatementContextExt<'a>}
 
 impl<'input> AssertStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssertStatementContextAll<'input>> {
@@ -22412,8 +22571,8 @@ where
 		let mut _localctx = AssertStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 312, RULE_assertStatement);
         let mut _localctx: Rc<AssertStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22444,7 +22603,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22473,14 +22633,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchStatementContext<'input>{
@@ -22495,7 +22655,7 @@ impl<'input> CustomRuleContext<'input> for SwitchStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_switchStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchStatement }
 }
-antlr_rust::type_id!{SwitchStatementContextExt<'a>}
+antlr_rust::tid!{SwitchStatementContextExt<'a>}
 
 impl<'input> SwitchStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchStatementContextAll<'input>> {
@@ -22547,7 +22707,7 @@ where
 		let mut _localctx = SwitchStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 314, RULE_switchStatement);
         let mut _localctx: Rc<SwitchStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22570,7 +22730,8 @@ where
 			recog.switchBlock()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22599,14 +22760,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchBlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchBlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchBlock(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchBlock(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchBlock(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchBlock(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchBlockContext<'input>{
@@ -22621,7 +22782,7 @@ impl<'input> CustomRuleContext<'input> for SwitchBlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_switchBlock }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchBlock }
 }
-antlr_rust::type_id!{SwitchBlockContextExt<'a>}
+antlr_rust::tid!{SwitchBlockContextExt<'a>}
 
 impl<'input> SwitchBlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchBlockContextAll<'input>> {
@@ -22689,8 +22850,8 @@ where
 		let mut _localctx = SwitchBlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 316, RULE_switchBlock);
         let mut _localctx: Rc<SwitchBlockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(1825);
@@ -22781,7 +22942,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22810,14 +22972,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchRuleContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchRuleContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchRule(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchRule(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchRule(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchRule(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchRuleContext<'input>{
@@ -22832,7 +22994,7 @@ impl<'input> CustomRuleContext<'input> for SwitchRuleContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_switchRule }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchRule }
 }
-antlr_rust::type_id!{SwitchRuleContextExt<'a>}
+antlr_rust::tid!{SwitchRuleContextExt<'a>}
 
 impl<'input> SwitchRuleContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchRuleContextAll<'input>> {
@@ -22885,7 +23047,7 @@ where
 		let mut _localctx = SwitchRuleContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 318, RULE_switchRule);
         let mut _localctx: Rc<SwitchRuleContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22939,7 +23101,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22968,14 +23131,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchBlockStatementGroupContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchBlockStatementGroupContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchBlockStatementGroup(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchBlockStatementGroup(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchBlockStatementGroup(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchBlockStatementGroup(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchBlockStatementGroupContext<'input>{
@@ -22990,7 +23153,7 @@ impl<'input> CustomRuleContext<'input> for SwitchBlockStatementGroupContextExt<'
 	fn get_rule_index(&self) -> usize { RULE_switchBlockStatementGroup }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchBlockStatementGroup }
 }
-antlr_rust::type_id!{SwitchBlockStatementGroupContextExt<'a>}
+antlr_rust::tid!{SwitchBlockStatementGroupContextExt<'a>}
 
 impl<'input> SwitchBlockStatementGroupContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchBlockStatementGroupContextAll<'input>> {
@@ -23039,8 +23202,8 @@ where
 		let mut _localctx = SwitchBlockStatementGroupContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 320, RULE_switchBlockStatementGroup);
         let mut _localctx: Rc<SwitchBlockStatementGroupContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23076,7 +23239,8 @@ where
 			recog.blockStatements()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23105,14 +23269,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchLabelContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchLabelContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchLabel(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchLabel(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchLabel(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchLabel(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchLabelContext<'input>{
@@ -23127,7 +23291,7 @@ impl<'input> CustomRuleContext<'input> for SwitchLabelContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_switchLabel }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchLabel }
 }
-antlr_rust::type_id!{SwitchLabelContextExt<'a>}
+antlr_rust::tid!{SwitchLabelContextExt<'a>}
 
 impl<'input> SwitchLabelContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchLabelContextAll<'input>> {
@@ -23183,8 +23347,8 @@ where
 		let mut _localctx = SwitchLabelContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 322, RULE_switchLabel);
         let mut _localctx: Rc<SwitchLabelContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1858);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -23236,7 +23400,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23265,14 +23430,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CaseConstantContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CaseConstantContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_caseConstant(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_caseConstant(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_caseConstant(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_caseConstant(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CaseConstantContext<'input>{
@@ -23287,7 +23452,7 @@ impl<'input> CustomRuleContext<'input> for CaseConstantContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_caseConstant }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_caseConstant }
 }
-antlr_rust::type_id!{CaseConstantContextExt<'a>}
+antlr_rust::tid!{CaseConstantContextExt<'a>}
 
 impl<'input> CaseConstantContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CaseConstantContextAll<'input>> {
@@ -23321,7 +23486,7 @@ where
 		let mut _localctx = CaseConstantContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 324, RULE_caseConstant);
         let mut _localctx: Rc<CaseConstantContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23331,7 +23496,8 @@ where
 			recog.conditionalExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23360,14 +23526,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for WhileStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for WhileStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_whileStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_whileStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_whileStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_whileStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for WhileStatementContext<'input>{
@@ -23382,7 +23548,7 @@ impl<'input> CustomRuleContext<'input> for WhileStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_whileStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_whileStatement }
 }
-antlr_rust::type_id!{WhileStatementContextExt<'a>}
+antlr_rust::tid!{WhileStatementContextExt<'a>}
 
 impl<'input> WhileStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<WhileStatementContextAll<'input>> {
@@ -23434,7 +23600,7 @@ where
 		let mut _localctx = WhileStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 326, RULE_whileStatement);
         let mut _localctx: Rc<WhileStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23457,7 +23623,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23486,14 +23653,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for WhileStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for WhileStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_whileStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_whileStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_whileStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_whileStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for WhileStatementNoShortIfContext<'input>{
@@ -23508,7 +23675,7 @@ impl<'input> CustomRuleContext<'input> for WhileStatementNoShortIfContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_whileStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_whileStatementNoShortIf }
 }
-antlr_rust::type_id!{WhileStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{WhileStatementNoShortIfContextExt<'a>}
 
 impl<'input> WhileStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<WhileStatementNoShortIfContextAll<'input>> {
@@ -23560,7 +23727,7 @@ where
 		let mut _localctx = WhileStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 328, RULE_whileStatementNoShortIf);
         let mut _localctx: Rc<WhileStatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23583,7 +23750,8 @@ where
 			recog.statementNoShortIf()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23612,14 +23780,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for DoStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for DoStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_doStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_doStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_doStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_doStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for DoStatementContext<'input>{
@@ -23634,7 +23802,7 @@ impl<'input> CustomRuleContext<'input> for DoStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_doStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_doStatement }
 }
-antlr_rust::type_id!{DoStatementContextExt<'a>}
+antlr_rust::tid!{DoStatementContextExt<'a>}
 
 impl<'input> DoStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DoStatementContextAll<'input>> {
@@ -23696,7 +23864,7 @@ where
 		let mut _localctx = DoStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 330, RULE_doStatement);
         let mut _localctx: Rc<DoStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23725,7 +23893,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23754,14 +23923,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ForStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ForStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_forStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_forStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ForStatementContext<'input>{
@@ -23776,7 +23945,7 @@ impl<'input> CustomRuleContext<'input> for ForStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forStatement }
 }
-antlr_rust::type_id!{ForStatementContextExt<'a>}
+antlr_rust::tid!{ForStatementContextExt<'a>}
 
 impl<'input> ForStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForStatementContextAll<'input>> {
@@ -23813,7 +23982,7 @@ where
 		let mut _localctx = ForStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 332, RULE_forStatement);
         let mut _localctx: Rc<ForStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1884);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -23842,7 +24011,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23871,14 +24041,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ForStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ForStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_forStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_forStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ForStatementNoShortIfContext<'input>{
@@ -23893,7 +24063,7 @@ impl<'input> CustomRuleContext<'input> for ForStatementNoShortIfContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_forStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forStatementNoShortIf }
 }
-antlr_rust::type_id!{ForStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{ForStatementNoShortIfContextExt<'a>}
 
 impl<'input> ForStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForStatementNoShortIfContextAll<'input>> {
@@ -23930,7 +24100,7 @@ where
 		let mut _localctx = ForStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 334, RULE_forStatementNoShortIf);
         let mut _localctx: Rc<ForStatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1888);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -23959,7 +24129,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23988,14 +24159,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BasicForStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BasicForStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_basicForStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_basicForStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_basicForStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_basicForStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BasicForStatementContext<'input>{
@@ -24010,7 +24181,7 @@ impl<'input> CustomRuleContext<'input> for BasicForStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_basicForStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_basicForStatement }
 }
-antlr_rust::type_id!{BasicForStatementContextExt<'a>}
+antlr_rust::tid!{BasicForStatementContextExt<'a>}
 
 impl<'input> BasicForStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BasicForStatementContextAll<'input>> {
@@ -24077,8 +24248,8 @@ where
 		let mut _localctx = BasicForStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 336, RULE_basicForStatement);
         let mut _localctx: Rc<BasicForStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24092,7 +24263,7 @@ where
 			recog.base.set_state(1893);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (FLOAT - 35)) | (1usize << (INT - 35)) | (1usize << (LONG - 35)) | (1usize << (NEW - 35)) | (1usize << (SHORT - 35)) | (1usize << (SUPER - 35)) | (1usize << (THIS - 35)) | (1usize << (VOID - 35)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule forInit*/
 				recog.base.set_state(1892);
@@ -24107,7 +24278,7 @@ where
 			recog.base.set_state(1897);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule expression*/
 				recog.base.set_state(1896);
@@ -24122,7 +24293,7 @@ where
 			recog.base.set_state(1901);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule forUpdate*/
 				recog.base.set_state(1900);
@@ -24139,7 +24310,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24168,14 +24340,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BasicForStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BasicForStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_basicForStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_basicForStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_basicForStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_basicForStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BasicForStatementNoShortIfContext<'input>{
@@ -24190,7 +24362,7 @@ impl<'input> CustomRuleContext<'input> for BasicForStatementNoShortIfContextExt<
 	fn get_rule_index(&self) -> usize { RULE_basicForStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_basicForStatementNoShortIf }
 }
-antlr_rust::type_id!{BasicForStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{BasicForStatementNoShortIfContextExt<'a>}
 
 impl<'input> BasicForStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BasicForStatementNoShortIfContextAll<'input>> {
@@ -24257,8 +24429,8 @@ where
 		let mut _localctx = BasicForStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 338, RULE_basicForStatementNoShortIf);
         let mut _localctx: Rc<BasicForStatementNoShortIfContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24272,7 +24444,7 @@ where
 			recog.base.set_state(1909);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (FLOAT - 35)) | (1usize << (INT - 35)) | (1usize << (LONG - 35)) | (1usize << (NEW - 35)) | (1usize << (SHORT - 35)) | (1usize << (SUPER - 35)) | (1usize << (THIS - 35)) | (1usize << (VOID - 35)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule forInit*/
 				recog.base.set_state(1908);
@@ -24287,7 +24459,7 @@ where
 			recog.base.set_state(1913);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule expression*/
 				recog.base.set_state(1912);
@@ -24302,7 +24474,7 @@ where
 			recog.base.set_state(1917);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule forUpdate*/
 				recog.base.set_state(1916);
@@ -24319,7 +24491,8 @@ where
 			recog.statementNoShortIf()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24348,14 +24521,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ForInitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ForInitContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forInit(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_forInit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forInit(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_forInit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ForInitContext<'input>{
@@ -24370,7 +24543,7 @@ impl<'input> CustomRuleContext<'input> for ForInitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forInit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forInit }
 }
-antlr_rust::type_id!{ForInitContextExt<'a>}
+antlr_rust::tid!{ForInitContextExt<'a>}
 
 impl<'input> ForInitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForInitContextAll<'input>> {
@@ -24407,7 +24580,7 @@ where
 		let mut _localctx = ForInitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 340, RULE_forInit);
         let mut _localctx: Rc<ForInitContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1924);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -24436,7 +24609,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24465,14 +24639,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ForUpdateContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ForUpdateContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forUpdate(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_forUpdate(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forUpdate(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_forUpdate(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ForUpdateContext<'input>{
@@ -24487,7 +24661,7 @@ impl<'input> CustomRuleContext<'input> for ForUpdateContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forUpdate }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forUpdate }
 }
-antlr_rust::type_id!{ForUpdateContextExt<'a>}
+antlr_rust::tid!{ForUpdateContextExt<'a>}
 
 impl<'input> ForUpdateContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForUpdateContextAll<'input>> {
@@ -24521,7 +24695,7 @@ where
 		let mut _localctx = ForUpdateContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 342, RULE_forUpdate);
         let mut _localctx: Rc<ForUpdateContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24531,7 +24705,8 @@ where
 			recog.statementExpressionList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24560,14 +24735,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for StatementExpressionListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for StatementExpressionListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statementExpressionList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_statementExpressionList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statementExpressionList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_statementExpressionList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for StatementExpressionListContext<'input>{
@@ -24582,7 +24757,7 @@ impl<'input> CustomRuleContext<'input> for StatementExpressionListContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_statementExpressionList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statementExpressionList }
 }
-antlr_rust::type_id!{StatementExpressionListContextExt<'a>}
+antlr_rust::tid!{StatementExpressionListContextExt<'a>}
 
 impl<'input> StatementExpressionListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementExpressionListContextAll<'input>> {
@@ -24628,8 +24803,8 @@ where
 		let mut _localctx = StatementExpressionListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 344, RULE_statementExpressionList);
         let mut _localctx: Rc<StatementExpressionListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24658,7 +24833,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24687,14 +24863,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnhancedForStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnhancedForStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enhancedForStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enhancedForStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enhancedForStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enhancedForStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnhancedForStatementContext<'input>{
@@ -24709,7 +24885,7 @@ impl<'input> CustomRuleContext<'input> for EnhancedForStatementContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_enhancedForStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enhancedForStatement }
 }
-antlr_rust::type_id!{EnhancedForStatementContextExt<'a>}
+antlr_rust::tid!{EnhancedForStatementContextExt<'a>}
 
 impl<'input> EnhancedForStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnhancedForStatementContextAll<'input>> {
@@ -24769,7 +24945,7 @@ where
 		let mut _localctx = EnhancedForStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 346, RULE_enhancedForStatement);
         let mut _localctx: Rc<EnhancedForStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24799,7 +24975,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24828,14 +25005,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EnhancedForStatementNoShortIfContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EnhancedForStatementNoShortIfContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enhancedForStatementNoShortIf(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_enhancedForStatementNoShortIf(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enhancedForStatementNoShortIf(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_enhancedForStatementNoShortIf(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EnhancedForStatementNoShortIfContext<'input>{
@@ -24850,7 +25027,7 @@ impl<'input> CustomRuleContext<'input> for EnhancedForStatementNoShortIfContextE
 	fn get_rule_index(&self) -> usize { RULE_enhancedForStatementNoShortIf }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enhancedForStatementNoShortIf }
 }
-antlr_rust::type_id!{EnhancedForStatementNoShortIfContextExt<'a>}
+antlr_rust::tid!{EnhancedForStatementNoShortIfContextExt<'a>}
 
 impl<'input> EnhancedForStatementNoShortIfContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnhancedForStatementNoShortIfContextAll<'input>> {
@@ -24910,7 +25087,7 @@ where
 		let mut _localctx = EnhancedForStatementNoShortIfContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 348, RULE_enhancedForStatementNoShortIf);
         let mut _localctx: Rc<EnhancedForStatementNoShortIfContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24940,7 +25117,8 @@ where
 			recog.statementNoShortIf()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24969,14 +25147,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for BreakStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for BreakStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_breakStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_breakStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_breakStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_breakStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for BreakStatementContext<'input>{
@@ -24991,7 +25169,7 @@ impl<'input> CustomRuleContext<'input> for BreakStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_breakStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_breakStatement }
 }
-antlr_rust::type_id!{BreakStatementContextExt<'a>}
+antlr_rust::tid!{BreakStatementContextExt<'a>}
 
 impl<'input> BreakStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BreakStatementContextAll<'input>> {
@@ -25037,8 +25215,8 @@ where
 		let mut _localctx = BreakStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 350, RULE_breakStatement);
         let mut _localctx: Rc<BreakStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25061,7 +25239,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25090,14 +25269,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ContinueStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ContinueStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_continueStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_continueStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_continueStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_continueStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ContinueStatementContext<'input>{
@@ -25112,7 +25291,7 @@ impl<'input> CustomRuleContext<'input> for ContinueStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_continueStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_continueStatement }
 }
-antlr_rust::type_id!{ContinueStatementContextExt<'a>}
+antlr_rust::tid!{ContinueStatementContextExt<'a>}
 
 impl<'input> ContinueStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ContinueStatementContextAll<'input>> {
@@ -25158,8 +25337,8 @@ where
 		let mut _localctx = ContinueStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 352, RULE_continueStatement);
         let mut _localctx: Rc<ContinueStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25182,7 +25361,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25211,14 +25391,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ReturnStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ReturnStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_returnStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_returnStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_returnStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_returnStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ReturnStatementContext<'input>{
@@ -25233,7 +25413,7 @@ impl<'input> CustomRuleContext<'input> for ReturnStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_returnStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_returnStatement }
 }
-antlr_rust::type_id!{ReturnStatementContextExt<'a>}
+antlr_rust::tid!{ReturnStatementContextExt<'a>}
 
 impl<'input> ReturnStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ReturnStatementContextAll<'input>> {
@@ -25277,8 +25457,8 @@ where
 		let mut _localctx = ReturnStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 354, RULE_returnStatement);
         let mut _localctx: Rc<ReturnStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25289,7 +25469,7 @@ where
 			recog.base.set_state(1966);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule expression*/
 				recog.base.set_state(1965);
@@ -25302,7 +25482,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25331,14 +25512,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ThrowStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ThrowStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_throwStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_throwStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_throwStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_throwStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ThrowStatementContext<'input>{
@@ -25353,7 +25534,7 @@ impl<'input> CustomRuleContext<'input> for ThrowStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_throwStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_throwStatement }
 }
-antlr_rust::type_id!{ThrowStatementContextExt<'a>}
+antlr_rust::tid!{ThrowStatementContextExt<'a>}
 
 impl<'input> ThrowStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ThrowStatementContextAll<'input>> {
@@ -25397,7 +25578,7 @@ where
 		let mut _localctx = ThrowStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 356, RULE_throwStatement);
         let mut _localctx: Rc<ThrowStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25413,7 +25594,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25442,14 +25624,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SynchronizedStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SynchronizedStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_synchronizedStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_synchronizedStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_synchronizedStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_synchronizedStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SynchronizedStatementContext<'input>{
@@ -25464,7 +25646,7 @@ impl<'input> CustomRuleContext<'input> for SynchronizedStatementContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_synchronizedStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_synchronizedStatement }
 }
-antlr_rust::type_id!{SynchronizedStatementContextExt<'a>}
+antlr_rust::tid!{SynchronizedStatementContextExt<'a>}
 
 impl<'input> SynchronizedStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SynchronizedStatementContextAll<'input>> {
@@ -25516,7 +25698,7 @@ where
 		let mut _localctx = SynchronizedStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 358, RULE_synchronizedStatement);
         let mut _localctx: Rc<SynchronizedStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25539,7 +25721,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25568,14 +25751,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TryStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TryStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_tryStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_tryStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_tryStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_tryStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TryStatementContext<'input>{
@@ -25590,7 +25773,7 @@ impl<'input> CustomRuleContext<'input> for TryStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_tryStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_tryStatement }
 }
-antlr_rust::type_id!{TryStatementContextExt<'a>}
+antlr_rust::tid!{TryStatementContextExt<'a>}
 
 impl<'input> TryStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TryStatementContextAll<'input>> {
@@ -25638,8 +25821,8 @@ where
 		let mut _localctx = TryStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 360, RULE_tryStatement);
         let mut _localctx: Rc<TryStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1996);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -25723,7 +25906,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25752,14 +25936,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CatchesContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CatchesContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_catches(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_catches(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_catches(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_catches(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CatchesContext<'input>{
@@ -25774,7 +25958,7 @@ impl<'input> CustomRuleContext<'input> for CatchesContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_catches }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_catches }
 }
-antlr_rust::type_id!{CatchesContextExt<'a>}
+antlr_rust::tid!{CatchesContextExt<'a>}
 
 impl<'input> CatchesContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CatchesContextAll<'input>> {
@@ -25811,8 +25995,8 @@ where
 		let mut _localctx = CatchesContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 362, RULE_catches);
         let mut _localctx: Rc<CatchesContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25838,7 +26022,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25867,14 +26052,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CatchClauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CatchClauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_catchClause(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_catchClause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_catchClause(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_catchClause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CatchClauseContext<'input>{
@@ -25889,7 +26074,7 @@ impl<'input> CustomRuleContext<'input> for CatchClauseContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_catchClause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_catchClause }
 }
-antlr_rust::type_id!{CatchClauseContextExt<'a>}
+antlr_rust::tid!{CatchClauseContextExt<'a>}
 
 impl<'input> CatchClauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CatchClauseContextAll<'input>> {
@@ -25941,7 +26126,7 @@ where
 		let mut _localctx = CatchClauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 364, RULE_catchClause);
         let mut _localctx: Rc<CatchClauseContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25964,7 +26149,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25993,14 +26179,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CatchFormalParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CatchFormalParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_catchFormalParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_catchFormalParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_catchFormalParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_catchFormalParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CatchFormalParameterContext<'input>{
@@ -26015,7 +26201,7 @@ impl<'input> CustomRuleContext<'input> for CatchFormalParameterContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_catchFormalParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_catchFormalParameter }
 }
-antlr_rust::type_id!{CatchFormalParameterContextExt<'a>}
+antlr_rust::tid!{CatchFormalParameterContextExt<'a>}
 
 impl<'input> CatchFormalParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CatchFormalParameterContextAll<'input>> {
@@ -26058,8 +26244,8 @@ where
 		let mut _localctx = CatchFormalParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 366, RULE_catchFormalParameter);
         let mut _localctx: Rc<CatchFormalParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26089,7 +26275,8 @@ where
 			recog.variableDeclaratorId()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26118,14 +26305,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CatchTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CatchTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_catchType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_catchType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_catchType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_catchType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CatchTypeContext<'input>{
@@ -26140,7 +26327,7 @@ impl<'input> CustomRuleContext<'input> for CatchTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_catchType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_catchType }
 }
-antlr_rust::type_id!{CatchTypeContextExt<'a>}
+antlr_rust::tid!{CatchTypeContextExt<'a>}
 
 impl<'input> CatchTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CatchTypeContextAll<'input>> {
@@ -26189,8 +26376,8 @@ where
 		let mut _localctx = CatchTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 368, RULE_catchType);
         let mut _localctx: Rc<CatchTypeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26219,7 +26406,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26248,14 +26436,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FinallyBlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FinallyBlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_finallyBlock(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_finallyBlock(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_finallyBlock(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_finallyBlock(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FinallyBlockContext<'input>{
@@ -26270,7 +26458,7 @@ impl<'input> CustomRuleContext<'input> for FinallyBlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_finallyBlock }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_finallyBlock }
 }
-antlr_rust::type_id!{FinallyBlockContextExt<'a>}
+antlr_rust::tid!{FinallyBlockContextExt<'a>}
 
 impl<'input> FinallyBlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FinallyBlockContextAll<'input>> {
@@ -26309,7 +26497,7 @@ where
 		let mut _localctx = FinallyBlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 370, RULE_finallyBlock);
         let mut _localctx: Rc<FinallyBlockContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26322,7 +26510,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26351,14 +26540,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TryWithResourcesStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TryWithResourcesStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_tryWithResourcesStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_tryWithResourcesStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_tryWithResourcesStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_tryWithResourcesStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TryWithResourcesStatementContext<'input>{
@@ -26373,7 +26562,7 @@ impl<'input> CustomRuleContext<'input> for TryWithResourcesStatementContextExt<'
 	fn get_rule_index(&self) -> usize { RULE_tryWithResourcesStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_tryWithResourcesStatement }
 }
-antlr_rust::type_id!{TryWithResourcesStatementContextExt<'a>}
+antlr_rust::tid!{TryWithResourcesStatementContextExt<'a>}
 
 impl<'input> TryWithResourcesStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TryWithResourcesStatementContextAll<'input>> {
@@ -26421,8 +26610,8 @@ where
 		let mut _localctx = TryWithResourcesStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 372, RULE_tryWithResourcesStatement);
         let mut _localctx: Rc<TryWithResourcesStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26463,7 +26652,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26492,14 +26682,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ResourceSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ResourceSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_resourceSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_resourceSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_resourceSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_resourceSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ResourceSpecificationContext<'input>{
@@ -26514,7 +26704,7 @@ impl<'input> CustomRuleContext<'input> for ResourceSpecificationContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_resourceSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_resourceSpecification }
 }
-antlr_rust::type_id!{ResourceSpecificationContextExt<'a>}
+antlr_rust::tid!{ResourceSpecificationContextExt<'a>}
 
 impl<'input> ResourceSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ResourceSpecificationContextAll<'input>> {
@@ -26563,8 +26753,8 @@ where
 		let mut _localctx = ResourceSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 374, RULE_resourceSpecification);
         let mut _localctx: Rc<ResourceSpecificationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26591,7 +26781,8 @@ where
 			recog.base.match_token(RPAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26620,14 +26811,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ResourceListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ResourceListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_resourceList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_resourceList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_resourceList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_resourceList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ResourceListContext<'input>{
@@ -26642,7 +26833,7 @@ impl<'input> CustomRuleContext<'input> for ResourceListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_resourceList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_resourceList }
 }
-antlr_rust::type_id!{ResourceListContextExt<'a>}
+antlr_rust::tid!{ResourceListContextExt<'a>}
 
 impl<'input> ResourceListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ResourceListContextAll<'input>> {
@@ -26688,7 +26879,7 @@ where
 		let mut _localctx = ResourceListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 376, RULE_resourceList);
         let mut _localctx: Rc<ResourceListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -26720,7 +26911,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(221,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26749,14 +26941,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ResourceContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ResourceContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_resource(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_resource(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_resource(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_resource(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ResourceContext<'input>{
@@ -26771,7 +26963,7 @@ impl<'input> CustomRuleContext<'input> for ResourceContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_resource }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_resource }
 }
-antlr_rust::type_id!{ResourceContextExt<'a>}
+antlr_rust::tid!{ResourceContextExt<'a>}
 
 impl<'input> ResourceContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ResourceContextAll<'input>> {
@@ -26808,7 +27000,7 @@ where
 		let mut _localctx = ResourceContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 378, RULE_resource);
         let mut _localctx: Rc<ResourceContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2057);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -26837,7 +27029,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26866,14 +27059,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for VariableAccessContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for VariableAccessContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_variableAccess(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_variableAccess(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_variableAccess(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_variableAccess(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for VariableAccessContext<'input>{
@@ -26888,7 +27081,7 @@ impl<'input> CustomRuleContext<'input> for VariableAccessContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_variableAccess }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_variableAccess }
 }
-antlr_rust::type_id!{VariableAccessContextExt<'a>}
+antlr_rust::tid!{VariableAccessContextExt<'a>}
 
 impl<'input> VariableAccessContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VariableAccessContextAll<'input>> {
@@ -26925,7 +27118,7 @@ where
 		let mut _localctx = VariableAccessContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 380, RULE_variableAccess);
         let mut _localctx: Rc<VariableAccessContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2061);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -26954,7 +27147,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26983,14 +27177,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for YieldStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for YieldStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_yieldStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_yieldStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_yieldStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_yieldStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for YieldStatementContext<'input>{
@@ -27005,7 +27199,7 @@ impl<'input> CustomRuleContext<'input> for YieldStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_yieldStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_yieldStatement }
 }
-antlr_rust::type_id!{YieldStatementContextExt<'a>}
+antlr_rust::tid!{YieldStatementContextExt<'a>}
 
 impl<'input> YieldStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<YieldStatementContextAll<'input>> {
@@ -27049,7 +27243,7 @@ where
 		let mut _localctx = YieldStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 382, RULE_yieldStatement);
         let mut _localctx: Rc<YieldStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27065,7 +27259,8 @@ where
 			recog.base.match_token(SEMI,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27094,14 +27289,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PatternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PatternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PatternContext<'input>{
@@ -27116,7 +27311,7 @@ impl<'input> CustomRuleContext<'input> for PatternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pattern }
 }
-antlr_rust::type_id!{PatternContextExt<'a>}
+antlr_rust::tid!{PatternContextExt<'a>}
 
 impl<'input> PatternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PatternContextAll<'input>> {
@@ -27150,7 +27345,7 @@ where
 		let mut _localctx = PatternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 384, RULE_pattern);
         let mut _localctx: Rc<PatternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27160,7 +27355,8 @@ where
 			recog.typePattern()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27189,14 +27385,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypePatternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypePatternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typePattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typePattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typePattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typePattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypePatternContext<'input>{
@@ -27211,7 +27407,7 @@ impl<'input> CustomRuleContext<'input> for TypePatternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typePattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typePattern }
 }
-antlr_rust::type_id!{TypePatternContextExt<'a>}
+antlr_rust::tid!{TypePatternContextExt<'a>}
 
 impl<'input> TypePatternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypePatternContextAll<'input>> {
@@ -27245,7 +27441,7 @@ where
 		let mut _localctx = TypePatternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 386, RULE_typePattern);
         let mut _localctx: Rc<TypePatternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27255,7 +27451,8 @@ where
 			recog.localVariableDeclaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27284,14 +27481,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_expression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_expression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExpressionContext<'input>{
@@ -27306,7 +27503,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expression }
 }
-antlr_rust::type_id!{ExpressionContextExt<'a>}
+antlr_rust::tid!{ExpressionContextExt<'a>}
 
 impl<'input> ExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionContextAll<'input>> {
@@ -27343,7 +27540,7 @@ where
 		let mut _localctx = ExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 388, RULE_expression);
         let mut _localctx: Rc<ExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2073);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -27372,7 +27569,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27401,14 +27599,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PrimaryContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PrimaryContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_primary(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_primary(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_primary(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_primary(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PrimaryContext<'input>{
@@ -27423,7 +27621,7 @@ impl<'input> CustomRuleContext<'input> for PrimaryContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primary }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primary }
 }
-antlr_rust::type_id!{PrimaryContextExt<'a>}
+antlr_rust::tid!{PrimaryContextExt<'a>}
 
 impl<'input> PrimaryContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimaryContextAll<'input>> {
@@ -27460,7 +27658,7 @@ where
 		let mut _localctx = PrimaryContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 390, RULE_primary);
         let mut _localctx: Rc<PrimaryContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2077);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -27489,7 +27687,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27518,14 +27717,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PrimaryNoNewArrayContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PrimaryNoNewArrayContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_primaryNoNewArray(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_primaryNoNewArray(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_primaryNoNewArray(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_primaryNoNewArray(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PrimaryNoNewArrayContext<'input>{
@@ -27540,7 +27739,7 @@ impl<'input> CustomRuleContext<'input> for PrimaryNoNewArrayContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primaryNoNewArray }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primaryNoNewArray }
 }
-antlr_rust::type_id!{PrimaryNoNewArrayContextExt<'a>}
+antlr_rust::tid!{PrimaryNoNewArrayContextExt<'a>}
 
 impl<'input> PrimaryNoNewArrayContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimaryNoNewArrayContextAll<'input>> {
@@ -27670,8 +27869,8 @@ where
 		let mut _localctx = PrimaryNoNewArrayContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 392, RULE_primaryNoNewArray);
         let mut _localctx: Rc<PrimaryNoNewArrayContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2296);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -28083,7 +28282,7 @@ where
 					recog.base.set_state(2156);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2155);
@@ -28144,7 +28343,7 @@ where
 					recog.base.set_state(2170);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2169);
@@ -28205,7 +28404,7 @@ where
 					recog.base.set_state(2184);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2183);
@@ -28266,7 +28465,7 @@ where
 					recog.base.set_state(2198);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2197);
@@ -28326,7 +28525,7 @@ where
 					recog.base.set_state(2212);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2211);
@@ -28393,7 +28592,7 @@ where
 					recog.base.set_state(2228);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2227);
@@ -28718,7 +28917,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -28747,14 +28947,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PNNAContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PNNAContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pNNA(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_pNNA(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pNNA(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_pNNA(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PNNAContext<'input>{
@@ -28769,7 +28969,7 @@ impl<'input> CustomRuleContext<'input> for PNNAContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pNNA }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pNNA }
 }
-antlr_rust::type_id!{PNNAContextExt<'a>}
+antlr_rust::tid!{PNNAContextExt<'a>}
 
 impl<'input> PNNAContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PNNAContextAll<'input>> {
@@ -28850,8 +29050,8 @@ where
 		let mut _localctx = PNNAContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 394, RULE_pNNA);
         let mut _localctx: Rc<PNNAContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2335);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -28970,7 +29170,7 @@ where
 					recog.base.set_state(2321);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2320);
@@ -29040,7 +29240,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29069,14 +29270,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassLiteralContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassLiteralContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classLiteral(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classLiteral(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classLiteral(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classLiteral(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassLiteralContext<'input>{
@@ -29091,7 +29292,7 @@ impl<'input> CustomRuleContext<'input> for ClassLiteralContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classLiteral }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classLiteral }
 }
-antlr_rust::type_id!{ClassLiteralContextExt<'a>}
+antlr_rust::tid!{ClassLiteralContextExt<'a>}
 
 impl<'input> ClassLiteralContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassLiteralContextAll<'input>> {
@@ -29166,8 +29367,8 @@ where
 		let mut _localctx = ClassLiteralContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 396, RULE_classLiteral);
         let mut _localctx: Rc<ClassLiteralContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2372);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -29298,7 +29499,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29327,14 +29529,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassInstanceCreationExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassInstanceCreationExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classInstanceCreationExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classInstanceCreationExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classInstanceCreationExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classInstanceCreationExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassInstanceCreationExpressionContext<'input>{
@@ -29349,7 +29551,7 @@ impl<'input> CustomRuleContext<'input> for ClassInstanceCreationExpressionContex
 	fn get_rule_index(&self) -> usize { RULE_classInstanceCreationExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classInstanceCreationExpression }
 }
-antlr_rust::type_id!{ClassInstanceCreationExpressionContextExt<'a>}
+antlr_rust::tid!{ClassInstanceCreationExpressionContextExt<'a>}
 
 impl<'input> ClassInstanceCreationExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassInstanceCreationExpressionContextAll<'input>> {
@@ -29394,7 +29596,7 @@ where
 		let mut _localctx = ClassInstanceCreationExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 398, RULE_classInstanceCreationExpression);
         let mut _localctx: Rc<ClassInstanceCreationExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2383);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -29448,7 +29650,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29477,14 +29680,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnqualifiedClassInstanceCreationExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnqualifiedClassInstanceCreationExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unqualifiedClassInstanceCreationExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unqualifiedClassInstanceCreationExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unqualifiedClassInstanceCreationExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unqualifiedClassInstanceCreationExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnqualifiedClassInstanceCreationExpressionContext<'input>{
@@ -29499,7 +29702,7 @@ impl<'input> CustomRuleContext<'input> for UnqualifiedClassInstanceCreationExpre
 	fn get_rule_index(&self) -> usize { RULE_unqualifiedClassInstanceCreationExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unqualifiedClassInstanceCreationExpression }
 }
-antlr_rust::type_id!{UnqualifiedClassInstanceCreationExpressionContextExt<'a>}
+antlr_rust::tid!{UnqualifiedClassInstanceCreationExpressionContextExt<'a>}
 
 impl<'input> UnqualifiedClassInstanceCreationExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnqualifiedClassInstanceCreationExpressionContextAll<'input>> {
@@ -29557,8 +29760,8 @@ where
 		let mut _localctx = UnqualifiedClassInstanceCreationExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 400, RULE_unqualifiedClassInstanceCreationExpression);
         let mut _localctx: Rc<UnqualifiedClassInstanceCreationExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -29588,7 +29791,7 @@ where
 			recog.base.set_state(2392);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 				{
 				/*InvokeRule argumentList*/
 				recog.base.set_state(2391);
@@ -29615,7 +29818,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29644,14 +29848,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ClassOrInterfaceTypeToInstantiateContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ClassOrInterfaceTypeToInstantiateContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classOrInterfaceTypeToInstantiate(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_classOrInterfaceTypeToInstantiate(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classOrInterfaceTypeToInstantiate(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_classOrInterfaceTypeToInstantiate(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ClassOrInterfaceTypeToInstantiateContext<'input>{
@@ -29666,7 +29870,7 @@ impl<'input> CustomRuleContext<'input> for ClassOrInterfaceTypeToInstantiateCont
 	fn get_rule_index(&self) -> usize { RULE_classOrInterfaceTypeToInstantiate }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classOrInterfaceTypeToInstantiate }
 }
-antlr_rust::type_id!{ClassOrInterfaceTypeToInstantiateContextExt<'a>}
+antlr_rust::tid!{ClassOrInterfaceTypeToInstantiateContextExt<'a>}
 
 impl<'input> ClassOrInterfaceTypeToInstantiateContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassOrInterfaceTypeToInstantiateContextAll<'input>> {
@@ -29724,8 +29928,8 @@ where
 		let mut _localctx = ClassOrInterfaceTypeToInstantiateContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 402, RULE_classOrInterfaceTypeToInstantiate);
         let mut _localctx: Rc<ClassOrInterfaceTypeToInstantiateContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -29796,7 +30000,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29825,14 +30030,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for TypeArgumentsOrDiamondContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for TypeArgumentsOrDiamondContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeArgumentsOrDiamond(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_typeArgumentsOrDiamond(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeArgumentsOrDiamond(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_typeArgumentsOrDiamond(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for TypeArgumentsOrDiamondContext<'input>{
@@ -29847,7 +30052,7 @@ impl<'input> CustomRuleContext<'input> for TypeArgumentsOrDiamondContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_typeArgumentsOrDiamond }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeArgumentsOrDiamond }
 }
-antlr_rust::type_id!{TypeArgumentsOrDiamondContextExt<'a>}
+antlr_rust::tid!{TypeArgumentsOrDiamondContextExt<'a>}
 
 impl<'input> TypeArgumentsOrDiamondContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeArgumentsOrDiamondContextAll<'input>> {
@@ -29886,7 +30091,7 @@ where
 		let mut _localctx = TypeArgumentsOrDiamondContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 404, RULE_typeArgumentsOrDiamond);
         let mut _localctx: Rc<TypeArgumentsOrDiamondContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2423);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -29916,7 +30121,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -29945,14 +30151,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayCreationExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayCreationExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayCreationExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayCreationExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayCreationExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayCreationExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayCreationExpressionContext<'input>{
@@ -29967,7 +30173,7 @@ impl<'input> CustomRuleContext<'input> for ArrayCreationExpressionContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_arrayCreationExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayCreationExpression }
 }
-antlr_rust::type_id!{ArrayCreationExpressionContextExt<'a>}
+antlr_rust::tid!{ArrayCreationExpressionContextExt<'a>}
 
 impl<'input> ArrayCreationExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayCreationExpressionContextAll<'input>> {
@@ -30004,7 +30210,7 @@ where
 		let mut _localctx = ArrayCreationExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 406, RULE_arrayCreationExpression);
         let mut _localctx: Rc<ArrayCreationExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2427);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -30033,7 +30239,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30062,14 +30269,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayCreationExpressionWithoutInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayCreationExpressionWithoutInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayCreationExpressionWithoutInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayCreationExpressionWithoutInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayCreationExpressionWithoutInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayCreationExpressionWithoutInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayCreationExpressionWithoutInitializerContext<'input>{
@@ -30084,7 +30291,7 @@ impl<'input> CustomRuleContext<'input> for ArrayCreationExpressionWithoutInitial
 	fn get_rule_index(&self) -> usize { RULE_arrayCreationExpressionWithoutInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayCreationExpressionWithoutInitializer }
 }
-antlr_rust::type_id!{ArrayCreationExpressionWithoutInitializerContextExt<'a>}
+antlr_rust::tid!{ArrayCreationExpressionWithoutInitializerContextExt<'a>}
 
 impl<'input> ArrayCreationExpressionWithoutInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayCreationExpressionWithoutInitializerContextAll<'input>> {
@@ -30132,7 +30339,7 @@ where
 		let mut _localctx = ArrayCreationExpressionWithoutInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 408, RULE_arrayCreationExpressionWithoutInitializer);
         let mut _localctx: Rc<ArrayCreationExpressionWithoutInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2441);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -30203,7 +30410,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30232,14 +30440,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayCreationExpressionWithInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayCreationExpressionWithInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayCreationExpressionWithInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayCreationExpressionWithInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayCreationExpressionWithInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayCreationExpressionWithInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayCreationExpressionWithInitializerContext<'input>{
@@ -30254,7 +30462,7 @@ impl<'input> CustomRuleContext<'input> for ArrayCreationExpressionWithInitialize
 	fn get_rule_index(&self) -> usize { RULE_arrayCreationExpressionWithInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayCreationExpressionWithInitializer }
 }
-antlr_rust::type_id!{ArrayCreationExpressionWithInitializerContextExt<'a>}
+antlr_rust::tid!{ArrayCreationExpressionWithInitializerContextExt<'a>}
 
 impl<'input> ArrayCreationExpressionWithInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayCreationExpressionWithInitializerContextAll<'input>> {
@@ -30302,7 +30510,7 @@ where
 		let mut _localctx = ArrayCreationExpressionWithInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 410, RULE_arrayCreationExpressionWithInitializer);
         let mut _localctx: Rc<ArrayCreationExpressionWithInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2453);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -30353,7 +30561,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30382,14 +30591,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for DimExprsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for DimExprsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dimExprs(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_dimExprs(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dimExprs(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_dimExprs(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for DimExprsContext<'input>{
@@ -30404,7 +30613,7 @@ impl<'input> CustomRuleContext<'input> for DimExprsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dimExprs }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dimExprs }
 }
-antlr_rust::type_id!{DimExprsContextExt<'a>}
+antlr_rust::tid!{DimExprsContextExt<'a>}
 
 impl<'input> DimExprsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DimExprsContextAll<'input>> {
@@ -30441,7 +30650,7 @@ where
 		let mut _localctx = DimExprsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 412, RULE_dimExprs);
         let mut _localctx: Rc<DimExprsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -30470,7 +30679,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(297,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30499,14 +30709,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for DimExprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for DimExprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dimExpr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_dimExpr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dimExpr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_dimExpr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for DimExprContext<'input>{
@@ -30521,7 +30731,7 @@ impl<'input> CustomRuleContext<'input> for DimExprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dimExpr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dimExpr }
 }
-antlr_rust::type_id!{DimExprContextExt<'a>}
+antlr_rust::tid!{DimExprContextExt<'a>}
 
 impl<'input> DimExprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DimExprContextAll<'input>> {
@@ -30571,8 +30781,8 @@ where
 		let mut _localctx = DimExprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 414, RULE_dimExpr);
         let mut _localctx: Rc<DimExprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -30604,7 +30814,8 @@ where
 			recog.base.match_token(RBRACK,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30633,14 +30844,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArrayAccessContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArrayAccessContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arrayAccess(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_arrayAccess(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arrayAccess(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_arrayAccess(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArrayAccessContext<'input>{
@@ -30655,7 +30866,7 @@ impl<'input> CustomRuleContext<'input> for ArrayAccessContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_arrayAccess }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arrayAccess }
 }
-antlr_rust::type_id!{ArrayAccessContextExt<'a>}
+antlr_rust::tid!{ArrayAccessContextExt<'a>}
 
 impl<'input> ArrayAccessContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArrayAccessContextAll<'input>> {
@@ -30708,7 +30919,7 @@ where
 		let mut _localctx = ArrayAccessContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 416, RULE_arrayAccess);
         let mut _localctx: Rc<ArrayAccessContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2487);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -30778,7 +30989,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30807,14 +31019,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for FieldAccessContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for FieldAccessContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_fieldAccess(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_fieldAccess(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_fieldAccess(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_fieldAccess(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for FieldAccessContext<'input>{
@@ -30829,7 +31041,7 @@ impl<'input> CustomRuleContext<'input> for FieldAccessContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_fieldAccess }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_fieldAccess }
 }
-antlr_rust::type_id!{FieldAccessContextExt<'a>}
+antlr_rust::tid!{FieldAccessContextExt<'a>}
 
 impl<'input> FieldAccessContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FieldAccessContextAll<'input>> {
@@ -30885,7 +31097,7 @@ where
 		let mut _localctx = FieldAccessContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 418, RULE_fieldAccess);
         let mut _localctx: Rc<FieldAccessContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2502);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -30948,7 +31160,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -30977,14 +31190,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodInvocationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodInvocationContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodInvocation(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodInvocation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodInvocation(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodInvocation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodInvocationContext<'input>{
@@ -30999,7 +31212,7 @@ impl<'input> CustomRuleContext<'input> for MethodInvocationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodInvocation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodInvocation }
 }
-antlr_rust::type_id!{MethodInvocationContextExt<'a>}
+antlr_rust::tid!{MethodInvocationContextExt<'a>}
 
 impl<'input> MethodInvocationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodInvocationContextAll<'input>> {
@@ -31077,8 +31290,8 @@ where
 		let mut _localctx = MethodInvocationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 420, RULE_methodInvocation);
         let mut _localctx: Rc<MethodInvocationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2572);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -31097,7 +31310,7 @@ where
 					recog.base.set_state(2507);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2506);
@@ -31144,7 +31357,7 @@ where
 					recog.base.set_state(2519);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2518);
@@ -31191,7 +31404,7 @@ where
 					recog.base.set_state(2531);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2530);
@@ -31238,7 +31451,7 @@ where
 					recog.base.set_state(2543);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2542);
@@ -31284,7 +31497,7 @@ where
 					recog.base.set_state(2555);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2554);
@@ -31337,7 +31550,7 @@ where
 					recog.base.set_state(2568);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << NEW) | (1usize << SHORT) | (1usize << SUPER) | (1usize << SWITCH) | (1usize << THIS))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (VOID - 65)) | (1usize << (IntegerLiteral - 65)) | (1usize << (FloatingPointLiteral - 65)) | (1usize << (BooleanLiteral - 65)) | (1usize << (CharacterLiteral - 65)) | (1usize << (StringLiteral - 65)) | (1usize << (TextBlock - 65)) | (1usize << (NullLiteral - 65)) | (1usize << (LPAREN - 65)) | (1usize << (AT - 65)) | (1usize << (BANG - 65)) | (1usize << (TILDE - 65)) | (1usize << (INC - 65)) | (1usize << (DEC - 65)) | (1usize << (ADD - 65)) | (1usize << (SUB - 65)) | (1usize << (Identifier - 65)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 37)) & !0x3f) == 0 && ((1usize << (_la - 37)) & ((1usize << (FLOAT - 37)) | (1usize << (INT - 37)) | (1usize << (LONG - 37)) | (1usize << (NEW - 37)) | (1usize << (SHORT - 37)) | (1usize << (SUPER - 37)) | (1usize << (SWITCH - 37)) | (1usize << (THIS - 37)) | (1usize << (VOID - 37)))) != 0) || ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (IntegerLiteral - 69)) | (1usize << (FloatingPointLiteral - 69)) | (1usize << (BooleanLiteral - 69)) | (1usize << (CharacterLiteral - 69)) | (1usize << (StringLiteral - 69)) | (1usize << (TextBlock - 69)) | (1usize << (NullLiteral - 69)) | (1usize << (LPAREN - 69)) | (1usize << (AT - 69)) | (1usize << (BANG - 69)) | (1usize << (TILDE - 69)))) != 0) || ((((_la - 102)) & !0x3f) == 0 && ((1usize << (_la - 102)) & ((1usize << (INC - 102)) | (1usize << (DEC - 102)) | (1usize << (ADD - 102)) | (1usize << (SUB - 102)) | (1usize << (Identifier - 102)))) != 0) {
 						{
 						/*InvokeRule argumentList*/
 						recog.base.set_state(2567);
@@ -31354,7 +31567,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -31383,14 +31597,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ArgumentListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ArgumentListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_argumentList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_argumentList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_argumentList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_argumentList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ArgumentListContext<'input>{
@@ -31405,7 +31619,7 @@ impl<'input> CustomRuleContext<'input> for ArgumentListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_argumentList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_argumentList }
 }
-antlr_rust::type_id!{ArgumentListContextExt<'a>}
+antlr_rust::tid!{ArgumentListContextExt<'a>}
 
 impl<'input> ArgumentListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArgumentListContextAll<'input>> {
@@ -31451,8 +31665,8 @@ where
 		let mut _localctx = ArgumentListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 422, RULE_argumentList);
         let mut _localctx: Rc<ArgumentListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -31481,7 +31695,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -31510,14 +31725,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MethodReferenceContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MethodReferenceContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_methodReference(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_methodReference(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_methodReference(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_methodReference(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MethodReferenceContext<'input>{
@@ -31532,7 +31747,7 @@ impl<'input> CustomRuleContext<'input> for MethodReferenceContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_methodReference }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_methodReference }
 }
-antlr_rust::type_id!{MethodReferenceContextExt<'a>}
+antlr_rust::tid!{MethodReferenceContextExt<'a>}
 
 impl<'input> MethodReferenceContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MethodReferenceContextAll<'input>> {
@@ -31609,8 +31824,8 @@ where
 		let mut _localctx = MethodReferenceContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 424, RULE_methodReference);
         let mut _localctx: Rc<MethodReferenceContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2629);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -31813,7 +32028,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -31842,14 +32058,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PostfixExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PostfixExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_postfixExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_postfixExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_postfixExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_postfixExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PostfixExpressionContext<'input>{
@@ -31864,7 +32080,7 @@ impl<'input> CustomRuleContext<'input> for PostfixExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_postfixExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_postfixExpression }
 }
-antlr_rust::type_id!{PostfixExpressionContextExt<'a>}
+antlr_rust::tid!{PostfixExpressionContextExt<'a>}
 
 impl<'input> PostfixExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PostfixExpressionContextAll<'input>> {
@@ -31904,7 +32120,7 @@ where
 		let mut _localctx = PostfixExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 426, RULE_postfixExpression);
         let mut _localctx: Rc<PostfixExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2639);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -31961,7 +32177,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -31990,14 +32207,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PfEContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PfEContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pfE(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_pfE(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pfE(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_pfE(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PfEContext<'input>{
@@ -32012,7 +32229,7 @@ impl<'input> CustomRuleContext<'input> for PfEContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pfE }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pfE }
 }
-antlr_rust::type_id!{PfEContextExt<'a>}
+antlr_rust::tid!{PfEContextExt<'a>}
 
 impl<'input> PfEContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PfEContextAll<'input>> {
@@ -32056,7 +32273,7 @@ where
 		let mut _localctx = PfEContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 428, RULE_pfE);
         let mut _localctx: Rc<PfEContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2649);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -32113,7 +32330,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32142,14 +32360,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PostIncrementExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PostIncrementExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_postIncrementExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_postIncrementExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_postIncrementExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_postIncrementExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PostIncrementExpressionContext<'input>{
@@ -32164,7 +32382,7 @@ impl<'input> CustomRuleContext<'input> for PostIncrementExpressionContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_postIncrementExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_postIncrementExpression }
 }
-antlr_rust::type_id!{PostIncrementExpressionContextExt<'a>}
+antlr_rust::tid!{PostIncrementExpressionContextExt<'a>}
 
 impl<'input> PostIncrementExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PostIncrementExpressionContextAll<'input>> {
@@ -32203,7 +32421,7 @@ where
 		let mut _localctx = PostIncrementExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 430, RULE_postIncrementExpression);
         let mut _localctx: Rc<PostIncrementExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -32216,7 +32434,8 @@ where
 			recog.base.match_token(INC,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32245,14 +32464,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PostDecrementExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PostDecrementExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_postDecrementExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_postDecrementExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_postDecrementExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_postDecrementExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PostDecrementExpressionContext<'input>{
@@ -32267,7 +32486,7 @@ impl<'input> CustomRuleContext<'input> for PostDecrementExpressionContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_postDecrementExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_postDecrementExpression }
 }
-antlr_rust::type_id!{PostDecrementExpressionContextExt<'a>}
+antlr_rust::tid!{PostDecrementExpressionContextExt<'a>}
 
 impl<'input> PostDecrementExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PostDecrementExpressionContextAll<'input>> {
@@ -32306,7 +32525,7 @@ where
 		let mut _localctx = PostDecrementExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 432, RULE_postDecrementExpression);
         let mut _localctx: Rc<PostDecrementExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -32319,7 +32538,8 @@ where
 			recog.base.match_token(DEC,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32348,14 +32568,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnaryExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnaryExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unaryExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unaryExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnaryExpressionContext<'input>{
@@ -32370,7 +32590,7 @@ impl<'input> CustomRuleContext<'input> for UnaryExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unaryExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryExpression }
 }
-antlr_rust::type_id!{UnaryExpressionContextExt<'a>}
+antlr_rust::tid!{UnaryExpressionContextExt<'a>}
 
 impl<'input> UnaryExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryExpressionContextAll<'input>> {
@@ -32423,7 +32643,7 @@ where
 		let mut _localctx = UnaryExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 434, RULE_unaryExpression);
         let mut _localctx: Rc<UnaryExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2664);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -32499,7 +32719,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32528,14 +32749,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PreIncrementExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PreIncrementExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_preIncrementExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_preIncrementExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_preIncrementExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_preIncrementExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PreIncrementExpressionContext<'input>{
@@ -32550,7 +32771,7 @@ impl<'input> CustomRuleContext<'input> for PreIncrementExpressionContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_preIncrementExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_preIncrementExpression }
 }
-antlr_rust::type_id!{PreIncrementExpressionContextExt<'a>}
+antlr_rust::tid!{PreIncrementExpressionContextExt<'a>}
 
 impl<'input> PreIncrementExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PreIncrementExpressionContextAll<'input>> {
@@ -32589,7 +32810,7 @@ where
 		let mut _localctx = PreIncrementExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 436, RULE_preIncrementExpression);
         let mut _localctx: Rc<PreIncrementExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -32602,7 +32823,8 @@ where
 			recog.unaryExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32631,14 +32853,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for PreDecrementExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for PreDecrementExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_preDecrementExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_preDecrementExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_preDecrementExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_preDecrementExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for PreDecrementExpressionContext<'input>{
@@ -32653,7 +32875,7 @@ impl<'input> CustomRuleContext<'input> for PreDecrementExpressionContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_preDecrementExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_preDecrementExpression }
 }
-antlr_rust::type_id!{PreDecrementExpressionContextExt<'a>}
+antlr_rust::tid!{PreDecrementExpressionContextExt<'a>}
 
 impl<'input> PreDecrementExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PreDecrementExpressionContextAll<'input>> {
@@ -32692,7 +32914,7 @@ where
 		let mut _localctx = PreDecrementExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 438, RULE_preDecrementExpression);
         let mut _localctx: Rc<PreDecrementExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -32705,7 +32927,8 @@ where
 			recog.unaryExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32734,14 +32957,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for UnaryExpressionNotPlusMinusContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for UnaryExpressionNotPlusMinusContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryExpressionNotPlusMinus(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_unaryExpressionNotPlusMinus(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryExpressionNotPlusMinus(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_unaryExpressionNotPlusMinus(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for UnaryExpressionNotPlusMinusContext<'input>{
@@ -32756,7 +32979,7 @@ impl<'input> CustomRuleContext<'input> for UnaryExpressionNotPlusMinusContextExt
 	fn get_rule_index(&self) -> usize { RULE_unaryExpressionNotPlusMinus }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryExpressionNotPlusMinus }
 }
-antlr_rust::type_id!{UnaryExpressionNotPlusMinusContextExt<'a>}
+antlr_rust::tid!{UnaryExpressionNotPlusMinusContextExt<'a>}
 
 impl<'input> UnaryExpressionNotPlusMinusContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryExpressionNotPlusMinusContextAll<'input>> {
@@ -32809,7 +33032,7 @@ where
 		let mut _localctx = UnaryExpressionNotPlusMinusContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 440, RULE_unaryExpressionNotPlusMinus);
         let mut _localctx: Rc<UnaryExpressionNotPlusMinusContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2679);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -32877,7 +33100,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -32906,14 +33130,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for CastExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for CastExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_castExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_castExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_castExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_castExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for CastExpressionContext<'input>{
@@ -32928,7 +33152,7 @@ impl<'input> CustomRuleContext<'input> for CastExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_castExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_castExpression }
 }
-antlr_rust::type_id!{CastExpressionContextExt<'a>}
+antlr_rust::tid!{CastExpressionContextExt<'a>}
 
 impl<'input> CastExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CastExpressionContextAll<'input>> {
@@ -32990,8 +33214,8 @@ where
 		let mut _localctx = CastExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 442, RULE_castExpression);
         let mut _localctx: Rc<CastExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2708);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -33093,7 +33317,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -33122,14 +33347,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for MultiplicativeExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for MultiplicativeExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_multiplicativeExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_multiplicativeExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_multiplicativeExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_multiplicativeExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for MultiplicativeExpressionContext<'input>{
@@ -33144,7 +33369,7 @@ impl<'input> CustomRuleContext<'input> for MultiplicativeExpressionContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_multiplicativeExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_multiplicativeExpression }
 }
-antlr_rust::type_id!{MultiplicativeExpressionContextExt<'a>}
+antlr_rust::tid!{MultiplicativeExpressionContextExt<'a>}
 
 impl<'input> MultiplicativeExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MultiplicativeExpressionContextAll<'input>> {
@@ -33204,7 +33429,7 @@ where
 	    let mut _localctx: Rc<MultiplicativeExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 444;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -33298,7 +33523,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(333,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -33326,14 +33552,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AdditiveExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AdditiveExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_additiveExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_additiveExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_additiveExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_additiveExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AdditiveExpressionContext<'input>{
@@ -33348,7 +33574,7 @@ impl<'input> CustomRuleContext<'input> for AdditiveExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_additiveExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_additiveExpression }
 }
-antlr_rust::type_id!{AdditiveExpressionContextExt<'a>}
+antlr_rust::tid!{AdditiveExpressionContextExt<'a>}
 
 impl<'input> AdditiveExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AdditiveExpressionContextAll<'input>> {
@@ -33403,7 +33629,7 @@ where
 	    let mut _localctx: Rc<AdditiveExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 446;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -33477,7 +33703,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(335,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -33505,14 +33732,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ShiftExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ShiftExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_shiftExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_shiftExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_shiftExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_shiftExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ShiftExpressionContext<'input>{
@@ -33527,7 +33754,7 @@ impl<'input> CustomRuleContext<'input> for ShiftExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_shiftExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_shiftExpression }
 }
-antlr_rust::type_id!{ShiftExpressionContextExt<'a>}
+antlr_rust::tid!{ShiftExpressionContextExt<'a>}
 
 impl<'input> ShiftExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ShiftExpressionContextAll<'input>> {
@@ -33590,7 +33817,7 @@ where
 	    let mut _localctx: Rc<ShiftExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 448;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -33696,7 +33923,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(337,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -33724,14 +33952,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for RelationalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for RelationalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_relationalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_relationalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_relationalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_relationalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for RelationalExpressionContext<'input>{
@@ -33746,7 +33974,7 @@ impl<'input> CustomRuleContext<'input> for RelationalExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_relationalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_relationalExpression }
 }
-antlr_rust::type_id!{RelationalExpressionContextExt<'a>}
+antlr_rust::tid!{RelationalExpressionContextExt<'a>}
 
 impl<'input> RelationalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RelationalExpressionContextAll<'input>> {
@@ -33822,7 +34050,7 @@ where
 	    let mut _localctx: Rc<RelationalExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 450;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -33975,7 +34203,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(340,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34003,14 +34232,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for EqualityExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for EqualityExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_equalityExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_equalityExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_equalityExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_equalityExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for EqualityExpressionContext<'input>{
@@ -34025,7 +34254,7 @@ impl<'input> CustomRuleContext<'input> for EqualityExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_equalityExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_equalityExpression }
 }
-antlr_rust::type_id!{EqualityExpressionContextExt<'a>}
+antlr_rust::tid!{EqualityExpressionContextExt<'a>}
 
 impl<'input> EqualityExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EqualityExpressionContextAll<'input>> {
@@ -34080,7 +34309,7 @@ where
 	    let mut _localctx: Rc<EqualityExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 452;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34154,7 +34383,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(342,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34182,14 +34412,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_andExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_andExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_andExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_andExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AndExpressionContext<'input>{
@@ -34204,7 +34434,7 @@ impl<'input> CustomRuleContext<'input> for AndExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_andExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_andExpression }
 }
-antlr_rust::type_id!{AndExpressionContextExt<'a>}
+antlr_rust::tid!{AndExpressionContextExt<'a>}
 
 impl<'input> AndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AndExpressionContextAll<'input>> {
@@ -34254,7 +34484,7 @@ where
 	    let mut _localctx: Rc<AndExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 454;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34300,7 +34530,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(343,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34328,14 +34559,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ExclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_exclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_exclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
@@ -34350,7 +34581,7 @@ impl<'input> CustomRuleContext<'input> for ExclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_exclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exclusiveOrExpression }
 }
-antlr_rust::type_id!{ExclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{ExclusiveOrExpressionContextExt<'a>}
 
 impl<'input> ExclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExclusiveOrExpressionContextAll<'input>> {
@@ -34400,7 +34631,7 @@ where
 	    let mut _localctx: Rc<ExclusiveOrExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 456;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34446,7 +34677,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(344,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34474,14 +34706,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for InclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for InclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_inclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_inclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_inclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_inclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for InclusiveOrExpressionContext<'input>{
@@ -34496,7 +34728,7 @@ impl<'input> CustomRuleContext<'input> for InclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_inclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_inclusiveOrExpression }
 }
-antlr_rust::type_id!{InclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{InclusiveOrExpressionContextExt<'a>}
 
 impl<'input> InclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InclusiveOrExpressionContextAll<'input>> {
@@ -34546,7 +34778,7 @@ where
 	    let mut _localctx: Rc<InclusiveOrExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 458;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34592,7 +34824,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(345,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34620,14 +34853,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConditionalAndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConditionalAndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalAndExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_conditionalAndExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalAndExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_conditionalAndExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConditionalAndExpressionContext<'input>{
@@ -34642,7 +34875,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalAndExpressionContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_conditionalAndExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalAndExpression }
 }
-antlr_rust::type_id!{ConditionalAndExpressionContextExt<'a>}
+antlr_rust::tid!{ConditionalAndExpressionContextExt<'a>}
 
 impl<'input> ConditionalAndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalAndExpressionContextAll<'input>> {
@@ -34692,7 +34925,7 @@ where
 	    let mut _localctx: Rc<ConditionalAndExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 460;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34738,7 +34971,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(346,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34766,14 +35000,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConditionalOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConditionalOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_conditionalOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_conditionalOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConditionalOrExpressionContext<'input>{
@@ -34788,7 +35022,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalOrExpressionContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_conditionalOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalOrExpression }
 }
-antlr_rust::type_id!{ConditionalOrExpressionContextExt<'a>}
+antlr_rust::tid!{ConditionalOrExpressionContextExt<'a>}
 
 impl<'input> ConditionalOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalOrExpressionContextAll<'input>> {
@@ -34838,7 +35072,7 @@ where
 	    let mut _localctx: Rc<ConditionalOrExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 462;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -34884,7 +35118,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(347,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -34912,14 +35147,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConditionalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConditionalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_conditionalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_conditionalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConditionalExpressionContext<'input>{
@@ -34934,7 +35169,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_conditionalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalExpression }
 }
-antlr_rust::type_id!{ConditionalExpressionContextExt<'a>}
+antlr_rust::tid!{ConditionalExpressionContextExt<'a>}
 
 impl<'input> ConditionalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalExpressionContextAll<'input>> {
@@ -34987,7 +35222,7 @@ where
 		let mut _localctx = ConditionalExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 464, RULE_conditionalExpression);
         let mut _localctx: Rc<ConditionalExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2870);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -35055,7 +35290,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35084,14 +35320,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AssignmentExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AssignmentExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_assignmentExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_assignmentExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AssignmentExpressionContext<'input>{
@@ -35106,7 +35342,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_assignmentExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentExpression }
 }
-antlr_rust::type_id!{AssignmentExpressionContextExt<'a>}
+antlr_rust::tid!{AssignmentExpressionContextExt<'a>}
 
 impl<'input> AssignmentExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentExpressionContextAll<'input>> {
@@ -35143,7 +35379,7 @@ where
 		let mut _localctx = AssignmentExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 466, RULE_assignmentExpression);
         let mut _localctx: Rc<AssignmentExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2874);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -35172,7 +35408,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35201,14 +35438,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AssignmentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AssignmentContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignment(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_assignment(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignment(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_assignment(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AssignmentContext<'input>{
@@ -35223,7 +35460,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assignment }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignment }
 }
-antlr_rust::type_id!{AssignmentContextExt<'a>}
+antlr_rust::tid!{AssignmentContextExt<'a>}
 
 impl<'input> AssignmentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentContextAll<'input>> {
@@ -35263,7 +35500,7 @@ where
 		let mut _localctx = AssignmentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 468, RULE_assignment);
         let mut _localctx: Rc<AssignmentContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -35281,7 +35518,8 @@ where
 			recog.expression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35310,14 +35548,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LeftHandSideContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LeftHandSideContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_leftHandSide(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_leftHandSide(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_leftHandSide(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_leftHandSide(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LeftHandSideContext<'input>{
@@ -35332,7 +35570,7 @@ impl<'input> CustomRuleContext<'input> for LeftHandSideContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_leftHandSide }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_leftHandSide }
 }
-antlr_rust::type_id!{LeftHandSideContextExt<'a>}
+antlr_rust::tid!{LeftHandSideContextExt<'a>}
 
 impl<'input> LeftHandSideContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LeftHandSideContextAll<'input>> {
@@ -35372,7 +35610,7 @@ where
 		let mut _localctx = LeftHandSideContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 470, RULE_leftHandSide);
         let mut _localctx: Rc<LeftHandSideContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2883);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -35412,7 +35650,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35441,14 +35680,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for AssignmentOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for AssignmentOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_assignmentOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_assignmentOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for AssignmentOperatorContext<'input>{
@@ -35463,7 +35702,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assignmentOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentOperator }
 }
-antlr_rust::type_id!{AssignmentOperatorContextExt<'a>}
+antlr_rust::tid!{AssignmentOperatorContextExt<'a>}
 
 impl<'input> AssignmentOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentOperatorContextAll<'input>> {
@@ -35554,15 +35793,15 @@ where
 		let mut _localctx = AssignmentOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 472, RULE_assignmentOperator);
         let mut _localctx: Rc<AssignmentOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(2885);
 			_la = recog.base.input.la(1);
-			if { !(((((_la - 88)) & !0x3f) == 0 && ((1usize << (_la - 88)) & ((1usize << (ASSIGN - 88)) | (1usize << (ADD_ASSIGN - 88)) | (1usize << (SUB_ASSIGN - 88)) | (1usize << (MUL_ASSIGN - 88)) | (1usize << (DIV_ASSIGN - 88)) | (1usize << (AND_ASSIGN - 88)) | (1usize << (OR_ASSIGN - 88)) | (1usize << (XOR_ASSIGN - 88)) | (1usize << (MOD_ASSIGN - 88)) | (1usize << (LSHIFT_ASSIGN - 88)) | (1usize << (RSHIFT_ASSIGN - 88)) | (1usize << (URSHIFT_ASSIGN - 88)))) != 0)) } {
+			if { !(((((_la - 88)) & !0x3f) == 0 && ((1usize << (_la - 88)) & ((1usize << (ASSIGN - 88)) | (1usize << (ADD_ASSIGN - 88)) | (1usize << (SUB_ASSIGN - 88)) | (1usize << (MUL_ASSIGN - 88)) | (1usize << (DIV_ASSIGN - 88)) | (1usize << (AND_ASSIGN - 88)) | (1usize << (OR_ASSIGN - 88)) | (1usize << (XOR_ASSIGN - 88)) | (1usize << (MOD_ASSIGN - 88)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (LSHIFT_ASSIGN - 120)) | (1usize << (RSHIFT_ASSIGN - 120)) | (1usize << (URSHIFT_ASSIGN - 120)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -35572,7 +35811,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35601,14 +35841,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaExpressionContext<'input>{
@@ -35623,7 +35863,7 @@ impl<'input> CustomRuleContext<'input> for LambdaExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaExpression }
 }
-antlr_rust::type_id!{LambdaExpressionContextExt<'a>}
+antlr_rust::tid!{LambdaExpressionContextExt<'a>}
 
 impl<'input> LambdaExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaExpressionContextAll<'input>> {
@@ -35665,7 +35905,7 @@ where
 		let mut _localctx = LambdaExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 474, RULE_lambdaExpression);
         let mut _localctx: Rc<LambdaExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -35682,7 +35922,8 @@ where
 			recog.lambdaBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35711,14 +35952,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaParametersContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaParametersContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaParameters(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaParameters(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaParameters(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaParameters(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaParametersContext<'input>{
@@ -35733,7 +35974,7 @@ impl<'input> CustomRuleContext<'input> for LambdaParametersContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaParameters }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaParameters }
 }
-antlr_rust::type_id!{LambdaParametersContextExt<'a>}
+antlr_rust::tid!{LambdaParametersContextExt<'a>}
 
 impl<'input> LambdaParametersContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaParametersContextAll<'input>> {
@@ -35782,8 +36023,8 @@ where
 		let mut _localctx = LambdaParametersContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 476, RULE_lambdaParameters);
         let mut _localctx: Rc<LambdaParametersContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2897);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -35799,7 +36040,7 @@ where
 					recog.base.set_state(2893);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE) | (1usize << FINAL) | (1usize << FLOAT) | (1usize << INT) | (1usize << LONG) | (1usize << SHORT))) != 0) || _la==AT || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << VAR) | (1usize << BOOLEAN) | (1usize << BYTE) | (1usize << CHAR) | (1usize << DOUBLE))) != 0) || ((((_la - 35)) & !0x3f) == 0 && ((1usize << (_la - 35)) & ((1usize << (FINAL - 35)) | (1usize << (FLOAT - 35)) | (1usize << (INT - 35)) | (1usize << (LONG - 35)) | (1usize << (SHORT - 35)))) != 0) || _la==AT || _la==Identifier {
 						{
 						/*InvokeRule lambdaParameterList*/
 						recog.base.set_state(2892);
@@ -35827,7 +36068,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -35856,14 +36098,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaParameterListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaParameterListContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaParameterList(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaParameterList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaParameterList(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaParameterList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaParameterListContext<'input>{
@@ -35878,7 +36120,7 @@ impl<'input> CustomRuleContext<'input> for LambdaParameterListContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_lambdaParameterList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaParameterList }
 }
-antlr_rust::type_id!{LambdaParameterListContextExt<'a>}
+antlr_rust::tid!{LambdaParameterListContextExt<'a>}
 
 impl<'input> LambdaParameterListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaParameterListContextAll<'input>> {
@@ -35933,8 +36175,8 @@ where
 		let mut _localctx = LambdaParameterListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 478, RULE_lambdaParameterList);
         let mut _localctx: Rc<LambdaParameterListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2915);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -35999,7 +36241,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -36028,14 +36271,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaParameterContext<'input>{
@@ -36050,7 +36293,7 @@ impl<'input> CustomRuleContext<'input> for LambdaParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaParameter }
 }
-antlr_rust::type_id!{LambdaParameterContextExt<'a>}
+antlr_rust::tid!{LambdaParameterContextExt<'a>}
 
 impl<'input> LambdaParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaParameterContextAll<'input>> {
@@ -36096,8 +36339,8 @@ where
 		let mut _localctx = LambdaParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 480, RULE_lambdaParameter);
         let mut _localctx: Rc<LambdaParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2927);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -36146,7 +36389,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -36175,14 +36419,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaParameterTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaParameterTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaParameterType(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaParameterType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaParameterType(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaParameterType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaParameterTypeContext<'input>{
@@ -36197,7 +36441,7 @@ impl<'input> CustomRuleContext<'input> for LambdaParameterTypeContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_lambdaParameterType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaParameterType }
 }
-antlr_rust::type_id!{LambdaParameterTypeContextExt<'a>}
+antlr_rust::tid!{LambdaParameterTypeContextExt<'a>}
 
 impl<'input> LambdaParameterTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaParameterTypeContextAll<'input>> {
@@ -36236,7 +36480,7 @@ where
 		let mut _localctx = LambdaParameterTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 482, RULE_lambdaParameterType);
         let mut _localctx: Rc<LambdaParameterTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2931);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -36266,7 +36510,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -36295,14 +36540,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for LambdaBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for LambdaBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_lambdaBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_lambdaBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for LambdaBodyContext<'input>{
@@ -36317,7 +36562,7 @@ impl<'input> CustomRuleContext<'input> for LambdaBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaBody }
 }
-antlr_rust::type_id!{LambdaBodyContextExt<'a>}
+antlr_rust::tid!{LambdaBodyContextExt<'a>}
 
 impl<'input> LambdaBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaBodyContextAll<'input>> {
@@ -36354,7 +36599,7 @@ where
 		let mut _localctx = LambdaBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 484, RULE_lambdaBody);
         let mut _localctx: Rc<LambdaBodyContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2935);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -36388,7 +36633,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -36417,14 +36663,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for SwitchExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for SwitchExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_switchExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_switchExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_switchExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_switchExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for SwitchExpressionContext<'input>{
@@ -36439,7 +36685,7 @@ impl<'input> CustomRuleContext<'input> for SwitchExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_switchExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_switchExpression }
 }
-antlr_rust::type_id!{SwitchExpressionContextExt<'a>}
+antlr_rust::tid!{SwitchExpressionContextExt<'a>}
 
 impl<'input> SwitchExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SwitchExpressionContextAll<'input>> {
@@ -36491,7 +36737,7 @@ where
 		let mut _localctx = SwitchExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 486, RULE_switchExpression);
         let mut _localctx: Rc<SwitchExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -36514,7 +36760,8 @@ where
 			recog.switchBlock()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -36543,14 +36790,14 @@ ph:PhantomData<&'input str>
 impl<'input> Java20ParserContext<'input> for ConstantExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Java20ParserListener<'input> + 'a> for ConstantExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constantExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
-		listener.exit_constantExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constantExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Java20ParserListener<'input> + 'a)) {
+			listener.exit_constantExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Java20ParserVisitor<'input> + 'a> for ConstantExpressionContext<'input>{
@@ -36565,7 +36812,7 @@ impl<'input> CustomRuleContext<'input> for ConstantExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_constantExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constantExpression }
 }
-antlr_rust::type_id!{ConstantExpressionContextExt<'a>}
+antlr_rust::tid!{ConstantExpressionContextExt<'a>}
 
 impl<'input> ConstantExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Java20ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstantExpressionContextAll<'input>> {
@@ -36599,7 +36846,7 @@ where
 		let mut _localctx = ConstantExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 488, RULE_constantExpression);
         let mut _localctx: Rc<ConstantExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -36609,7 +36856,8 @@ where
 			recog.expression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),

@@ -263,10 +263,11 @@ pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
 type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
 
-#[derive(Tid)]
 pub struct Java20Lexer<'input, Input:CharStream<From<'input> >> {
 	base: BaseLexer<'input,Java20LexerActions,Input,LocalTokenFactory<'input>>,
 }
+
+antlr_rust::tid! { impl<'input,Input> TidAble<'input> for Java20Lexer<'input,Input> where Input:CharStream<From<'input> > }
 
 impl<'input, Input:CharStream<From<'input> >> Deref for Java20Lexer<'input,Input>{
 	type Target = BaseLexer<'input,Java20LexerActions,Input,LocalTokenFactory<'input>>;
@@ -300,7 +301,7 @@ impl<'input, Input:CharStream<From<'input> >> Java20Lexer<'input,Input>{
     }
 
 	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
     	Self {
 			base: BaseLexer::new_base_lexer(
 				input,
@@ -325,7 +326,38 @@ impl<'input, Input:CharStream<From<'input> >> Java20Lexer<'input,Input> where &'
 pub struct Java20LexerActions {
 }
 
-impl Java20LexerActions{
+impl<'input> Java20LexerActions{
+	fn is_java_identifier_part(c: isize) -> bool {
+		let c = char::from_u32(c as u32).unwrap();
+
+		c.is_alphanumeric() || c == '$' || c == '_'
+ 	}
+
+	fn is_java_identifier_start(c: isize) -> bool {
+		let c = char::from_u32(c as u32).unwrap();
+
+		c.is_alphabetic() || c == '$' || c == '_'
+ 	}
+
+	fn combine_chars(high: isize, low: isize) -> isize {
+		(high << 10) + low - 0x35fdc00
+	}
+
+	pub fn Check1(&self, back_one: isize) -> bool {
+		Self::is_java_identifier_start(back_one)
+	}
+
+	pub fn Check2(&self, back_one: isize, back_two: isize) -> bool {
+		Self::is_java_identifier_start(Self::combine_chars(back_two, back_one))
+	}
+
+	pub fn Check3(&self, back_one: isize) -> bool {
+		Self::is_java_identifier_part(back_one)
+	}
+
+	pub fn Check4(&self, back_one: isize, back_two: isize) -> bool {
+		Self::is_java_identifier_part(Self::combine_chars(back_two, back_one))
+	}
 }
 
 impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Java20LexerActions,Input,LocalTokenFactory<'input>>> for Java20LexerActions{
@@ -347,12 +379,16 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Ja
 		fn JavaLetter_sempred(_localctx: Option<&LexerContext<'input>>, pred_index:isize,
 							recog:&mut <Self as Deref>::Target
 			) -> bool {
+				let (back_one, back_two) = {
+					let ctx = recog.input.as_mut().unwrap();
+					(ctx.la(-1), ctx.la(-2))
+				};
 			match pred_index {
 					0=>{
-						 this.Check1() 
+						 recog.Check1(back_one) 
 					}
 					1=>{
-						 this.Check2() 
+						 recog.Check2(back_one, back_two)
 					}
 				_ => true
 			}
@@ -360,12 +396,16 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Ja
 		fn JavaLetterOrDigit_sempred(_localctx: Option<&LexerContext<'input>>, pred_index:isize,
 							recog:&mut <Self as Deref>::Target
 			) -> bool {
+			let (back_one, back_two) = {
+				let ctx = recog.input.as_mut().unwrap();
+				(ctx.la(-1), ctx.la(-2))
+			};
 			match pred_index {
 					2=>{
-						 this.Check3() 
+						 recog.Check3(back_one) 
 					}
 					3=>{
-						 this.Check4() 
+						 recog.Check4(back_one, back_two) 
 					}
 				_ => true
 			}

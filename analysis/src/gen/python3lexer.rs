@@ -219,10 +219,11 @@ pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
 type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
 
-#[derive(Tid)]
 pub struct Python3Lexer<'input, Input:CharStream<From<'input> >> {
 	base: BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>,
 }
+
+antlr_rust::tid! { impl<'input,Input> TidAble<'input> for Python3Lexer<'input,Input> where Input:CharStream<From<'input> > }
 
 impl<'input, Input:CharStream<From<'input> >> Deref for Python3Lexer<'input,Input>{
 	type Target = BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>;
@@ -256,7 +257,7 @@ impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input>{
     }
 
 	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
     	Self {
 			base: BaseLexer::new_base_lexer(
 				input,
@@ -265,7 +266,9 @@ impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input>{
 					_decision_to_DFA.clone(),
 					_shared_context_cache.clone(),
 				),
-				Python3LexerActions{},
+				Python3LexerActions{
+					opened: 0,
+				},
 				tf
 			)
 	    }
@@ -279,9 +282,21 @@ impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input> where &
 }
 
 pub struct Python3LexerActions {
+	opened: usize,
 }
 
 impl Python3LexerActions{
+	pub fn onNewLine(&mut self) {
+		todo!()
+	}
+
+	pub fn openBrace(&mut self) {
+		self.opened += 1;
+	}
+
+	pub fn closeBrace(&mut self) {
+		self.opened -= 1;
+	}
 }
 
 impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>> for Python3LexerActions{
@@ -326,7 +341,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		0=>{
-						this.onNewLine();
+						recog.onNewLine();
 					},
 
 				_ => {}
@@ -338,7 +353,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		1=>{
-						this.openBrace();
+						recog.openBrace();
 					},
 
 				_ => {}
@@ -350,7 +365,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		2=>{
-						this.closeBrace();
+						recog.closeBrace();
 					},
 
 				_ => {}
@@ -362,7 +377,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		3=>{
-						this.openBrace();
+						recog.openBrace();
 					},
 
 				_ => {}
@@ -374,7 +389,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		4=>{
-						this.closeBrace();
+						recog.closeBrace();
 					},
 
 				_ => {}
@@ -386,7 +401,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		5=>{
-						this.openBrace();
+						recog.openBrace();
 					},
 
 				_ => {}
@@ -398,7 +413,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) {
 			match action_index {
 			 		6=>{
-						this.closeBrace();
+						recog.closeBrace();
 					},
 
 				_ => {}
@@ -409,7 +424,7 @@ impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Py
 			) -> bool {
 			match pred_index {
 					0=>{
-						this.atStartOfInput()
+						recog.get_char_position_in_line() == 0 && recog.get_line() == 1
 					}
 				_ => true
 			}

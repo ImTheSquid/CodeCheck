@@ -5,6 +5,7 @@
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+#![allow(unused_braces)]
 use antlr_rust::PredictionContextCache;
 use antlr_rust::parser::{Parser, BaseParser, ParserRecog, ParserNodeType};
 use antlr_rust::token_stream::TokenStream;
@@ -498,7 +499,7 @@ use std::any::{Any,TypeId};
 
 
 type BaseParserType<'input, I> =
-	BaseParser<'input,CPP14ParserExt, I, CPP14ParserContextType , dyn CPP14ParserListener<'input> + 'input >;
+	BaseParser<'input,CPP14ParserExt<'input>, I, CPP14ParserContextType , dyn CPP14ParserListener<'input> + 'input >;
 
 type TokenType<'input> = <LocalTokenFactory<'input> as TokenFactory<'input>>::Tok;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
@@ -530,7 +531,7 @@ where
     }
 
     pub fn with_strategy(input: I, strategy: H) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
 		let interpreter = Arc::new(ParserATNSimulator::new(
 			_ATN.clone(),
 			_decision_to_DFA.clone(),
@@ -541,6 +542,7 @@ where
 				input,
 				Arc::clone(&interpreter),
 				CPP14ParserExt{
+					_pd: Default::default(),
 				}
 			),
 			interpreter,
@@ -578,6 +580,8 @@ pub trait CPP14ParserContext<'input>:
 	ParserRuleContext<'input, TF=LocalTokenFactory<'input>, Ctx=CPP14ParserContextType>
 {}
 
+antlr_rust::coerce_from!{ 'input : CPP14ParserContext<'input> }
+
 impl<'input, 'x, T> VisitableDyn<T> for dyn CPP14ParserContext<'input> + 'input
 where
     T: CPP14ParserVisitor<'input> + 'x,
@@ -590,14 +594,12 @@ where
 impl<'input> CPP14ParserContext<'input> for TerminalNode<'input,CPP14ParserContextType> {}
 impl<'input> CPP14ParserContext<'input> for ErrorNode<'input,CPP14ParserContextType> {}
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CPP14ParserContext<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CPP14ParserContext<'input> + 'input }
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CPP14ParserListener<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CPP14ParserListener<'input> + 'input }
 
 pub struct CPP14ParserContextType;
-antlr_rust::type_id!{CPP14ParserContextType}
+antlr_rust::tid!{CPP14ParserContextType}
 
 impl<'input> ParserNodeType<'input> for CPP14ParserContextType{
 	type TF = LocalTokenFactory<'input>;
@@ -626,20 +628,33 @@ where
     }
 }
 
-pub struct CPP14ParserExt{
+pub struct CPP14ParserExt<'input>{
+	_pd: PhantomData<&'input str>,
 }
 
-impl CPP14ParserExt{
+impl<'input> CPP14ParserExt<'input>{
+	pub fn IsPureSpecifierAllowed(&self, ctx: &impl ParserRuleContext<'input>) -> bool {
+		let child = ctx.get_child(0).unwrap().get_child(0).unwrap();
+		let child2 = child.get_child(0).unwrap();
+		let p = child2.get_child(1);
+
+		match p {
+			Some(p) => {
+				p.downcast_ref::<ParametersAndQualifiersContext>().is_some()
+			},
+			None => false,
+		}
+	}
 }
+antlr_rust::tid! { CPP14ParserExt<'a> }
 
-
-impl<'input> TokenAware<'input> for CPP14ParserExt{
+impl<'input> TokenAware<'input> for CPP14ParserExt<'input>{
 	type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CPP14ParserExt{}
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CPP14ParserExt<'input>{}
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CPP14ParserExt{
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CPP14ParserExt<'input>{
 	fn get_grammar_file_name(&self) -> & str{ "CPP14Parser.g4"}
 
    	fn get_rule_names(&self) -> &[& str] {&ruleNames}
@@ -734,15 +749,15 @@ where
 			_ => true
 		}
 	}
-	fn memberDeclarator_sempred(_localctx: Option<&MemberDeclaratorContext<'input>>, pred_index:isize,
+	fn memberDeclarator_sempred(localctx: Option<&MemberDeclaratorContext<'input>>, pred_index:isize,
 						recog:&mut <Self as Deref>::Target
 		) -> bool {
 		match pred_index {
 				9=>{
-					 this.IsPureSpecifierAllowed() 
+					recog.IsPureSpecifierAllowed(localctx.unwrap()) 
 				}
 				10=>{
-					 this.IsPureSpecifierAllowed() 
+					recog.IsPureSpecifierAllowed(localctx.unwrap()) 
 				}
 			_ => true
 		}
@@ -762,14 +777,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TranslationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TranslationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_translationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_translationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_translationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_translationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TranslationUnitContext<'input>{
@@ -784,7 +799,7 @@ impl<'input> CustomRuleContext<'input> for TranslationUnitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_translationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_translationUnit }
 }
-antlr_rust::type_id!{TranslationUnitContextExt<'a>}
+antlr_rust::tid!{TranslationUnitContextExt<'a>}
 
 impl<'input> TranslationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TranslationUnitContextAll<'input>> {
@@ -823,8 +838,8 @@ where
 		let mut _localctx = TranslationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 0, RULE_translationUnit);
         let mut _localctx: Rc<TranslationUnitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -832,7 +847,7 @@ where
 			recog.base.set_state(383);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Namespace - 10)) | (1usize << (Operator - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0) {
+			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Namespace - 44)) | (1usize << (Operator - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 				{
 				/*InvokeRule declarationseq*/
 				recog.base.set_state(382);
@@ -845,7 +860,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -874,14 +890,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PrimaryExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PrimaryExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_primaryExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_primaryExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_primaryExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_primaryExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PrimaryExpressionContext<'input>{
@@ -896,7 +912,7 @@ impl<'input> CustomRuleContext<'input> for PrimaryExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primaryExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primaryExpression }
 }
-antlr_rust::type_id!{PrimaryExpressionContextExt<'a>}
+antlr_rust::tid!{PrimaryExpressionContextExt<'a>}
 
 impl<'input> PrimaryExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimaryExpressionContextAll<'input>> {
@@ -957,7 +973,7 @@ where
 		let mut _localctx = PrimaryExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 2, RULE_primaryExpression);
         let mut _localctx: Rc<PrimaryExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(399);
@@ -1049,7 +1065,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1078,14 +1095,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for IdExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for IdExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_idExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_idExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_idExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_idExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for IdExpressionContext<'input>{
@@ -1100,7 +1117,7 @@ impl<'input> CustomRuleContext<'input> for IdExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_idExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_idExpression }
 }
-antlr_rust::type_id!{IdExpressionContextExt<'a>}
+antlr_rust::tid!{IdExpressionContextExt<'a>}
 
 impl<'input> IdExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IdExpressionContextAll<'input>> {
@@ -1137,7 +1154,7 @@ where
 		let mut _localctx = IdExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 4, RULE_idExpression);
         let mut _localctx: Rc<IdExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(403);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -1166,7 +1183,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1195,14 +1213,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for UnqualifiedIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for UnqualifiedIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unqualifiedId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_unqualifiedId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unqualifiedId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_unqualifiedId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for UnqualifiedIdContext<'input>{
@@ -1217,7 +1235,7 @@ impl<'input> CustomRuleContext<'input> for UnqualifiedIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unqualifiedId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unqualifiedId }
 }
-antlr_rust::type_id!{UnqualifiedIdContextExt<'a>}
+antlr_rust::tid!{UnqualifiedIdContextExt<'a>}
 
 impl<'input> UnqualifiedIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnqualifiedIdContextAll<'input>> {
@@ -1276,7 +1294,7 @@ where
 		let mut _localctx = UnqualifiedIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 6, RULE_unqualifiedId);
         let mut _localctx: Rc<UnqualifiedIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(415);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -1372,7 +1390,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1401,14 +1420,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for QualifiedIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for QualifiedIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_qualifiedId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_qualifiedId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_qualifiedId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_qualifiedId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for QualifiedIdContext<'input>{
@@ -1423,7 +1442,7 @@ impl<'input> CustomRuleContext<'input> for QualifiedIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_qualifiedId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_qualifiedId }
 }
-antlr_rust::type_id!{QualifiedIdContextExt<'a>}
+antlr_rust::tid!{QualifiedIdContextExt<'a>}
 
 impl<'input> QualifiedIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<QualifiedIdContextAll<'input>> {
@@ -1465,8 +1484,8 @@ where
 		let mut _localctx = QualifiedIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 8, RULE_qualifiedId);
         let mut _localctx: Rc<QualifiedIdContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1491,7 +1510,8 @@ where
 			recog.unqualifiedId()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1520,14 +1540,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NestedNameSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NestedNameSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_nestedNameSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_nestedNameSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_nestedNameSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_nestedNameSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NestedNameSpecifierContext<'input>{
@@ -1542,7 +1562,7 @@ impl<'input> CustomRuleContext<'input> for NestedNameSpecifierContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_nestedNameSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_nestedNameSpecifier }
 }
-antlr_rust::type_id!{NestedNameSpecifierContextExt<'a>}
+antlr_rust::tid!{NestedNameSpecifierContextExt<'a>}
 
 impl<'input> NestedNameSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NestedNameSpecifierContextAll<'input>> {
@@ -1611,8 +1631,8 @@ where
 	    let mut _localctx: Rc<NestedNameSpecifierContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 10;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1718,7 +1738,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(10,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1746,14 +1767,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LambdaExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LambdaExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_lambdaExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_lambdaExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LambdaExpressionContext<'input>{
@@ -1768,7 +1789,7 @@ impl<'input> CustomRuleContext<'input> for LambdaExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaExpression }
 }
-antlr_rust::type_id!{LambdaExpressionContextExt<'a>}
+antlr_rust::tid!{LambdaExpressionContextExt<'a>}
 
 impl<'input> LambdaExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaExpressionContextAll<'input>> {
@@ -1808,8 +1829,8 @@ where
 		let mut _localctx = LambdaExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 12, RULE_lambdaExpression);
         let mut _localctx: Rc<LambdaExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1835,7 +1856,8 @@ where
 			recog.compoundStatement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1864,14 +1886,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LambdaIntroducerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LambdaIntroducerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaIntroducer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_lambdaIntroducer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaIntroducer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_lambdaIntroducer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LambdaIntroducerContext<'input>{
@@ -1886,7 +1908,7 @@ impl<'input> CustomRuleContext<'input> for LambdaIntroducerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaIntroducer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaIntroducer }
 }
-antlr_rust::type_id!{LambdaIntroducerContextExt<'a>}
+antlr_rust::tid!{LambdaIntroducerContextExt<'a>}
 
 impl<'input> LambdaIntroducerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaIntroducerContextAll<'input>> {
@@ -1930,8 +1952,8 @@ where
 		let mut _localctx = LambdaIntroducerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 14, RULE_lambdaIntroducer);
         let mut _localctx: Rc<LambdaIntroducerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1942,7 +1964,7 @@ where
 			recog.base.set_state(453);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 69)) & !0x3f) == 0 && ((1usize << (_la - 69)) & ((1usize << (This - 69)) | (1usize << (And - 69)) | (1usize << (Assign - 69)) | (1usize << (Identifier - 69)))) != 0) {
+			if _la==This || _la==And || _la==Assign || _la==Identifier {
 				{
 				/*InvokeRule lambdaCapture*/
 				recog.base.set_state(452);
@@ -1955,7 +1977,8 @@ where
 			recog.base.match_token(RightBracket,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1984,14 +2007,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LambdaCaptureContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LambdaCaptureContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaCapture(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_lambdaCapture(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaCapture(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_lambdaCapture(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LambdaCaptureContext<'input>{
@@ -2006,7 +2029,7 @@ impl<'input> CustomRuleContext<'input> for LambdaCaptureContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaCapture }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaCapture }
 }
-antlr_rust::type_id!{LambdaCaptureContextExt<'a>}
+antlr_rust::tid!{LambdaCaptureContextExt<'a>}
 
 impl<'input> LambdaCaptureContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaCaptureContextAll<'input>> {
@@ -2048,8 +2071,8 @@ where
 		let mut _localctx = LambdaCaptureContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 16, RULE_lambdaCapture);
         let mut _localctx: Rc<LambdaCaptureContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(463);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2093,7 +2116,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2122,14 +2146,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CaptureDefaultContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CaptureDefaultContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_captureDefault(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_captureDefault(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_captureDefault(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_captureDefault(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CaptureDefaultContext<'input>{
@@ -2144,7 +2168,7 @@ impl<'input> CustomRuleContext<'input> for CaptureDefaultContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_captureDefault }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_captureDefault }
 }
-antlr_rust::type_id!{CaptureDefaultContextExt<'a>}
+antlr_rust::tid!{CaptureDefaultContextExt<'a>}
 
 impl<'input> CaptureDefaultContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CaptureDefaultContextAll<'input>> {
@@ -2185,8 +2209,8 @@ where
 		let mut _localctx = CaptureDefaultContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 18, RULE_captureDefault);
         let mut _localctx: Rc<CaptureDefaultContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2203,7 +2227,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2232,14 +2257,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CaptureListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CaptureListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_captureList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_captureList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_captureList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_captureList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CaptureListContext<'input>{
@@ -2254,7 +2279,7 @@ impl<'input> CustomRuleContext<'input> for CaptureListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_captureList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_captureList }
 }
-antlr_rust::type_id!{CaptureListContextExt<'a>}
+antlr_rust::tid!{CaptureListContextExt<'a>}
 
 impl<'input> CaptureListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CaptureListContextAll<'input>> {
@@ -2305,8 +2330,8 @@ where
 		let mut _localctx = CaptureListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 20, RULE_captureList);
         let mut _localctx: Rc<CaptureListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2346,7 +2371,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2375,14 +2401,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CaptureContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CaptureContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_capture(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_capture(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_capture(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_capture(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CaptureContext<'input>{
@@ -2397,7 +2423,7 @@ impl<'input> CustomRuleContext<'input> for CaptureContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_capture }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_capture }
 }
-antlr_rust::type_id!{CaptureContextExt<'a>}
+antlr_rust::tid!{CaptureContextExt<'a>}
 
 impl<'input> CaptureContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CaptureContextAll<'input>> {
@@ -2434,7 +2460,7 @@ where
 		let mut _localctx = CaptureContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 22, RULE_capture);
         let mut _localctx: Rc<CaptureContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(480);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2463,7 +2489,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2492,14 +2519,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleCaptureContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleCaptureContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleCapture(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleCapture(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleCapture(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleCapture(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleCaptureContext<'input>{
@@ -2514,7 +2541,7 @@ impl<'input> CustomRuleContext<'input> for SimpleCaptureContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simpleCapture }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleCapture }
 }
-antlr_rust::type_id!{SimpleCaptureContextExt<'a>}
+antlr_rust::tid!{SimpleCaptureContextExt<'a>}
 
 impl<'input> SimpleCaptureContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleCaptureContextAll<'input>> {
@@ -2560,8 +2587,8 @@ where
 		let mut _localctx = SimpleCaptureContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 24, RULE_simpleCapture);
         let mut _localctx: Rc<SimpleCaptureContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(487);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2601,7 +2628,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2630,14 +2658,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitcaptureContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitcaptureContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initcapture(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initcapture(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initcapture(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initcapture(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitcaptureContext<'input>{
@@ -2652,7 +2680,7 @@ impl<'input> CustomRuleContext<'input> for InitcaptureContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initcapture }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initcapture }
 }
-antlr_rust::type_id!{InitcaptureContextExt<'a>}
+antlr_rust::tid!{InitcaptureContextExt<'a>}
 
 impl<'input> InitcaptureContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitcaptureContextAll<'input>> {
@@ -2696,8 +2724,8 @@ where
 		let mut _localctx = InitcaptureContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 26, RULE_initcapture);
         let mut _localctx: Rc<InitcaptureContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2721,7 +2749,8 @@ where
 			recog.initializer()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2750,14 +2779,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LambdaDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LambdaDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdaDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_lambdaDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdaDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_lambdaDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LambdaDeclaratorContext<'input>{
@@ -2772,7 +2801,7 @@ impl<'input> CustomRuleContext<'input> for LambdaDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdaDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdaDeclarator }
 }
-antlr_rust::type_id!{LambdaDeclaratorContextExt<'a>}
+antlr_rust::tid!{LambdaDeclaratorContextExt<'a>}
 
 impl<'input> LambdaDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdaDeclaratorContextAll<'input>> {
@@ -2830,8 +2859,8 @@ where
 		let mut _localctx = LambdaDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 28, RULE_lambdaDeclarator);
         let mut _localctx: Rc<LambdaDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2842,7 +2871,7 @@ where
 			recog.base.set_state(497);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Struct - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Identifier - 74)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Alignas) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Decltype) | (1usize << Double))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Explicit - 33)) | (1usize << (Extern - 33)) | (1usize << (Float - 33)) | (1usize << (Friend - 33)) | (1usize << (Inline - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Mutable - 33)) | (1usize << (Register - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Static - 33)))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (Struct - 66)) | (1usize << (Thread_local - 66)) | (1usize << (Typedef - 66)) | (1usize << (Typename_ - 66)) | (1usize << (Union - 66)) | (1usize << (Unsigned - 66)) | (1usize << (Virtual - 66)) | (1usize << (Void - 66)) | (1usize << (Volatile - 66)) | (1usize << (Wchar - 66)) | (1usize << (LeftBracket - 66)))) != 0) || _la==Doublecolon || _la==Identifier {
 				{
 				/*InvokeRule parameterDeclarationClause*/
 				recog.base.set_state(496);
@@ -2902,7 +2931,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2931,14 +2961,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PostfixExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PostfixExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_postfixExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_postfixExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_postfixExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_postfixExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PostfixExpressionContext<'input>{
@@ -2953,7 +2983,7 @@ impl<'input> CustomRuleContext<'input> for PostfixExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_postfixExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_postfixExpression }
 }
-antlr_rust::type_id!{PostfixExpressionContextExt<'a>}
+antlr_rust::tid!{PostfixExpressionContextExt<'a>}
 
 impl<'input> PostfixExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PostfixExpressionContextAll<'input>> {
@@ -3100,8 +3130,8 @@ where
 	    let mut _localctx: Rc<PostfixExpressionContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 30;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3159,7 +3189,7 @@ where
 							recog.base.set_state(520);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (LeftBrace - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule expressionList*/
 								recog.base.set_state(519);
@@ -3193,7 +3223,7 @@ where
 					{
 					recog.base.set_state(526);
 					_la = recog.base.input.la(1);
-					if { !(((((_la - 24)) & !0x3f) == 0 && ((1usize << (_la - 24)) & ((1usize << (Const_cast - 24)) | (1usize << (Dynamic_cast - 24)) | (1usize << (Reinterpret_cast - 24)) | (1usize << (Static_cast - 24)))) != 0)) } {
+					if { !(_la==Const_cast || _la==Dynamic_cast || _la==Reinterpret_cast || _la==Static_cast) } {
 						recog.err_handler.recover_inline(&mut recog.base)?;
 
 					}
@@ -3346,7 +3376,7 @@ where
 							recog.base.set_state(555);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (LeftBrace - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule expressionList*/
 								recog.base.set_state(554);
@@ -3452,7 +3482,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(36,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3480,14 +3511,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeIdOfTheTypeIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeIdOfTheTypeIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeIdOfTheTypeId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeIdOfTheTypeId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeIdOfTheTypeId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeIdOfTheTypeId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeIdOfTheTypeIdContext<'input>{
@@ -3502,7 +3533,7 @@ impl<'input> CustomRuleContext<'input> for TypeIdOfTheTypeIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeIdOfTheTypeId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeIdOfTheTypeId }
 }
-antlr_rust::type_id!{TypeIdOfTheTypeIdContextExt<'a>}
+antlr_rust::tid!{TypeIdOfTheTypeIdContextExt<'a>}
 
 impl<'input> TypeIdOfTheTypeIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeIdOfTheTypeIdContextAll<'input>> {
@@ -3538,7 +3569,7 @@ where
 		let mut _localctx = TypeIdOfTheTypeIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 32, RULE_typeIdOfTheTypeId);
         let mut _localctx: Rc<TypeIdOfTheTypeIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3547,7 +3578,8 @@ where
 			recog.base.match_token(Typeid_,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3576,14 +3608,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExpressionListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExpressionListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expressionList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_expressionList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expressionList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_expressionList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExpressionListContext<'input>{
@@ -3598,7 +3630,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expressionList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expressionList }
 }
-antlr_rust::type_id!{ExpressionListContextExt<'a>}
+antlr_rust::tid!{ExpressionListContextExt<'a>}
 
 impl<'input> ExpressionListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionListContextAll<'input>> {
@@ -3632,7 +3664,7 @@ where
 		let mut _localctx = ExpressionListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 34, RULE_expressionList);
         let mut _localctx: Rc<ExpressionListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3642,7 +3674,8 @@ where
 			recog.initializerList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3671,14 +3704,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PseudoDestructorNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PseudoDestructorNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pseudoDestructorName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pseudoDestructorName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pseudoDestructorName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pseudoDestructorName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PseudoDestructorNameContext<'input>{
@@ -3693,7 +3726,7 @@ impl<'input> CustomRuleContext<'input> for PseudoDestructorNameContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_pseudoDestructorName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pseudoDestructorName }
 }
-antlr_rust::type_id!{PseudoDestructorNameContextExt<'a>}
+antlr_rust::tid!{PseudoDestructorNameContextExt<'a>}
 
 impl<'input> PseudoDestructorNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PseudoDestructorNameContextAll<'input>> {
@@ -3754,8 +3787,8 @@ where
 		let mut _localctx = PseudoDestructorNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 36, RULE_pseudoDestructorName);
         let mut _localctx: Rc<PseudoDestructorNameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(597);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -3847,7 +3880,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3876,14 +3910,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for UnaryExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for UnaryExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_unaryExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_unaryExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for UnaryExpressionContext<'input>{
@@ -3898,7 +3932,7 @@ impl<'input> CustomRuleContext<'input> for UnaryExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unaryExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryExpression }
 }
-antlr_rust::type_id!{UnaryExpressionContextExt<'a>}
+antlr_rust::tid!{UnaryExpressionContextExt<'a>}
 
 impl<'input> UnaryExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryExpressionContextAll<'input>> {
@@ -3990,7 +4024,7 @@ where
 		let mut _localctx = UnaryExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 38, RULE_unaryExpression);
         let mut _localctx: Rc<UnaryExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(626);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4163,7 +4197,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4192,14 +4227,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for UnaryOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for UnaryOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_unaryOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_unaryOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for UnaryOperatorContext<'input>{
@@ -4214,7 +4249,7 @@ impl<'input> CustomRuleContext<'input> for UnaryOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unaryOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryOperator }
 }
-antlr_rust::type_id!{UnaryOperatorContextExt<'a>}
+antlr_rust::tid!{UnaryOperatorContextExt<'a>}
 
 impl<'input> UnaryOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryOperatorContextAll<'input>> {
@@ -4280,8 +4315,8 @@ where
 		let mut _localctx = UnaryOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 40, RULE_unaryOperator);
         let mut _localctx: Rc<UnaryOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4298,7 +4333,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4327,14 +4363,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NewExpression_Context<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NewExpression_Context<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_newExpression_(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_newExpression_(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_newExpression_(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_newExpression_(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NewExpression_Context<'input>{
@@ -4349,7 +4385,7 @@ impl<'input> CustomRuleContext<'input> for NewExpression_ContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_newExpression_ }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_newExpression_ }
 }
-antlr_rust::type_id!{NewExpression_ContextExt<'a>}
+antlr_rust::tid!{NewExpression_ContextExt<'a>}
 
 impl<'input> NewExpression_ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NewExpression_ContextAll<'input>> {
@@ -4412,8 +4448,8 @@ where
 		let mut _localctx = NewExpression_ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 42, RULE_newExpression_);
         let mut _localctx: Rc<NewExpression_ContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4492,7 +4528,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4521,14 +4558,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NewPlacementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NewPlacementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_newPlacement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_newPlacement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_newPlacement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_newPlacement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NewPlacementContext<'input>{
@@ -4543,7 +4580,7 @@ impl<'input> CustomRuleContext<'input> for NewPlacementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_newPlacement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_newPlacement }
 }
-antlr_rust::type_id!{NewPlacementContextExt<'a>}
+antlr_rust::tid!{NewPlacementContextExt<'a>}
 
 impl<'input> NewPlacementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NewPlacementContextAll<'input>> {
@@ -4587,7 +4624,7 @@ where
 		let mut _localctx = NewPlacementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 44, RULE_newPlacement);
         let mut _localctx: Rc<NewPlacementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4603,7 +4640,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4632,14 +4670,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NewTypeIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NewTypeIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_newTypeId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_newTypeId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_newTypeId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_newTypeId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NewTypeIdContext<'input>{
@@ -4654,7 +4692,7 @@ impl<'input> CustomRuleContext<'input> for NewTypeIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_newTypeId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_newTypeId }
 }
-antlr_rust::type_id!{NewTypeIdContextExt<'a>}
+antlr_rust::tid!{NewTypeIdContextExt<'a>}
 
 impl<'input> NewTypeIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NewTypeIdContextAll<'input>> {
@@ -4691,7 +4729,7 @@ where
 		let mut _localctx = NewTypeIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 46, RULE_newTypeId);
         let mut _localctx: Rc<NewTypeIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4715,7 +4753,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4744,14 +4783,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NewDeclarator_Context<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NewDeclarator_Context<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_newDeclarator_(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_newDeclarator_(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_newDeclarator_(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_newDeclarator_(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NewDeclarator_Context<'input>{
@@ -4766,7 +4805,7 @@ impl<'input> CustomRuleContext<'input> for NewDeclarator_ContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_newDeclarator_ }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_newDeclarator_ }
 }
-antlr_rust::type_id!{NewDeclarator_ContextExt<'a>}
+antlr_rust::tid!{NewDeclarator_ContextExt<'a>}
 
 impl<'input> NewDeclarator_ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NewDeclarator_ContextAll<'input>> {
@@ -4806,7 +4845,7 @@ where
 		let mut _localctx = NewDeclarator_ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 48, RULE_newDeclarator_);
         let mut _localctx: Rc<NewDeclarator_ContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(660);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4851,7 +4890,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4880,14 +4920,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoPointerNewDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoPointerNewDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noPointerNewDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noPointerNewDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noPointerNewDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noPointerNewDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoPointerNewDeclaratorContext<'input>{
@@ -4902,7 +4942,7 @@ impl<'input> CustomRuleContext<'input> for NoPointerNewDeclaratorContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_noPointerNewDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noPointerNewDeclarator }
 }
-antlr_rust::type_id!{NoPointerNewDeclaratorContextExt<'a>}
+antlr_rust::tid!{NoPointerNewDeclaratorContextExt<'a>}
 
 impl<'input> NoPointerNewDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoPointerNewDeclaratorContextAll<'input>> {
@@ -4963,7 +5003,7 @@ where
 	    let mut _localctx: Rc<NoPointerNewDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 50;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5046,7 +5086,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(52,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5074,14 +5115,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NewInitializer_Context<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NewInitializer_Context<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_newInitializer_(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_newInitializer_(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_newInitializer_(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_newInitializer_(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NewInitializer_Context<'input>{
@@ -5096,7 +5137,7 @@ impl<'input> CustomRuleContext<'input> for NewInitializer_ContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_newInitializer_ }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_newInitializer_ }
 }
-antlr_rust::type_id!{NewInitializer_ContextExt<'a>}
+antlr_rust::tid!{NewInitializer_ContextExt<'a>}
 
 impl<'input> NewInitializer_ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NewInitializer_ContextAll<'input>> {
@@ -5143,8 +5184,8 @@ where
 		let mut _localctx = NewInitializer_ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 52, RULE_newInitializer_);
         let mut _localctx: Rc<NewInitializer_ContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(687);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5160,7 +5201,7 @@ where
 					recog.base.set_state(683);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (LeftBrace - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 						{
 						/*InvokeRule expressionList*/
 						recog.base.set_state(682);
@@ -5189,7 +5230,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5218,14 +5260,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeleteExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeleteExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_deleteExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_deleteExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_deleteExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_deleteExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeleteExpressionContext<'input>{
@@ -5240,7 +5282,7 @@ impl<'input> CustomRuleContext<'input> for DeleteExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_deleteExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_deleteExpression }
 }
-antlr_rust::type_id!{DeleteExpressionContextExt<'a>}
+antlr_rust::tid!{DeleteExpressionContextExt<'a>}
 
 impl<'input> DeleteExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeleteExpressionContextAll<'input>> {
@@ -5294,8 +5336,8 @@ where
 		let mut _localctx = DeleteExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 54, RULE_deleteExpression);
         let mut _localctx: Rc<DeleteExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5335,7 +5377,8 @@ where
 			recog.castExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5364,14 +5407,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoExceptExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoExceptExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noExceptExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noExceptExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noExceptExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noExceptExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoExceptExpressionContext<'input>{
@@ -5386,7 +5429,7 @@ impl<'input> CustomRuleContext<'input> for NoExceptExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_noExceptExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noExceptExpression }
 }
-antlr_rust::type_id!{NoExceptExpressionContextExt<'a>}
+antlr_rust::tid!{NoExceptExpressionContextExt<'a>}
 
 impl<'input> NoExceptExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoExceptExpressionContextAll<'input>> {
@@ -5435,7 +5478,7 @@ where
 		let mut _localctx = NoExceptExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 56, RULE_noExceptExpression);
         let mut _localctx: Rc<NoExceptExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5454,7 +5497,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5483,14 +5527,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CastExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CastExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_castExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_castExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_castExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_castExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CastExpressionContext<'input>{
@@ -5505,7 +5549,7 @@ impl<'input> CustomRuleContext<'input> for CastExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_castExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_castExpression }
 }
-antlr_rust::type_id!{CastExpressionContextExt<'a>}
+antlr_rust::tid!{CastExpressionContextExt<'a>}
 
 impl<'input> CastExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CastExpressionContextAll<'input>> {
@@ -5555,7 +5599,7 @@ where
 		let mut _localctx = CastExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 58, RULE_castExpression);
         let mut _localctx: Rc<CastExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(710);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5594,7 +5638,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5623,14 +5668,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PointerMemberExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PointerMemberExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pointerMemberExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pointerMemberExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pointerMemberExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pointerMemberExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PointerMemberExpressionContext<'input>{
@@ -5645,7 +5690,7 @@ impl<'input> CustomRuleContext<'input> for PointerMemberExpressionContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_pointerMemberExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pointerMemberExpression }
 }
-antlr_rust::type_id!{PointerMemberExpressionContextExt<'a>}
+antlr_rust::tid!{PointerMemberExpressionContextExt<'a>}
 
 impl<'input> PointerMemberExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PointerMemberExpressionContextAll<'input>> {
@@ -5700,8 +5745,8 @@ where
 		let mut _localctx = PointerMemberExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 60, RULE_pointerMemberExpression);
         let mut _localctx: Rc<PointerMemberExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5738,7 +5783,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5767,14 +5813,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MultiplicativeExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MultiplicativeExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_multiplicativeExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_multiplicativeExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_multiplicativeExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_multiplicativeExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MultiplicativeExpressionContext<'input>{
@@ -5789,7 +5835,7 @@ impl<'input> CustomRuleContext<'input> for MultiplicativeExpressionContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_multiplicativeExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_multiplicativeExpression }
 }
-antlr_rust::type_id!{MultiplicativeExpressionContextExt<'a>}
+antlr_rust::tid!{MultiplicativeExpressionContextExt<'a>}
 
 impl<'input> MultiplicativeExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MultiplicativeExpressionContextAll<'input>> {
@@ -5853,8 +5899,8 @@ where
 		let mut _localctx = MultiplicativeExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 62, RULE_multiplicativeExpression);
         let mut _localctx: Rc<MultiplicativeExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5891,7 +5937,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5920,14 +5967,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AdditiveExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AdditiveExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_additiveExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_additiveExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_additiveExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_additiveExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AdditiveExpressionContext<'input>{
@@ -5942,7 +5989,7 @@ impl<'input> CustomRuleContext<'input> for AdditiveExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_additiveExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_additiveExpression }
 }
-antlr_rust::type_id!{AdditiveExpressionContextExt<'a>}
+antlr_rust::tid!{AdditiveExpressionContextExt<'a>}
 
 impl<'input> AdditiveExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AdditiveExpressionContextAll<'input>> {
@@ -5997,8 +6044,8 @@ where
 		let mut _localctx = AdditiveExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 64, RULE_additiveExpression);
         let mut _localctx: Rc<AdditiveExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6035,7 +6082,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6064,14 +6112,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ShiftExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ShiftExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_shiftExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_shiftExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_shiftExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_shiftExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ShiftExpressionContext<'input>{
@@ -6086,7 +6134,7 @@ impl<'input> CustomRuleContext<'input> for ShiftExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_shiftExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_shiftExpression }
 }
-antlr_rust::type_id!{ShiftExpressionContextExt<'a>}
+antlr_rust::tid!{ShiftExpressionContextExt<'a>}
 
 impl<'input> ShiftExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ShiftExpressionContextAll<'input>> {
@@ -6129,7 +6177,7 @@ where
 		let mut _localctx = ShiftExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 66, RULE_shiftExpression);
         let mut _localctx: Rc<ShiftExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -6162,7 +6210,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(61,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6191,14 +6240,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ShiftOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ShiftOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_shiftOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_shiftOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_shiftOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_shiftOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ShiftOperatorContext<'input>{
@@ -6213,7 +6262,7 @@ impl<'input> CustomRuleContext<'input> for ShiftOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_shiftOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_shiftOperator }
 }
-antlr_rust::type_id!{ShiftOperatorContextExt<'a>}
+antlr_rust::tid!{ShiftOperatorContextExt<'a>}
 
 impl<'input> ShiftOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ShiftOperatorContextAll<'input>> {
@@ -6262,7 +6311,7 @@ where
 		let mut _localctx = ShiftOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 68, RULE_shiftOperator);
         let mut _localctx: Rc<ShiftOperatorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(749);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6297,7 +6346,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6326,14 +6376,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for RelationalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for RelationalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_relationalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_relationalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_relationalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_relationalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for RelationalExpressionContext<'input>{
@@ -6348,7 +6398,7 @@ impl<'input> CustomRuleContext<'input> for RelationalExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_relationalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_relationalExpression }
 }
-antlr_rust::type_id!{RelationalExpressionContextExt<'a>}
+antlr_rust::tid!{RelationalExpressionContextExt<'a>}
 
 impl<'input> RelationalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RelationalExpressionContextAll<'input>> {
@@ -6421,8 +6471,8 @@ where
 		let mut _localctx = RelationalExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 70, RULE_relationalExpression);
         let mut _localctx: Rc<RelationalExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -6462,7 +6512,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(63,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6491,14 +6542,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EqualityExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EqualityExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_equalityExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_equalityExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_equalityExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_equalityExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EqualityExpressionContext<'input>{
@@ -6513,7 +6564,7 @@ impl<'input> CustomRuleContext<'input> for EqualityExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_equalityExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_equalityExpression }
 }
-antlr_rust::type_id!{EqualityExpressionContextExt<'a>}
+antlr_rust::tid!{EqualityExpressionContextExt<'a>}
 
 impl<'input> EqualityExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EqualityExpressionContextAll<'input>> {
@@ -6568,8 +6619,8 @@ where
 		let mut _localctx = EqualityExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 72, RULE_equalityExpression);
         let mut _localctx: Rc<EqualityExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6606,7 +6657,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6635,14 +6687,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_andExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_andExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_andExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_andExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AndExpressionContext<'input>{
@@ -6657,7 +6709,7 @@ impl<'input> CustomRuleContext<'input> for AndExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_andExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_andExpression }
 }
-antlr_rust::type_id!{AndExpressionContextExt<'a>}
+antlr_rust::tid!{AndExpressionContextExt<'a>}
 
 impl<'input> AndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AndExpressionContextAll<'input>> {
@@ -6703,8 +6755,8 @@ where
 		let mut _localctx = AndExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 74, RULE_andExpression);
         let mut _localctx: Rc<AndExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6733,7 +6785,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6762,14 +6815,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_exclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_exclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
@@ -6784,7 +6837,7 @@ impl<'input> CustomRuleContext<'input> for ExclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_exclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exclusiveOrExpression }
 }
-antlr_rust::type_id!{ExclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{ExclusiveOrExpressionContextExt<'a>}
 
 impl<'input> ExclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExclusiveOrExpressionContextAll<'input>> {
@@ -6830,8 +6883,8 @@ where
 		let mut _localctx = ExclusiveOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 76, RULE_exclusiveOrExpression);
         let mut _localctx: Rc<ExclusiveOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6860,7 +6913,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6889,14 +6943,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_inclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_inclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_inclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_inclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InclusiveOrExpressionContext<'input>{
@@ -6911,7 +6965,7 @@ impl<'input> CustomRuleContext<'input> for InclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_inclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_inclusiveOrExpression }
 }
-antlr_rust::type_id!{InclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{InclusiveOrExpressionContextExt<'a>}
 
 impl<'input> InclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InclusiveOrExpressionContextAll<'input>> {
@@ -6957,8 +7011,8 @@ where
 		let mut _localctx = InclusiveOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 78, RULE_inclusiveOrExpression);
         let mut _localctx: Rc<InclusiveOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6987,7 +7041,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7016,14 +7071,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LogicalAndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LogicalAndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_logicalAndExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_logicalAndExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_logicalAndExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_logicalAndExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LogicalAndExpressionContext<'input>{
@@ -7038,7 +7093,7 @@ impl<'input> CustomRuleContext<'input> for LogicalAndExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_logicalAndExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_logicalAndExpression }
 }
-antlr_rust::type_id!{LogicalAndExpressionContextExt<'a>}
+antlr_rust::tid!{LogicalAndExpressionContextExt<'a>}
 
 impl<'input> LogicalAndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LogicalAndExpressionContextAll<'input>> {
@@ -7084,8 +7139,8 @@ where
 		let mut _localctx = LogicalAndExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 80, RULE_logicalAndExpression);
         let mut _localctx: Rc<LogicalAndExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7114,7 +7169,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7143,14 +7199,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LogicalOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LogicalOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_logicalOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_logicalOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_logicalOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_logicalOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LogicalOrExpressionContext<'input>{
@@ -7165,7 +7221,7 @@ impl<'input> CustomRuleContext<'input> for LogicalOrExpressionContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_logicalOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_logicalOrExpression }
 }
-antlr_rust::type_id!{LogicalOrExpressionContextExt<'a>}
+antlr_rust::tid!{LogicalOrExpressionContextExt<'a>}
 
 impl<'input> LogicalOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LogicalOrExpressionContextAll<'input>> {
@@ -7211,8 +7267,8 @@ where
 		let mut _localctx = LogicalOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 82, RULE_logicalOrExpression);
         let mut _localctx: Rc<LogicalOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7241,7 +7297,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7270,14 +7327,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConditionalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConditionalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_conditionalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_conditionalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConditionalExpressionContext<'input>{
@@ -7292,7 +7349,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_conditionalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalExpression }
 }
-antlr_rust::type_id!{ConditionalExpressionContextExt<'a>}
+antlr_rust::tid!{ConditionalExpressionContextExt<'a>}
 
 impl<'input> ConditionalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalExpressionContextAll<'input>> {
@@ -7342,8 +7399,8 @@ where
 		let mut _localctx = ConditionalExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 84, RULE_conditionalExpression);
         let mut _localctx: Rc<ConditionalExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7375,7 +7432,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7404,14 +7462,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AssignmentExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AssignmentExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_assignmentExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_assignmentExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AssignmentExpressionContext<'input>{
@@ -7426,7 +7484,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_assignmentExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentExpression }
 }
-antlr_rust::type_id!{AssignmentExpressionContextExt<'a>}
+antlr_rust::tid!{AssignmentExpressionContextExt<'a>}
 
 impl<'input> AssignmentExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentExpressionContextAll<'input>> {
@@ -7472,7 +7530,7 @@ where
 		let mut _localctx = AssignmentExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 86, RULE_assignmentExpression);
         let mut _localctx: Rc<AssignmentExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(821);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -7520,7 +7578,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7549,14 +7608,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AssignmentOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AssignmentOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_assignmentOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_assignmentOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AssignmentOperatorContext<'input>{
@@ -7571,7 +7630,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assignmentOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentOperator }
 }
-antlr_rust::type_id!{AssignmentOperatorContextExt<'a>}
+antlr_rust::tid!{AssignmentOperatorContextExt<'a>}
 
 impl<'input> AssignmentOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentOperatorContextAll<'input>> {
@@ -7657,8 +7716,8 @@ where
 		let mut _localctx = AssignmentOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 88, RULE_assignmentOperator);
         let mut _localctx: Rc<AssignmentOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7675,7 +7734,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7704,14 +7764,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_expression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_expression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExpressionContext<'input>{
@@ -7726,7 +7786,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expression }
 }
-antlr_rust::type_id!{ExpressionContextExt<'a>}
+antlr_rust::tid!{ExpressionContextExt<'a>}
 
 impl<'input> ExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionContextAll<'input>> {
@@ -7772,8 +7832,8 @@ where
 		let mut _localctx = ExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 90, RULE_expression);
         let mut _localctx: Rc<ExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7802,7 +7862,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7831,14 +7892,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConstantExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConstantExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constantExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_constantExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constantExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_constantExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConstantExpressionContext<'input>{
@@ -7853,7 +7914,7 @@ impl<'input> CustomRuleContext<'input> for ConstantExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_constantExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constantExpression }
 }
-antlr_rust::type_id!{ConstantExpressionContextExt<'a>}
+antlr_rust::tid!{ConstantExpressionContextExt<'a>}
 
 impl<'input> ConstantExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstantExpressionContextAll<'input>> {
@@ -7887,7 +7948,7 @@ where
 		let mut _localctx = ConstantExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 92, RULE_constantExpression);
         let mut _localctx: Rc<ConstantExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7897,7 +7958,8 @@ where
 			recog.conditionalExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7926,14 +7988,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for StatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for StatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_statement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_statement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for StatementContext<'input>{
@@ -7948,7 +8010,7 @@ impl<'input> CustomRuleContext<'input> for StatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_statement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statement }
 }
-antlr_rust::type_id!{StatementContextExt<'a>}
+antlr_rust::tid!{StatementContextExt<'a>}
 
 impl<'input> StatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementContextAll<'input>> {
@@ -8006,7 +8068,7 @@ where
 		let mut _localctx = StatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 94, RULE_statement);
         let mut _localctx: Rc<StatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(848);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8128,7 +8190,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8157,14 +8220,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LabeledStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LabeledStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_labeledStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_labeledStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_labeledStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_labeledStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LabeledStatementContext<'input>{
@@ -8179,7 +8242,7 @@ impl<'input> CustomRuleContext<'input> for LabeledStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_labeledStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_labeledStatement }
 }
-antlr_rust::type_id!{LabeledStatementContextExt<'a>}
+antlr_rust::tid!{LabeledStatementContextExt<'a>}
 
 impl<'input> LabeledStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LabeledStatementContextAll<'input>> {
@@ -8239,8 +8302,8 @@ where
 		let mut _localctx = LabeledStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 96, RULE_labeledStatement);
         let mut _localctx: Rc<LabeledStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8301,7 +8364,8 @@ where
 			recog.statement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8330,14 +8394,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExpressionStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExpressionStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expressionStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_expressionStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expressionStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_expressionStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExpressionStatementContext<'input>{
@@ -8352,7 +8416,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionStatementContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_expressionStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expressionStatement }
 }
-antlr_rust::type_id!{ExpressionStatementContextExt<'a>}
+antlr_rust::tid!{ExpressionStatementContextExt<'a>}
 
 impl<'input> ExpressionStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionStatementContextAll<'input>> {
@@ -8391,8 +8455,8 @@ where
 		let mut _localctx = ExpressionStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 98, RULE_expressionStatement);
         let mut _localctx: Rc<ExpressionStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8400,7 +8464,7 @@ where
 			recog.base.set_state(863);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 				{
 				/*InvokeRule expression*/
 				recog.base.set_state(862);
@@ -8413,7 +8477,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8442,14 +8507,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CompoundStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CompoundStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compoundStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_compoundStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compoundStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_compoundStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CompoundStatementContext<'input>{
@@ -8464,7 +8529,7 @@ impl<'input> CustomRuleContext<'input> for CompoundStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_compoundStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compoundStatement }
 }
-antlr_rust::type_id!{CompoundStatementContextExt<'a>}
+antlr_rust::tid!{CompoundStatementContextExt<'a>}
 
 impl<'input> CompoundStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CompoundStatementContextAll<'input>> {
@@ -8508,8 +8573,8 @@ where
 		let mut _localctx = CompoundStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 100, RULE_compoundStatement);
         let mut _localctx: Rc<CompoundStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8520,7 +8585,7 @@ where
 			recog.base.set_state(869);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Enum) | (1usize << Explicit) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Friend) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Mutable) | (1usize << Namespace) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Register) | (1usize << Reinterpret_cast) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (Tilde - 64)) | (1usize << (Not - 64)) | (1usize << (AndAnd - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Doublecolon - 64)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Explicit - 33)) | (1usize << (Extern - 33)) | (1usize << (Float - 33)) | (1usize << (For - 33)) | (1usize << (Friend - 33)) | (1usize << (Goto - 33)) | (1usize << (If - 33)) | (1usize << (Inline - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Mutable - 33)) | (1usize << (Namespace - 33)) | (1usize << (New - 33)) | (1usize << (Noexcept - 33)) | (1usize << (Operator - 33)) | (1usize << (Register - 33)) | (1usize << (Reinterpret_cast - 33)) | (1usize << (Return - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Sizeof - 33)) | (1usize << (Static - 33)) | (1usize << (Static_assert - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (Switch - 65)) | (1usize << (This - 65)) | (1usize << (Thread_local - 65)) | (1usize << (Throw - 65)) | (1usize << (Try - 65)) | (1usize << (Typedef - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Using - 65)) | (1usize << (Virtual - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (While - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)))) != 0) || ((((_la - 97)) & !0x3f) == 0 && ((1usize << (_la - 97)) & ((1usize << (And - 97)) | (1usize << (Or - 97)) | (1usize << (Tilde - 97)) | (1usize << (Not - 97)) | (1usize << (AndAnd - 97)) | (1usize << (PlusPlus - 97)) | (1usize << (MinusMinus - 97)) | (1usize << (Doublecolon - 97)) | (1usize << (Semi - 97)))) != 0) || _la==Ellipsis || _la==Identifier {
 				{
 				/*InvokeRule statementSeq*/
 				recog.base.set_state(868);
@@ -8533,7 +8598,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8562,14 +8628,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for StatementSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for StatementSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statementSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_statementSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statementSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_statementSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for StatementSeqContext<'input>{
@@ -8584,7 +8650,7 @@ impl<'input> CustomRuleContext<'input> for StatementSeqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_statementSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statementSeq }
 }
-antlr_rust::type_id!{StatementSeqContextExt<'a>}
+antlr_rust::tid!{StatementSeqContextExt<'a>}
 
 impl<'input> StatementSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementSeqContextAll<'input>> {
@@ -8621,8 +8687,8 @@ where
 		let mut _localctx = StatementSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 102, RULE_statementSeq);
         let mut _localctx: Rc<StatementSeqContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8642,10 +8708,11 @@ where
 				recog.base.set_state(876); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Enum) | (1usize << Explicit) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Friend) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Mutable) | (1usize << Namespace) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Register) | (1usize << Reinterpret_cast) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (Tilde - 64)) | (1usize << (Not - 64)) | (1usize << (AndAnd - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Doublecolon - 64)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)))) != 0)) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Explicit - 33)) | (1usize << (Extern - 33)) | (1usize << (Float - 33)) | (1usize << (For - 33)) | (1usize << (Friend - 33)) | (1usize << (Goto - 33)) | (1usize << (If - 33)) | (1usize << (Inline - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Mutable - 33)) | (1usize << (Namespace - 33)) | (1usize << (New - 33)) | (1usize << (Noexcept - 33)) | (1usize << (Operator - 33)) | (1usize << (Register - 33)) | (1usize << (Reinterpret_cast - 33)) | (1usize << (Return - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Sizeof - 33)) | (1usize << (Static - 33)) | (1usize << (Static_assert - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (Switch - 65)) | (1usize << (This - 65)) | (1usize << (Thread_local - 65)) | (1usize << (Throw - 65)) | (1usize << (Try - 65)) | (1usize << (Typedef - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Using - 65)) | (1usize << (Virtual - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (While - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)))) != 0) || ((((_la - 97)) & !0x3f) == 0 && ((1usize << (_la - 97)) & ((1usize << (And - 97)) | (1usize << (Or - 97)) | (1usize << (Tilde - 97)) | (1usize << (Not - 97)) | (1usize << (AndAnd - 97)) | (1usize << (PlusPlus - 97)) | (1usize << (MinusMinus - 97)) | (1usize << (Doublecolon - 97)) | (1usize << (Semi - 97)))) != 0) || _la==Ellipsis || _la==Identifier) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8674,14 +8741,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SelectionStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SelectionStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_selectionStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_selectionStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_selectionStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_selectionStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SelectionStatementContext<'input>{
@@ -8696,7 +8763,7 @@ impl<'input> CustomRuleContext<'input> for SelectionStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_selectionStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_selectionStatement }
 }
-antlr_rust::type_id!{SelectionStatementContextExt<'a>}
+antlr_rust::tid!{SelectionStatementContextExt<'a>}
 
 impl<'input> SelectionStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SelectionStatementContextAll<'input>> {
@@ -8761,7 +8828,7 @@ where
 		let mut _localctx = SelectionStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 104, RULE_selectionStatement);
         let mut _localctx: Rc<SelectionStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(893);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8835,7 +8902,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8864,14 +8932,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConditionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConditionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_condition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_condition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_condition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_condition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConditionContext<'input>{
@@ -8886,7 +8954,7 @@ impl<'input> CustomRuleContext<'input> for ConditionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_condition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_condition }
 }
-antlr_rust::type_id!{ConditionContextExt<'a>}
+antlr_rust::tid!{ConditionContextExt<'a>}
 
 impl<'input> ConditionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionContextAll<'input>> {
@@ -8940,8 +9008,8 @@ where
 		let mut _localctx = ConditionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 106, RULE_condition);
         let mut _localctx: Rc<ConditionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(906);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9014,7 +9082,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9043,14 +9112,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for IterationStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for IterationStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_iterationStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_iterationStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_iterationStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_iterationStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for IterationStatementContext<'input>{
@@ -9065,7 +9134,7 @@ impl<'input> CustomRuleContext<'input> for IterationStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_iterationStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_iterationStatement }
 }
-antlr_rust::type_id!{IterationStatementContextExt<'a>}
+antlr_rust::tid!{IterationStatementContextExt<'a>}
 
 impl<'input> IterationStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IterationStatementContextAll<'input>> {
@@ -9149,8 +9218,8 @@ where
 		let mut _localctx = IterationStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 108, RULE_iterationStatement);
         let mut _localctx: Rc<IterationStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(941);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9234,7 +9303,7 @@ where
 							recog.base.set_state(926);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Enum) | (1usize << Explicit) | (1usize << Extern) | (1usize << Float) | (1usize << Friend) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Mutable) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Register) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Thread_local - 65)) | (1usize << (Throw - 65)) | (1usize << (Typedef - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Virtual - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Explicit - 33)) | (1usize << (Extern - 33)) | (1usize << (Float - 33)) | (1usize << (Friend - 33)) | (1usize << (Inline - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Mutable - 33)) | (1usize << (New - 33)) | (1usize << (Noexcept - 33)) | (1usize << (Operator - 33)) | (1usize << (Register - 33)) | (1usize << (Reinterpret_cast - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Sizeof - 33)) | (1usize << (Static - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Thread_local - 65)) | (1usize << (Throw - 65)) | (1usize << (Typedef - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Virtual - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)))) != 0) || ((((_la - 97)) & !0x3f) == 0 && ((1usize << (_la - 97)) & ((1usize << (And - 97)) | (1usize << (Or - 97)) | (1usize << (Tilde - 97)) | (1usize << (Not - 97)) | (1usize << (PlusPlus - 97)) | (1usize << (MinusMinus - 97)) | (1usize << (Doublecolon - 97)))) != 0) || _la==Identifier {
 								{
 								/*InvokeRule condition*/
 								recog.base.set_state(925);
@@ -9249,7 +9318,7 @@ where
 							recog.base.set_state(930);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule expression*/
 								recog.base.set_state(929);
@@ -9291,7 +9360,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9320,14 +9390,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ForInitStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ForInitStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forInitStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_forInitStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forInitStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_forInitStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ForInitStatementContext<'input>{
@@ -9342,7 +9412,7 @@ impl<'input> CustomRuleContext<'input> for ForInitStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forInitStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forInitStatement }
 }
-antlr_rust::type_id!{ForInitStatementContextExt<'a>}
+antlr_rust::tid!{ForInitStatementContextExt<'a>}
 
 impl<'input> ForInitStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForInitStatementContextAll<'input>> {
@@ -9379,7 +9449,7 @@ where
 		let mut _localctx = ForInitStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 110, RULE_forInitStatement);
         let mut _localctx: Rc<ForInitStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(945);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9408,7 +9478,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9437,14 +9508,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ForRangeDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ForRangeDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forRangeDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_forRangeDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forRangeDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_forRangeDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ForRangeDeclarationContext<'input>{
@@ -9459,7 +9530,7 @@ impl<'input> CustomRuleContext<'input> for ForRangeDeclarationContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_forRangeDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forRangeDeclaration }
 }
-antlr_rust::type_id!{ForRangeDeclarationContextExt<'a>}
+antlr_rust::tid!{ForRangeDeclarationContextExt<'a>}
 
 impl<'input> ForRangeDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForRangeDeclarationContextAll<'input>> {
@@ -9499,8 +9570,8 @@ where
 		let mut _localctx = ForRangeDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 112, RULE_forRangeDeclaration);
         let mut _localctx: Rc<ForRangeDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9526,7 +9597,8 @@ where
 			recog.declarator()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9555,14 +9627,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ForRangeInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ForRangeInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forRangeInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_forRangeInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forRangeInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_forRangeInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ForRangeInitializerContext<'input>{
@@ -9577,7 +9649,7 @@ impl<'input> CustomRuleContext<'input> for ForRangeInitializerContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_forRangeInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forRangeInitializer }
 }
-antlr_rust::type_id!{ForRangeInitializerContextExt<'a>}
+antlr_rust::tid!{ForRangeInitializerContextExt<'a>}
 
 impl<'input> ForRangeInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForRangeInitializerContextAll<'input>> {
@@ -9614,7 +9686,7 @@ where
 		let mut _localctx = ForRangeInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 114, RULE_forRangeInitializer);
         let mut _localctx: Rc<ForRangeInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(955);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9651,7 +9723,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9680,14 +9753,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for JumpStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for JumpStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_jumpStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_jumpStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_jumpStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_jumpStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for JumpStatementContext<'input>{
@@ -9702,7 +9775,7 @@ impl<'input> CustomRuleContext<'input> for JumpStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_jumpStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_jumpStatement }
 }
-antlr_rust::type_id!{JumpStatementContextExt<'a>}
+antlr_rust::tid!{JumpStatementContextExt<'a>}
 
 impl<'input> JumpStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<JumpStatementContextAll<'input>> {
@@ -9769,7 +9842,7 @@ where
 		let mut _localctx = JumpStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 116, RULE_jumpStatement);
         let mut _localctx: Rc<JumpStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9858,7 +9931,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9887,14 +9961,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclarationStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclarationStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declarationStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declarationStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclarationStatementContext<'input>{
@@ -9909,7 +9983,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationStatementContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_declarationStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationStatement }
 }
-antlr_rust::type_id!{DeclarationStatementContextExt<'a>}
+antlr_rust::tid!{DeclarationStatementContextExt<'a>}
 
 impl<'input> DeclarationStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationStatementContextAll<'input>> {
@@ -9943,7 +10017,7 @@ where
 		let mut _localctx = DeclarationStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 118, RULE_declarationStatement);
         let mut _localctx: Rc<DeclarationStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9953,7 +10027,8 @@ where
 			recog.blockDeclaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9982,14 +10057,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclarationseqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclarationseqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationseq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declarationseq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationseq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declarationseq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclarationseqContext<'input>{
@@ -10004,7 +10079,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationseqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declarationseq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationseq }
 }
-antlr_rust::type_id!{DeclarationseqContextExt<'a>}
+antlr_rust::tid!{DeclarationseqContextExt<'a>}
 
 impl<'input> DeclarationseqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationseqContextAll<'input>> {
@@ -10041,8 +10116,8 @@ where
 		let mut _localctx = DeclarationseqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 120, RULE_declarationseq);
         let mut _localctx: Rc<DeclarationseqContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10062,10 +10137,11 @@ where
 				recog.base.set_state(975); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !(((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Namespace - 10)) | (1usize << (Operator - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0)) {break}
+				if !(((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Namespace - 44)) | (1usize << (Operator - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10094,14 +10170,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclarationContext<'input>{
@@ -10116,7 +10192,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declaration }
 }
-antlr_rust::type_id!{DeclarationContextExt<'a>}
+antlr_rust::tid!{DeclarationContextExt<'a>}
 
 impl<'input> DeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationContextAll<'input>> {
@@ -10174,7 +10250,7 @@ where
 		let mut _localctx = DeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 122, RULE_declaration);
         let mut _localctx: Rc<DeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(986);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10280,7 +10356,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10309,14 +10386,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BlockDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BlockDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_blockDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_blockDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_blockDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_blockDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BlockDeclarationContext<'input>{
@@ -10331,7 +10408,7 @@ impl<'input> CustomRuleContext<'input> for BlockDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_blockDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_blockDeclaration }
 }
-antlr_rust::type_id!{BlockDeclarationContextExt<'a>}
+antlr_rust::tid!{BlockDeclarationContextExt<'a>}
 
 impl<'input> BlockDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockDeclarationContextAll<'input>> {
@@ -10386,7 +10463,7 @@ where
 		let mut _localctx = BlockDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 124, RULE_blockDeclaration);
         let mut _localctx: Rc<BlockDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(996);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10481,7 +10558,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10510,14 +10588,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AliasDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AliasDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_aliasDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_aliasDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_aliasDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_aliasDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AliasDeclarationContext<'input>{
@@ -10532,7 +10610,7 @@ impl<'input> CustomRuleContext<'input> for AliasDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_aliasDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_aliasDeclaration }
 }
-antlr_rust::type_id!{AliasDeclarationContextExt<'a>}
+antlr_rust::tid!{AliasDeclarationContextExt<'a>}
 
 impl<'input> AliasDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AliasDeclarationContextAll<'input>> {
@@ -10589,8 +10667,8 @@ where
 		let mut _localctx = AliasDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 126, RULE_aliasDeclaration);
         let mut _localctx: Rc<AliasDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10624,7 +10702,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10653,14 +10732,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleDeclarationContext<'input>{
@@ -10675,7 +10754,7 @@ impl<'input> CustomRuleContext<'input> for SimpleDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simpleDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleDeclaration }
 }
-antlr_rust::type_id!{SimpleDeclarationContextExt<'a>}
+antlr_rust::tid!{SimpleDeclarationContextExt<'a>}
 
 impl<'input> SimpleDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleDeclarationContextAll<'input>> {
@@ -10720,8 +10799,8 @@ where
 		let mut _localctx = SimpleDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 128, RULE_simpleDeclaration);
         let mut _localctx: Rc<SimpleDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1021);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10753,7 +10832,7 @@ where
 					recog.base.set_state(1011);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if _la==Decltype || _la==Operator || ((((_la - 85)) & !0x3f) == 0 && ((1usize << (_la - 85)) & ((1usize << (LeftParen - 85)) | (1usize << (Star - 85)) | (1usize << (And - 85)) | (1usize << (Tilde - 85)) | (1usize << (AndAnd - 85)) | (1usize << (Doublecolon - 85)) | (1usize << (Ellipsis - 85)) | (1usize << (Identifier - 85)))) != 0) {
+					if _la==Decltype || _la==Operator || ((((_la - 85)) & !0x3f) == 0 && ((1usize << (_la - 85)) & ((1usize << (LeftParen - 85)) | (1usize << (Star - 85)) | (1usize << (And - 85)) | (1usize << (Tilde - 85)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 						{
 						/*InvokeRule initDeclaratorList*/
 						recog.base.set_state(1010);
@@ -10803,7 +10882,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10832,14 +10912,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for StaticAssertDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for StaticAssertDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_staticAssertDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_staticAssertDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_staticAssertDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_staticAssertDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for StaticAssertDeclarationContext<'input>{
@@ -10854,7 +10934,7 @@ impl<'input> CustomRuleContext<'input> for StaticAssertDeclarationContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_staticAssertDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_staticAssertDeclaration }
 }
-antlr_rust::type_id!{StaticAssertDeclarationContextExt<'a>}
+antlr_rust::tid!{StaticAssertDeclarationContextExt<'a>}
 
 impl<'input> StaticAssertDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StaticAssertDeclarationContextAll<'input>> {
@@ -10918,7 +10998,7 @@ where
 		let mut _localctx = StaticAssertDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 130, RULE_staticAssertDeclaration);
         let mut _localctx: Rc<StaticAssertDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10946,7 +11026,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10975,14 +11056,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EmptyDeclaration_Context<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EmptyDeclaration_Context<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_emptyDeclaration_(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_emptyDeclaration_(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_emptyDeclaration_(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_emptyDeclaration_(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EmptyDeclaration_Context<'input>{
@@ -10997,7 +11078,7 @@ impl<'input> CustomRuleContext<'input> for EmptyDeclaration_ContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_emptyDeclaration_ }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_emptyDeclaration_ }
 }
-antlr_rust::type_id!{EmptyDeclaration_ContextExt<'a>}
+antlr_rust::tid!{EmptyDeclaration_ContextExt<'a>}
 
 impl<'input> EmptyDeclaration_ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EmptyDeclaration_ContextAll<'input>> {
@@ -11033,7 +11114,7 @@ where
 		let mut _localctx = EmptyDeclaration_ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 132, RULE_emptyDeclaration_);
         let mut _localctx: Rc<EmptyDeclaration_ContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11042,7 +11123,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11071,14 +11153,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeDeclarationContext<'input>{
@@ -11093,7 +11175,7 @@ impl<'input> CustomRuleContext<'input> for AttributeDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_attributeDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeDeclaration }
 }
-antlr_rust::type_id!{AttributeDeclarationContextExt<'a>}
+antlr_rust::tid!{AttributeDeclarationContextExt<'a>}
 
 impl<'input> AttributeDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeDeclarationContextAll<'input>> {
@@ -11132,7 +11214,7 @@ where
 		let mut _localctx = AttributeDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 134, RULE_attributeDeclaration);
         let mut _localctx: Rc<AttributeDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11145,7 +11227,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11174,14 +11257,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclSpecifierContext<'input>{
@@ -11196,7 +11279,7 @@ impl<'input> CustomRuleContext<'input> for DeclSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declSpecifier }
 }
-antlr_rust::type_id!{DeclSpecifierContextExt<'a>}
+antlr_rust::tid!{DeclSpecifierContextExt<'a>}
 
 impl<'input> DeclSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclSpecifierContextAll<'input>> {
@@ -11251,7 +11334,7 @@ where
 		let mut _localctx = DeclSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 136, RULE_declSpecifier);
         let mut _localctx: Rc<DeclSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1042);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11329,7 +11412,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11358,14 +11442,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclSpecifierSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclSpecifierSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declSpecifierSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declSpecifierSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declSpecifierSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declSpecifierSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclSpecifierSeqContext<'input>{
@@ -11380,7 +11464,7 @@ impl<'input> CustomRuleContext<'input> for DeclSpecifierSeqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declSpecifierSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declSpecifierSeq }
 }
-antlr_rust::type_id!{DeclSpecifierSeqContextExt<'a>}
+antlr_rust::tid!{DeclSpecifierSeqContextExt<'a>}
 
 impl<'input> DeclSpecifierSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclSpecifierSeqContextAll<'input>> {
@@ -11420,7 +11504,7 @@ where
 		let mut _localctx = DeclSpecifierSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 138, RULE_declSpecifierSeq);
         let mut _localctx: Rc<DeclSpecifierSeqContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -11463,7 +11547,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11492,14 +11577,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for StorageClassSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for StorageClassSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_storageClassSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_storageClassSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_storageClassSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_storageClassSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for StorageClassSpecifierContext<'input>{
@@ -11514,7 +11599,7 @@ impl<'input> CustomRuleContext<'input> for StorageClassSpecifierContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_storageClassSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_storageClassSpecifier }
 }
-antlr_rust::type_id!{StorageClassSpecifierContextExt<'a>}
+antlr_rust::tid!{StorageClassSpecifierContextExt<'a>}
 
 impl<'input> StorageClassSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StorageClassSpecifierContextAll<'input>> {
@@ -11570,15 +11655,15 @@ where
 		let mut _localctx = StorageClassSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 140, RULE_storageClassSpecifier);
         let mut _localctx: Rc<StorageClassSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(1052);
 			_la = recog.base.input.la(1);
-			if { !(((((_la - 36)) & !0x3f) == 0 && ((1usize << (_la - 36)) & ((1usize << (Extern - 36)) | (1usize << (Mutable - 36)) | (1usize << (Register - 36)) | (1usize << (Static - 36)) | (1usize << (Thread_local - 36)))) != 0)) } {
+			if { !(((((_la - 36)) & !0x3f) == 0 && ((1usize << (_la - 36)) & ((1usize << (Extern - 36)) | (1usize << (Mutable - 36)) | (1usize << (Register - 36)) | (1usize << (Static - 36)))) != 0) || _la==Thread_local) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -11588,7 +11673,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11617,14 +11703,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for FunctionSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for FunctionSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_functionSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_functionSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for FunctionSpecifierContext<'input>{
@@ -11639,7 +11725,7 @@ impl<'input> CustomRuleContext<'input> for FunctionSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionSpecifier }
 }
-antlr_rust::type_id!{FunctionSpecifierContextExt<'a>}
+antlr_rust::tid!{FunctionSpecifierContextExt<'a>}
 
 impl<'input> FunctionSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionSpecifierContextAll<'input>> {
@@ -11685,15 +11771,15 @@ where
 		let mut _localctx = FunctionSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 142, RULE_functionSpecifier);
         let mut _localctx: Rc<FunctionSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(1054);
 			_la = recog.base.input.la(1);
-			if { !(((((_la - 34)) & !0x3f) == 0 && ((1usize << (_la - 34)) & ((1usize << (Explicit - 34)) | (1usize << (Inline - 34)) | (1usize << (Virtual - 34)))) != 0)) } {
+			if { !(_la==Explicit || _la==Inline || _la==Virtual) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -11703,7 +11789,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11732,14 +11819,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypedefNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypedefNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typedefName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typedefName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typedefName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typedefName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypedefNameContext<'input>{
@@ -11754,7 +11841,7 @@ impl<'input> CustomRuleContext<'input> for TypedefNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typedefName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typedefName }
 }
-antlr_rust::type_id!{TypedefNameContextExt<'a>}
+antlr_rust::tid!{TypedefNameContextExt<'a>}
 
 impl<'input> TypedefNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypedefNameContextAll<'input>> {
@@ -11790,7 +11877,7 @@ where
 		let mut _localctx = TypedefNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 144, RULE_typedefName);
         let mut _localctx: Rc<TypedefNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11799,7 +11886,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11828,14 +11916,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeSpecifierContext<'input>{
@@ -11850,7 +11938,7 @@ impl<'input> CustomRuleContext<'input> for TypeSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeSpecifier }
 }
-antlr_rust::type_id!{TypeSpecifierContextExt<'a>}
+antlr_rust::tid!{TypeSpecifierContextExt<'a>}
 
 impl<'input> TypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeSpecifierContextAll<'input>> {
@@ -11890,7 +11978,7 @@ where
 		let mut _localctx = TypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 146, RULE_typeSpecifier);
         let mut _localctx: Rc<TypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1061);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11930,7 +12018,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11959,14 +12048,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TrailingTypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TrailingTypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_trailingTypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_trailingTypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_trailingTypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_trailingTypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TrailingTypeSpecifierContext<'input>{
@@ -11981,7 +12070,7 @@ impl<'input> CustomRuleContext<'input> for TrailingTypeSpecifierContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_trailingTypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_trailingTypeSpecifier }
 }
-antlr_rust::type_id!{TrailingTypeSpecifierContextExt<'a>}
+antlr_rust::tid!{TrailingTypeSpecifierContextExt<'a>}
 
 impl<'input> TrailingTypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TrailingTypeSpecifierContextAll<'input>> {
@@ -12024,7 +12113,7 @@ where
 		let mut _localctx = TrailingTypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 148, RULE_trailingTypeSpecifier);
         let mut _localctx: Rc<TrailingTypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1067);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12080,7 +12169,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12109,14 +12199,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeSpecifierSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeSpecifierSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeSpecifierSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeSpecifierSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeSpecifierSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeSpecifierSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeSpecifierSeqContext<'input>{
@@ -12131,7 +12221,7 @@ impl<'input> CustomRuleContext<'input> for TypeSpecifierSeqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeSpecifierSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeSpecifierSeq }
 }
-antlr_rust::type_id!{TypeSpecifierSeqContextExt<'a>}
+antlr_rust::tid!{TypeSpecifierSeqContextExt<'a>}
 
 impl<'input> TypeSpecifierSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeSpecifierSeqContextAll<'input>> {
@@ -12171,7 +12261,7 @@ where
 		let mut _localctx = TypeSpecifierSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 150, RULE_typeSpecifierSeq);
         let mut _localctx: Rc<TypeSpecifierSeqContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -12214,7 +12304,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12243,14 +12334,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TrailingTypeSpecifierSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TrailingTypeSpecifierSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_trailingTypeSpecifierSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_trailingTypeSpecifierSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_trailingTypeSpecifierSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_trailingTypeSpecifierSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TrailingTypeSpecifierSeqContext<'input>{
@@ -12265,7 +12356,7 @@ impl<'input> CustomRuleContext<'input> for TrailingTypeSpecifierSeqContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_trailingTypeSpecifierSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_trailingTypeSpecifierSeq }
 }
-antlr_rust::type_id!{TrailingTypeSpecifierSeqContextExt<'a>}
+antlr_rust::tid!{TrailingTypeSpecifierSeqContextExt<'a>}
 
 impl<'input> TrailingTypeSpecifierSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TrailingTypeSpecifierSeqContextAll<'input>> {
@@ -12305,7 +12396,7 @@ where
 		let mut _localctx = TrailingTypeSpecifierSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 152, RULE_trailingTypeSpecifierSeq);
         let mut _localctx: Rc<TrailingTypeSpecifierSeqContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -12348,7 +12439,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12377,14 +12469,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleTypeLengthModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleTypeLengthModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleTypeLengthModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleTypeLengthModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleTypeLengthModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleTypeLengthModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleTypeLengthModifierContext<'input>{
@@ -12399,7 +12491,7 @@ impl<'input> CustomRuleContext<'input> for SimpleTypeLengthModifierContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_simpleTypeLengthModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleTypeLengthModifier }
 }
-antlr_rust::type_id!{SimpleTypeLengthModifierContextExt<'a>}
+antlr_rust::tid!{SimpleTypeLengthModifierContextExt<'a>}
 
 impl<'input> SimpleTypeLengthModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleTypeLengthModifierContextAll<'input>> {
@@ -12440,8 +12532,8 @@ where
 		let mut _localctx = SimpleTypeLengthModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 154, RULE_simpleTypeLengthModifier);
         let mut _localctx: Rc<SimpleTypeLengthModifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12458,7 +12550,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12487,14 +12580,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleTypeSignednessModifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleTypeSignednessModifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleTypeSignednessModifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleTypeSignednessModifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleTypeSignednessModifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleTypeSignednessModifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleTypeSignednessModifierContext<'input>{
@@ -12509,7 +12602,7 @@ impl<'input> CustomRuleContext<'input> for SimpleTypeSignednessModifierContextEx
 	fn get_rule_index(&self) -> usize { RULE_simpleTypeSignednessModifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleTypeSignednessModifier }
 }
-antlr_rust::type_id!{SimpleTypeSignednessModifierContextExt<'a>}
+antlr_rust::tid!{SimpleTypeSignednessModifierContextExt<'a>}
 
 impl<'input> SimpleTypeSignednessModifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleTypeSignednessModifierContextAll<'input>> {
@@ -12550,8 +12643,8 @@ where
 		let mut _localctx = SimpleTypeSignednessModifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 156, RULE_simpleTypeSignednessModifier);
         let mut _localctx: Rc<SimpleTypeSignednessModifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12568,7 +12661,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12597,14 +12691,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleTypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleTypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleTypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleTypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleTypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleTypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleTypeSpecifierContext<'input>{
@@ -12619,7 +12713,7 @@ impl<'input> CustomRuleContext<'input> for SimpleTypeSpecifierContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_simpleTypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleTypeSpecifier }
 }
-antlr_rust::type_id!{SimpleTypeSpecifierContextExt<'a>}
+antlr_rust::tid!{SimpleTypeSpecifierContextExt<'a>}
 
 impl<'input> SimpleTypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleTypeSpecifierContextAll<'input>> {
@@ -12737,7 +12831,7 @@ where
 		let mut _localctx = SimpleTypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 158, RULE_simpleTypeSpecifier);
         let mut _localctx: Rc<SimpleTypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1113);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12948,7 +13042,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12977,14 +13072,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TheTypeNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TheTypeNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_theTypeName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_theTypeName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_theTypeName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_theTypeName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TheTypeNameContext<'input>{
@@ -12999,7 +13094,7 @@ impl<'input> CustomRuleContext<'input> for TheTypeNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_theTypeName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_theTypeName }
 }
-antlr_rust::type_id!{TheTypeNameContextExt<'a>}
+antlr_rust::tid!{TheTypeNameContextExt<'a>}
 
 impl<'input> TheTypeNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TheTypeNameContextAll<'input>> {
@@ -13042,7 +13137,7 @@ where
 		let mut _localctx = TheTypeNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 160, RULE_theTypeName);
         let mut _localctx: Rc<TheTypeNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1119);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13093,7 +13188,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13122,14 +13218,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DecltypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DecltypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_decltypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_decltypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_decltypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_decltypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DecltypeSpecifierContext<'input>{
@@ -13144,7 +13240,7 @@ impl<'input> CustomRuleContext<'input> for DecltypeSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_decltypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_decltypeSpecifier }
 }
-antlr_rust::type_id!{DecltypeSpecifierContextExt<'a>}
+antlr_rust::tid!{DecltypeSpecifierContextExt<'a>}
 
 impl<'input> DecltypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DecltypeSpecifierContextAll<'input>> {
@@ -13198,7 +13294,7 @@ where
 		let mut _localctx = DecltypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 162, RULE_decltypeSpecifier);
         let mut _localctx: Rc<DecltypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13235,7 +13331,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13264,14 +13361,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ElaboratedTypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ElaboratedTypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_elaboratedTypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_elaboratedTypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_elaboratedTypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_elaboratedTypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ElaboratedTypeSpecifierContext<'input>{
@@ -13286,7 +13383,7 @@ impl<'input> CustomRuleContext<'input> for ElaboratedTypeSpecifierContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_elaboratedTypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_elaboratedTypeSpecifier }
 }
-antlr_rust::type_id!{ElaboratedTypeSpecifierContextExt<'a>}
+antlr_rust::tid!{ElaboratedTypeSpecifierContextExt<'a>}
 
 impl<'input> ElaboratedTypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ElaboratedTypeSpecifierContextAll<'input>> {
@@ -13344,8 +13441,8 @@ where
 		let mut _localctx = ElaboratedTypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 164, RULE_elaboratedTypeSpecifier);
         let mut _localctx: Rc<ElaboratedTypeSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1151);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13464,7 +13561,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13493,14 +13591,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumNameContext<'input>{
@@ -13515,7 +13613,7 @@ impl<'input> CustomRuleContext<'input> for EnumNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumName }
 }
-antlr_rust::type_id!{EnumNameContextExt<'a>}
+antlr_rust::tid!{EnumNameContextExt<'a>}
 
 impl<'input> EnumNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumNameContextAll<'input>> {
@@ -13551,7 +13649,7 @@ where
 		let mut _localctx = EnumNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 166, RULE_enumName);
         let mut _localctx: Rc<EnumNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13560,7 +13658,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13589,14 +13688,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumSpecifierContext<'input>{
@@ -13611,7 +13710,7 @@ impl<'input> CustomRuleContext<'input> for EnumSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumSpecifier }
 }
-antlr_rust::type_id!{EnumSpecifierContextExt<'a>}
+antlr_rust::tid!{EnumSpecifierContextExt<'a>}
 
 impl<'input> EnumSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumSpecifierContextAll<'input>> {
@@ -13663,8 +13762,8 @@ where
 		let mut _localctx = EnumSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 168, RULE_enumSpecifier);
         let mut _localctx: Rc<EnumSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13703,7 +13802,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13732,14 +13832,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumHeadContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumHeadContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumHead(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumHead(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumHead(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumHead(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumHeadContext<'input>{
@@ -13754,7 +13854,7 @@ impl<'input> CustomRuleContext<'input> for EnumHeadContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumHead }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumHead }
 }
-antlr_rust::type_id!{EnumHeadContextExt<'a>}
+antlr_rust::tid!{EnumHeadContextExt<'a>}
 
 impl<'input> EnumHeadContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumHeadContextAll<'input>> {
@@ -13802,8 +13902,8 @@ where
 		let mut _localctx = EnumHeadContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 170, RULE_enumHead);
         let mut _localctx: Rc<EnumHeadContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13862,7 +13962,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13891,14 +13992,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for OpaqueEnumDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for OpaqueEnumDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_opaqueEnumDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_opaqueEnumDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_opaqueEnumDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_opaqueEnumDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for OpaqueEnumDeclarationContext<'input>{
@@ -13913,7 +14014,7 @@ impl<'input> CustomRuleContext<'input> for OpaqueEnumDeclarationContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_opaqueEnumDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_opaqueEnumDeclaration }
 }
-antlr_rust::type_id!{OpaqueEnumDeclarationContextExt<'a>}
+antlr_rust::tid!{OpaqueEnumDeclarationContextExt<'a>}
 
 impl<'input> OpaqueEnumDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OpaqueEnumDeclarationContextAll<'input>> {
@@ -13963,8 +14064,8 @@ where
 		let mut _localctx = OpaqueEnumDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 172, RULE_opaqueEnumDeclaration);
         let mut _localctx: Rc<OpaqueEnumDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14004,7 +14105,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14033,14 +14135,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumkeyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumkeyContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumkey(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumkey(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumkey(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumkey(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumkeyContext<'input>{
@@ -14055,7 +14157,7 @@ impl<'input> CustomRuleContext<'input> for EnumkeyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumkey }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumkey }
 }
-antlr_rust::type_id!{EnumkeyContextExt<'a>}
+antlr_rust::tid!{EnumkeyContextExt<'a>}
 
 impl<'input> EnumkeyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumkeyContextAll<'input>> {
@@ -14101,8 +14203,8 @@ where
 		let mut _localctx = EnumkeyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 174, RULE_enumkey);
         let mut _localctx: Rc<EnumkeyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14130,7 +14232,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14159,14 +14262,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumbaseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumbaseContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumbase(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumbase(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumbase(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumbase(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumbaseContext<'input>{
@@ -14181,7 +14284,7 @@ impl<'input> CustomRuleContext<'input> for EnumbaseContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumbase }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumbase }
 }
-antlr_rust::type_id!{EnumbaseContextExt<'a>}
+antlr_rust::tid!{EnumbaseContextExt<'a>}
 
 impl<'input> EnumbaseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumbaseContextAll<'input>> {
@@ -14220,7 +14323,7 @@ where
 		let mut _localctx = EnumbaseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 176, RULE_enumbase);
         let mut _localctx: Rc<EnumbaseContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14233,7 +14336,8 @@ where
 			recog.typeSpecifierSeq()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14262,14 +14366,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumeratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumeratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumeratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumeratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumeratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumeratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumeratorListContext<'input>{
@@ -14284,7 +14388,7 @@ impl<'input> CustomRuleContext<'input> for EnumeratorListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumeratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumeratorList }
 }
-antlr_rust::type_id!{EnumeratorListContextExt<'a>}
+antlr_rust::tid!{EnumeratorListContextExt<'a>}
 
 impl<'input> EnumeratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumeratorListContextAll<'input>> {
@@ -14330,7 +14434,7 @@ where
 		let mut _localctx = EnumeratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 178, RULE_enumeratorList);
         let mut _localctx: Rc<EnumeratorListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -14362,7 +14466,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(131,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14391,14 +14496,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumeratorDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumeratorDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumeratorDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumeratorDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumeratorDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumeratorDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumeratorDefinitionContext<'input>{
@@ -14413,7 +14518,7 @@ impl<'input> CustomRuleContext<'input> for EnumeratorDefinitionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_enumeratorDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumeratorDefinition }
 }
-antlr_rust::type_id!{EnumeratorDefinitionContextExt<'a>}
+antlr_rust::tid!{EnumeratorDefinitionContextExt<'a>}
 
 impl<'input> EnumeratorDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumeratorDefinitionContextAll<'input>> {
@@ -14455,8 +14560,8 @@ where
 		let mut _localctx = EnumeratorDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 180, RULE_enumeratorDefinition);
         let mut _localctx: Rc<EnumeratorDefinitionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14481,7 +14586,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14510,14 +14616,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for EnumeratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for EnumeratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumerator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_enumerator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumerator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_enumerator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for EnumeratorContext<'input>{
@@ -14532,7 +14638,7 @@ impl<'input> CustomRuleContext<'input> for EnumeratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumerator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumerator }
 }
-antlr_rust::type_id!{EnumeratorContextExt<'a>}
+antlr_rust::tid!{EnumeratorContextExt<'a>}
 
 impl<'input> EnumeratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumeratorContextAll<'input>> {
@@ -14568,7 +14674,7 @@ where
 		let mut _localctx = EnumeratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 182, RULE_enumerator);
         let mut _localctx: Rc<EnumeratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14577,7 +14683,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14606,14 +14713,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NamespaceNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NamespaceNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_namespaceName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_namespaceName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_namespaceName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_namespaceName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NamespaceNameContext<'input>{
@@ -14628,7 +14735,7 @@ impl<'input> CustomRuleContext<'input> for NamespaceNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_namespaceName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_namespaceName }
 }
-antlr_rust::type_id!{NamespaceNameContextExt<'a>}
+antlr_rust::tid!{NamespaceNameContextExt<'a>}
 
 impl<'input> NamespaceNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NamespaceNameContextAll<'input>> {
@@ -14665,7 +14772,7 @@ where
 		let mut _localctx = NamespaceNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 184, RULE_namespaceName);
         let mut _localctx: Rc<NamespaceNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1212);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -14694,7 +14801,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14723,14 +14831,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for OriginalNamespaceNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for OriginalNamespaceNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_originalNamespaceName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_originalNamespaceName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_originalNamespaceName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_originalNamespaceName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for OriginalNamespaceNameContext<'input>{
@@ -14745,7 +14853,7 @@ impl<'input> CustomRuleContext<'input> for OriginalNamespaceNameContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_originalNamespaceName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_originalNamespaceName }
 }
-antlr_rust::type_id!{OriginalNamespaceNameContextExt<'a>}
+antlr_rust::tid!{OriginalNamespaceNameContextExt<'a>}
 
 impl<'input> OriginalNamespaceNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OriginalNamespaceNameContextAll<'input>> {
@@ -14781,7 +14889,7 @@ where
 		let mut _localctx = OriginalNamespaceNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 186, RULE_originalNamespaceName);
         let mut _localctx: Rc<OriginalNamespaceNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14790,7 +14898,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14820,14 +14929,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NamespaceDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NamespaceDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_namespaceDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_namespaceDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_namespaceDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_namespaceDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NamespaceDefinitionContext<'input>{
@@ -14842,7 +14951,7 @@ impl<'input> CustomRuleContext<'input> for NamespaceDefinitionContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_namespaceDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_namespaceDefinition }
 }
-antlr_rust::type_id!{NamespaceDefinitionContextExt<'a>}
+antlr_rust::tid!{NamespaceDefinitionContextExt<'a>}
 
 impl<'input> NamespaceDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NamespaceDefinitionContextAll<'input>> {
@@ -14905,8 +15014,8 @@ where
 		let mut _localctx = NamespaceDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 188, RULE_namespaceDefinition);
         let mut _localctx: Rc<NamespaceDefinitionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14953,7 +15062,7 @@ where
 			recog.base.set_state(1226);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Namespace - 10)) | (1usize << (Operator - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0) {
+			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Namespace - 44)) | (1usize << (Operator - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 				{
 				/*InvokeRule declarationseq*/
 				recog.base.set_state(1225);
@@ -14968,7 +15077,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14997,14 +15107,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NamespaceAliasContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NamespaceAliasContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_namespaceAlias(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_namespaceAlias(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_namespaceAlias(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_namespaceAlias(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NamespaceAliasContext<'input>{
@@ -15019,7 +15129,7 @@ impl<'input> CustomRuleContext<'input> for NamespaceAliasContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_namespaceAlias }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_namespaceAlias }
 }
-antlr_rust::type_id!{NamespaceAliasContextExt<'a>}
+antlr_rust::tid!{NamespaceAliasContextExt<'a>}
 
 impl<'input> NamespaceAliasContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NamespaceAliasContextAll<'input>> {
@@ -15055,7 +15165,7 @@ where
 		let mut _localctx = NamespaceAliasContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 190, RULE_namespaceAlias);
         let mut _localctx: Rc<NamespaceAliasContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15064,7 +15174,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15093,14 +15204,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NamespaceAliasDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NamespaceAliasDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_namespaceAliasDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_namespaceAliasDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_namespaceAliasDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_namespaceAliasDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NamespaceAliasDefinitionContext<'input>{
@@ -15115,7 +15226,7 @@ impl<'input> CustomRuleContext<'input> for NamespaceAliasDefinitionContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_namespaceAliasDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_namespaceAliasDefinition }
 }
-antlr_rust::type_id!{NamespaceAliasDefinitionContextExt<'a>}
+antlr_rust::tid!{NamespaceAliasDefinitionContextExt<'a>}
 
 impl<'input> NamespaceAliasDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NamespaceAliasDefinitionContextAll<'input>> {
@@ -15169,7 +15280,7 @@ where
 		let mut _localctx = NamespaceAliasDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 192, RULE_namespaceAliasDefinition);
         let mut _localctx: Rc<NamespaceAliasDefinitionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15191,7 +15302,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15220,14 +15332,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for QualifiednamespacespecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for QualifiednamespacespecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_qualifiednamespacespecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_qualifiednamespacespecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_qualifiednamespacespecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_qualifiednamespacespecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for QualifiednamespacespecifierContext<'input>{
@@ -15242,7 +15354,7 @@ impl<'input> CustomRuleContext<'input> for QualifiednamespacespecifierContextExt
 	fn get_rule_index(&self) -> usize { RULE_qualifiednamespacespecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_qualifiednamespacespecifier }
 }
-antlr_rust::type_id!{QualifiednamespacespecifierContextExt<'a>}
+antlr_rust::tid!{QualifiednamespacespecifierContextExt<'a>}
 
 impl<'input> QualifiednamespacespecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<QualifiednamespacespecifierContextAll<'input>> {
@@ -15279,7 +15391,7 @@ where
 		let mut _localctx = QualifiednamespacespecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 194, RULE_qualifiednamespacespecifier);
         let mut _localctx: Rc<QualifiednamespacespecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15303,7 +15415,8 @@ where
 			recog.namespaceName()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15332,14 +15445,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for UsingDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for UsingDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_usingDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_usingDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_usingDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_usingDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for UsingDeclarationContext<'input>{
@@ -15354,7 +15467,7 @@ impl<'input> CustomRuleContext<'input> for UsingDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_usingDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_usingDeclaration }
 }
-antlr_rust::type_id!{UsingDeclarationContextExt<'a>}
+antlr_rust::tid!{UsingDeclarationContextExt<'a>}
 
 impl<'input> UsingDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UsingDeclarationContextAll<'input>> {
@@ -15411,8 +15524,8 @@ where
 		let mut _localctx = UsingDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 196, RULE_usingDeclaration);
         let mut _localctx: Rc<UsingDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15461,7 +15574,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15490,14 +15604,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for UsingDirectiveContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for UsingDirectiveContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_usingDirective(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_usingDirective(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_usingDirective(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_usingDirective(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for UsingDirectiveContext<'input>{
@@ -15512,7 +15626,7 @@ impl<'input> CustomRuleContext<'input> for UsingDirectiveContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_usingDirective }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_usingDirective }
 }
-antlr_rust::type_id!{UsingDirectiveContextExt<'a>}
+antlr_rust::tid!{UsingDirectiveContextExt<'a>}
 
 impl<'input> UsingDirectiveContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UsingDirectiveContextAll<'input>> {
@@ -15567,8 +15681,8 @@ where
 		let mut _localctx = UsingDirectiveContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 198, RULE_usingDirective);
         let mut _localctx: Rc<UsingDirectiveContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15613,7 +15727,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15642,14 +15757,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AsmDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AsmDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_asmDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_asmDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_asmDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_asmDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AsmDefinitionContext<'input>{
@@ -15664,7 +15779,7 @@ impl<'input> CustomRuleContext<'input> for AsmDefinitionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_asmDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_asmDefinition }
 }
-antlr_rust::type_id!{AsmDefinitionContextExt<'a>}
+antlr_rust::tid!{AsmDefinitionContextExt<'a>}
 
 impl<'input> AsmDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AsmDefinitionContextAll<'input>> {
@@ -15720,7 +15835,7 @@ where
 		let mut _localctx = AsmDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 200, RULE_asmDefinition);
         let mut _localctx: Rc<AsmDefinitionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15741,7 +15856,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15770,14 +15886,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LinkageSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LinkageSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_linkageSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_linkageSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_linkageSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_linkageSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LinkageSpecificationContext<'input>{
@@ -15792,7 +15908,7 @@ impl<'input> CustomRuleContext<'input> for LinkageSpecificationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_linkageSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_linkageSpecification }
 }
-antlr_rust::type_id!{LinkageSpecificationContextExt<'a>}
+antlr_rust::tid!{LinkageSpecificationContextExt<'a>}
 
 impl<'input> LinkageSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LinkageSpecificationContextAll<'input>> {
@@ -15849,8 +15965,8 @@ where
 		let mut _localctx = LinkageSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 202, RULE_linkageSpecification);
         let mut _localctx: Rc<LinkageSpecificationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -15873,7 +15989,7 @@ where
 					recog.base.set_state(1275);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Namespace - 10)) | (1usize << (Operator - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0) {
+					if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Asm - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Namespace - 44)) | (1usize << (Operator - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 						{
 						/*InvokeRule declarationseq*/
 						recog.base.set_state(1274);
@@ -15907,7 +16023,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15936,14 +16053,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeSpecifierSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeSpecifierSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeSpecifierSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeSpecifierSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeSpecifierSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeSpecifierSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeSpecifierSeqContext<'input>{
@@ -15958,7 +16075,7 @@ impl<'input> CustomRuleContext<'input> for AttributeSpecifierSeqContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_attributeSpecifierSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeSpecifierSeq }
 }
-antlr_rust::type_id!{AttributeSpecifierSeqContextExt<'a>}
+antlr_rust::tid!{AttributeSpecifierSeqContextExt<'a>}
 
 impl<'input> AttributeSpecifierSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeSpecifierSeqContextAll<'input>> {
@@ -15995,7 +16112,7 @@ where
 		let mut _localctx = AttributeSpecifierSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 204, RULE_attributeSpecifierSeq);
         let mut _localctx: Rc<AttributeSpecifierSeqContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -16024,7 +16141,8 @@ where
 				if _alt==2 || _alt==INVALID_ALT { break }
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16053,14 +16171,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeSpecifierContext<'input>{
@@ -16075,7 +16193,7 @@ impl<'input> CustomRuleContext<'input> for AttributeSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_attributeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeSpecifier }
 }
-antlr_rust::type_id!{AttributeSpecifierContextExt<'a>}
+antlr_rust::tid!{AttributeSpecifierContextExt<'a>}
 
 impl<'input> AttributeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeSpecifierContextAll<'input>> {
@@ -16130,8 +16248,8 @@ where
 		let mut _localctx = AttributeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 206, RULE_attributeSpecifier);
         let mut _localctx: Rc<AttributeSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1294);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -16182,7 +16300,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16211,14 +16330,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AlignmentspecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AlignmentspecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_alignmentspecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_alignmentspecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_alignmentspecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_alignmentspecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AlignmentspecifierContext<'input>{
@@ -16233,7 +16352,7 @@ impl<'input> CustomRuleContext<'input> for AlignmentspecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_alignmentspecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_alignmentspecifier }
 }
-antlr_rust::type_id!{AlignmentspecifierContextExt<'a>}
+antlr_rust::tid!{AlignmentspecifierContextExt<'a>}
 
 impl<'input> AlignmentspecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AlignmentspecifierContextAll<'input>> {
@@ -16290,8 +16409,8 @@ where
 		let mut _localctx = AlignmentspecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 208, RULE_alignmentspecifier);
         let mut _localctx: Rc<AlignmentspecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16340,7 +16459,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16369,14 +16489,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeListContext<'input>{
@@ -16391,7 +16511,7 @@ impl<'input> CustomRuleContext<'input> for AttributeListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_attributeList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeList }
 }
-antlr_rust::type_id!{AttributeListContextExt<'a>}
+antlr_rust::tid!{AttributeListContextExt<'a>}
 
 impl<'input> AttributeListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeListContextAll<'input>> {
@@ -16442,8 +16562,8 @@ where
 		let mut _localctx = AttributeListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 210, RULE_attributeList);
         let mut _localctx: Rc<AttributeListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16483,7 +16603,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16512,14 +16633,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attribute(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attribute(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attribute(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attribute(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeContext<'input>{
@@ -16534,7 +16655,7 @@ impl<'input> CustomRuleContext<'input> for AttributeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_attribute }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attribute }
 }
-antlr_rust::type_id!{AttributeContextExt<'a>}
+antlr_rust::tid!{AttributeContextExt<'a>}
 
 impl<'input> AttributeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeContextAll<'input>> {
@@ -16581,8 +16702,8 @@ where
 		let mut _localctx = AttributeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 212, RULE_attribute);
         let mut _localctx: Rc<AttributeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16620,7 +16741,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16649,14 +16771,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeNamespaceContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeNamespaceContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeNamespace(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeNamespace(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeNamespace(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeNamespace(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeNamespaceContext<'input>{
@@ -16671,7 +16793,7 @@ impl<'input> CustomRuleContext<'input> for AttributeNamespaceContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_attributeNamespace }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeNamespace }
 }
-antlr_rust::type_id!{AttributeNamespaceContextExt<'a>}
+antlr_rust::tid!{AttributeNamespaceContextExt<'a>}
 
 impl<'input> AttributeNamespaceContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeNamespaceContextAll<'input>> {
@@ -16707,7 +16829,7 @@ where
 		let mut _localctx = AttributeNamespaceContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 214, RULE_attributeNamespace);
         let mut _localctx: Rc<AttributeNamespaceContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16716,7 +16838,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16745,14 +16868,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AttributeArgumentClauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AttributeArgumentClauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attributeArgumentClause(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_attributeArgumentClause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attributeArgumentClause(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_attributeArgumentClause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AttributeArgumentClauseContext<'input>{
@@ -16767,7 +16890,7 @@ impl<'input> CustomRuleContext<'input> for AttributeArgumentClauseContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_attributeArgumentClause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attributeArgumentClause }
 }
-antlr_rust::type_id!{AttributeArgumentClauseContextExt<'a>}
+antlr_rust::tid!{AttributeArgumentClauseContextExt<'a>}
 
 impl<'input> AttributeArgumentClauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttributeArgumentClauseContextAll<'input>> {
@@ -16811,8 +16934,8 @@ where
 		let mut _localctx = AttributeArgumentClauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 216, RULE_attributeArgumentClause);
         let mut _localctx: Rc<AttributeArgumentClauseContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16823,7 +16946,7 @@ where
 			recog.base.set_state(1331);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << MultiLineMacro) | (1usize << Directive) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Catch) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Else) | (1usize << Enum) | (1usize << Explicit) | (1usize << Export) | (1usize << Extern) | (1usize << False_) | (1usize << Final) | (1usize << Float) | (1usize << For) | (1usize << Friend) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Mutable) | (1usize << Namespace) | (1usize << New) | (1usize << Noexcept) | (1usize << Nullptr) | (1usize << Operator) | (1usize << Override) | (1usize << Private) | (1usize << Protected) | (1usize << Public) | (1usize << Register) | (1usize << Reinterpret_cast) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (Template - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (True_ - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)) | (1usize << (Caret - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (Tilde - 64)) | (1usize << (Not - 64)) | (1usize << (Assign - 64)) | (1usize << (Less - 64)) | (1usize << (Greater - 64)) | (1usize << (PlusAssign - 64)) | (1usize << (MinusAssign - 64)) | (1usize << (StarAssign - 64)) | (1usize << (DivAssign - 64)) | (1usize << (ModAssign - 64)) | (1usize << (XorAssign - 64)) | (1usize << (AndAssign - 64)) | (1usize << (OrAssign - 64)) | (1usize << (LeftShiftAssign - 64)) | (1usize << (RightShiftAssign - 64)) | (1usize << (Equal - 64)) | (1usize << (NotEqual - 64)) | (1usize << (LessEqual - 64)) | (1usize << (GreaterEqual - 64)) | (1usize << (AndAnd - 64)) | (1usize << (OrOr - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Comma - 64)) | (1usize << (ArrowStar - 64)) | (1usize << (Arrow - 64)) | (1usize << (Question - 64)) | (1usize << (Colon - 64)) | (1usize << (Doublecolon - 64)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Dot - 128)) | (1usize << (DotStar - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)) | (1usize << (DecimalLiteral - 128)) | (1usize << (OctalLiteral - 128)) | (1usize << (HexadecimalLiteral - 128)) | (1usize << (BinaryLiteral - 128)) | (1usize << (Integersuffix - 128)) | (1usize << (UserDefinedIntegerLiteral - 128)) | (1usize << (UserDefinedFloatingLiteral - 128)) | (1usize << (UserDefinedStringLiteral - 128)) | (1usize << (UserDefinedCharacterLiteral - 128)) | (1usize << (Whitespace - 128)) | (1usize << (Newline - 128)) | (1usize << (BlockComment - 128)) | (1usize << (LineComment - 128)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << MultiLineMacro) | (1usize << Directive) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Catch) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Else - 32)) | (1usize << (Enum - 32)) | (1usize << (Explicit - 32)) | (1usize << (Export - 32)) | (1usize << (Extern - 32)) | (1usize << (False_ - 32)) | (1usize << (Final - 32)) | (1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Friend - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Mutable - 32)) | (1usize << (Namespace - 32)) | (1usize << (New - 32)) | (1usize << (Noexcept - 32)) | (1usize << (Nullptr - 32)) | (1usize << (Operator - 32)) | (1usize << (Override - 32)) | (1usize << (Private - 32)) | (1usize << (Protected - 32)) | (1usize << (Public - 32)) | (1usize << (Register - 32)) | (1usize << (Reinterpret_cast - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (Template - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (True_ - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)))) != 0) || ((((_la - 96)) & !0x3f) == 0 && ((1usize << (_la - 96)) & ((1usize << (Caret - 96)) | (1usize << (And - 96)) | (1usize << (Or - 96)) | (1usize << (Tilde - 96)) | (1usize << (Not - 96)) | (1usize << (Assign - 96)) | (1usize << (Less - 96)) | (1usize << (Greater - 96)) | (1usize << (PlusAssign - 96)) | (1usize << (MinusAssign - 96)) | (1usize << (StarAssign - 96)) | (1usize << (DivAssign - 96)) | (1usize << (ModAssign - 96)) | (1usize << (XorAssign - 96)) | (1usize << (AndAssign - 96)) | (1usize << (OrAssign - 96)) | (1usize << (LeftShiftAssign - 96)) | (1usize << (RightShiftAssign - 96)) | (1usize << (Equal - 96)) | (1usize << (NotEqual - 96)) | (1usize << (LessEqual - 96)) | (1usize << (GreaterEqual - 96)) | (1usize << (AndAnd - 96)) | (1usize << (OrOr - 96)) | (1usize << (PlusPlus - 96)) | (1usize << (MinusMinus - 96)) | (1usize << (Comma - 96)) | (1usize << (ArrowStar - 96)) | (1usize << (Arrow - 96)) | (1usize << (Question - 96)) | (1usize << (Colon - 96)) | (1usize << (Doublecolon - 96)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Dot - 128)) | (1usize << (DotStar - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)) | (1usize << (DecimalLiteral - 128)) | (1usize << (OctalLiteral - 128)) | (1usize << (HexadecimalLiteral - 128)) | (1usize << (BinaryLiteral - 128)) | (1usize << (Integersuffix - 128)) | (1usize << (UserDefinedIntegerLiteral - 128)) | (1usize << (UserDefinedFloatingLiteral - 128)) | (1usize << (UserDefinedStringLiteral - 128)) | (1usize << (UserDefinedCharacterLiteral - 128)) | (1usize << (Whitespace - 128)) | (1usize << (Newline - 128)) | (1usize << (BlockComment - 128)) | (1usize << (LineComment - 128)))) != 0) {
 				{
 				/*InvokeRule balancedTokenSeq*/
 				recog.base.set_state(1330);
@@ -16836,7 +16959,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16865,14 +16989,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BalancedTokenSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BalancedTokenSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_balancedTokenSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_balancedTokenSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_balancedTokenSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_balancedTokenSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BalancedTokenSeqContext<'input>{
@@ -16887,7 +17011,7 @@ impl<'input> CustomRuleContext<'input> for BalancedTokenSeqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_balancedTokenSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_balancedTokenSeq }
 }
-antlr_rust::type_id!{BalancedTokenSeqContextExt<'a>}
+antlr_rust::tid!{BalancedTokenSeqContextExt<'a>}
 
 impl<'input> BalancedTokenSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BalancedTokenSeqContextAll<'input>> {
@@ -16924,8 +17048,8 @@ where
 		let mut _localctx = BalancedTokenSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 218, RULE_balancedTokenSeq);
         let mut _localctx: Rc<BalancedTokenSeqContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16945,10 +17069,11 @@ where
 				recog.base.set_state(1338); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << MultiLineMacro) | (1usize << Directive) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Catch) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Else) | (1usize << Enum) | (1usize << Explicit) | (1usize << Export) | (1usize << Extern) | (1usize << False_) | (1usize << Final) | (1usize << Float) | (1usize << For) | (1usize << Friend) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Mutable) | (1usize << Namespace) | (1usize << New) | (1usize << Noexcept) | (1usize << Nullptr) | (1usize << Operator) | (1usize << Override) | (1usize << Private) | (1usize << Protected) | (1usize << Public) | (1usize << Register) | (1usize << Reinterpret_cast) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (Template - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (True_ - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)) | (1usize << (Caret - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (Tilde - 64)) | (1usize << (Not - 64)) | (1usize << (Assign - 64)) | (1usize << (Less - 64)) | (1usize << (Greater - 64)) | (1usize << (PlusAssign - 64)) | (1usize << (MinusAssign - 64)) | (1usize << (StarAssign - 64)) | (1usize << (DivAssign - 64)) | (1usize << (ModAssign - 64)) | (1usize << (XorAssign - 64)) | (1usize << (AndAssign - 64)) | (1usize << (OrAssign - 64)) | (1usize << (LeftShiftAssign - 64)) | (1usize << (RightShiftAssign - 64)) | (1usize << (Equal - 64)) | (1usize << (NotEqual - 64)) | (1usize << (LessEqual - 64)) | (1usize << (GreaterEqual - 64)) | (1usize << (AndAnd - 64)) | (1usize << (OrOr - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Comma - 64)) | (1usize << (ArrowStar - 64)) | (1usize << (Arrow - 64)) | (1usize << (Question - 64)) | (1usize << (Colon - 64)) | (1usize << (Doublecolon - 64)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Dot - 128)) | (1usize << (DotStar - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)) | (1usize << (DecimalLiteral - 128)) | (1usize << (OctalLiteral - 128)) | (1usize << (HexadecimalLiteral - 128)) | (1usize << (BinaryLiteral - 128)) | (1usize << (Integersuffix - 128)) | (1usize << (UserDefinedIntegerLiteral - 128)) | (1usize << (UserDefinedFloatingLiteral - 128)) | (1usize << (UserDefinedStringLiteral - 128)) | (1usize << (UserDefinedCharacterLiteral - 128)) | (1usize << (Whitespace - 128)) | (1usize << (Newline - 128)) | (1usize << (BlockComment - 128)) | (1usize << (LineComment - 128)))) != 0)) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << MultiLineMacro) | (1usize << Directive) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Asm) | (1usize << Auto) | (1usize << Bool) | (1usize << Break) | (1usize << Case) | (1usize << Catch) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Const_cast) | (1usize << Continue) | (1usize << Decltype) | (1usize << Default) | (1usize << Delete) | (1usize << Do) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Else - 32)) | (1usize << (Enum - 32)) | (1usize << (Explicit - 32)) | (1usize << (Export - 32)) | (1usize << (Extern - 32)) | (1usize << (False_ - 32)) | (1usize << (Final - 32)) | (1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Friend - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Mutable - 32)) | (1usize << (Namespace - 32)) | (1usize << (New - 32)) | (1usize << (Noexcept - 32)) | (1usize << (Nullptr - 32)) | (1usize << (Operator - 32)) | (1usize << (Override - 32)) | (1usize << (Private - 32)) | (1usize << (Protected - 32)) | (1usize << (Public - 32)) | (1usize << (Register - 32)) | (1usize << (Reinterpret_cast - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (Static_assert - 64)) | (1usize << (Static_cast - 64)) | (1usize << (Struct - 64)) | (1usize << (Switch - 64)) | (1usize << (Template - 64)) | (1usize << (This - 64)) | (1usize << (Thread_local - 64)) | (1usize << (Throw - 64)) | (1usize << (True_ - 64)) | (1usize << (Try - 64)) | (1usize << (Typedef - 64)) | (1usize << (Typeid_ - 64)) | (1usize << (Typename_ - 64)) | (1usize << (Union - 64)) | (1usize << (Unsigned - 64)) | (1usize << (Using - 64)) | (1usize << (Virtual - 64)) | (1usize << (Void - 64)) | (1usize << (Volatile - 64)) | (1usize << (Wchar - 64)) | (1usize << (While - 64)) | (1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (Minus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)))) != 0) || ((((_la - 96)) & !0x3f) == 0 && ((1usize << (_la - 96)) & ((1usize << (Caret - 96)) | (1usize << (And - 96)) | (1usize << (Or - 96)) | (1usize << (Tilde - 96)) | (1usize << (Not - 96)) | (1usize << (Assign - 96)) | (1usize << (Less - 96)) | (1usize << (Greater - 96)) | (1usize << (PlusAssign - 96)) | (1usize << (MinusAssign - 96)) | (1usize << (StarAssign - 96)) | (1usize << (DivAssign - 96)) | (1usize << (ModAssign - 96)) | (1usize << (XorAssign - 96)) | (1usize << (AndAssign - 96)) | (1usize << (OrAssign - 96)) | (1usize << (LeftShiftAssign - 96)) | (1usize << (RightShiftAssign - 96)) | (1usize << (Equal - 96)) | (1usize << (NotEqual - 96)) | (1usize << (LessEqual - 96)) | (1usize << (GreaterEqual - 96)) | (1usize << (AndAnd - 96)) | (1usize << (OrOr - 96)) | (1usize << (PlusPlus - 96)) | (1usize << (MinusMinus - 96)) | (1usize << (Comma - 96)) | (1usize << (ArrowStar - 96)) | (1usize << (Arrow - 96)) | (1usize << (Question - 96)) | (1usize << (Colon - 96)) | (1usize << (Doublecolon - 96)))) != 0) || ((((_la - 128)) & !0x3f) == 0 && ((1usize << (_la - 128)) & ((1usize << (Semi - 128)) | (1usize << (Dot - 128)) | (1usize << (DotStar - 128)) | (1usize << (Ellipsis - 128)) | (1usize << (Identifier - 128)) | (1usize << (DecimalLiteral - 128)) | (1usize << (OctalLiteral - 128)) | (1usize << (HexadecimalLiteral - 128)) | (1usize << (BinaryLiteral - 128)) | (1usize << (Integersuffix - 128)) | (1usize << (UserDefinedIntegerLiteral - 128)) | (1usize << (UserDefinedFloatingLiteral - 128)) | (1usize << (UserDefinedStringLiteral - 128)) | (1usize << (UserDefinedCharacterLiteral - 128)) | (1usize << (Whitespace - 128)) | (1usize << (Newline - 128)) | (1usize << (BlockComment - 128)) | (1usize << (LineComment - 128)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16977,14 +17102,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BalancedtokenContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BalancedtokenContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_balancedtoken(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_balancedtoken(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_balancedtoken(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_balancedtoken(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BalancedtokenContext<'input>{
@@ -16999,7 +17124,7 @@ impl<'input> CustomRuleContext<'input> for BalancedtokenContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_balancedtoken }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_balancedtoken }
 }
-antlr_rust::type_id!{BalancedtokenContextExt<'a>}
+antlr_rust::tid!{BalancedtokenContextExt<'a>}
 
 impl<'input> BalancedtokenContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BalancedtokenContextAll<'input>> {
@@ -17087,8 +17212,8 @@ where
 		let mut _localctx = BalancedtokenContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 220, RULE_balancedtoken);
         let mut _localctx: Rc<BalancedtokenContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(1357);
@@ -17207,7 +17332,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17236,14 +17362,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitDeclaratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitDeclaratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initDeclaratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initDeclaratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initDeclaratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initDeclaratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitDeclaratorListContext<'input>{
@@ -17258,7 +17384,7 @@ impl<'input> CustomRuleContext<'input> for InitDeclaratorListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initDeclaratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initDeclaratorList }
 }
-antlr_rust::type_id!{InitDeclaratorListContextExt<'a>}
+antlr_rust::tid!{InitDeclaratorListContextExt<'a>}
 
 impl<'input> InitDeclaratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitDeclaratorListContextAll<'input>> {
@@ -17304,8 +17430,8 @@ where
 		let mut _localctx = InitDeclaratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 222, RULE_initDeclaratorList);
         let mut _localctx: Rc<InitDeclaratorListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17334,7 +17460,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17363,14 +17490,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitDeclaratorContext<'input>{
@@ -17385,7 +17512,7 @@ impl<'input> CustomRuleContext<'input> for InitDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initDeclarator }
 }
-antlr_rust::type_id!{InitDeclaratorContextExt<'a>}
+antlr_rust::tid!{InitDeclaratorContextExt<'a>}
 
 impl<'input> InitDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitDeclaratorContextAll<'input>> {
@@ -17422,8 +17549,8 @@ where
 		let mut _localctx = InitDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 224, RULE_initDeclarator);
         let mut _localctx: Rc<InitDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17445,7 +17572,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17474,14 +17602,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclaratorContext<'input>{
@@ -17496,7 +17624,7 @@ impl<'input> CustomRuleContext<'input> for DeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarator }
 }
-antlr_rust::type_id!{DeclaratorContextExt<'a>}
+antlr_rust::tid!{DeclaratorContextExt<'a>}
 
 impl<'input> DeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclaratorContextAll<'input>> {
@@ -17539,7 +17667,7 @@ where
 		let mut _localctx = DeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 226, RULE_declarator);
         let mut _localctx: Rc<DeclaratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1376);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -17576,7 +17704,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17605,14 +17734,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PointerDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PointerDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pointerDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pointerDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pointerDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pointerDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PointerDeclaratorContext<'input>{
@@ -17627,7 +17756,7 @@ impl<'input> CustomRuleContext<'input> for PointerDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pointerDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pointerDeclarator }
 }
-antlr_rust::type_id!{PointerDeclaratorContextExt<'a>}
+antlr_rust::tid!{PointerDeclaratorContextExt<'a>}
 
 impl<'input> PointerDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PointerDeclaratorContextAll<'input>> {
@@ -17676,8 +17805,8 @@ where
 		let mut _localctx = PointerDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 228, RULE_pointerDeclarator);
         let mut _localctx: Rc<PointerDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -17717,7 +17846,8 @@ where
 			recog.noPointerDeclarator_rec(0)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17746,14 +17876,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoPointerDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoPointerDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noPointerDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noPointerDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noPointerDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noPointerDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoPointerDeclaratorContext<'input>{
@@ -17768,7 +17898,7 @@ impl<'input> CustomRuleContext<'input> for NoPointerDeclaratorContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_noPointerDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noPointerDeclarator }
 }
-antlr_rust::type_id!{NoPointerDeclaratorContextExt<'a>}
+antlr_rust::tid!{NoPointerDeclaratorContextExt<'a>}
 
 impl<'input> NoPointerDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoPointerDeclaratorContextAll<'input>> {
@@ -17845,8 +17975,8 @@ where
 	    let mut _localctx: Rc<NoPointerDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 230;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17938,7 +18068,7 @@ where
 							recog.base.set_state(1404);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 75)) & !0x3f) == 0 && ((1usize << (_la - 75)) & ((1usize << (Typeid_ - 75)) | (1usize << (Typename_ - 75)) | (1usize << (Unsigned - 75)) | (1usize << (Void - 75)) | (1usize << (Wchar - 75)) | (1usize << (LeftParen - 75)) | (1usize << (LeftBracket - 75)) | (1usize << (Plus - 75)) | (1usize << (Minus - 75)) | (1usize << (Star - 75)) | (1usize << (And - 75)) | (1usize << (Or - 75)) | (1usize << (Tilde - 75)) | (1usize << (Not - 75)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule constantExpression*/
 								recog.base.set_state(1403);
@@ -17977,7 +18107,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(167,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18005,14 +18136,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ParametersAndQualifiersContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ParametersAndQualifiersContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parametersAndQualifiers(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_parametersAndQualifiers(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parametersAndQualifiers(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_parametersAndQualifiers(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ParametersAndQualifiersContext<'input>{
@@ -18027,7 +18158,7 @@ impl<'input> CustomRuleContext<'input> for ParametersAndQualifiersContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_parametersAndQualifiers }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parametersAndQualifiers }
 }
-antlr_rust::type_id!{ParametersAndQualifiersContextExt<'a>}
+antlr_rust::tid!{ParametersAndQualifiersContextExt<'a>}
 
 impl<'input> ParametersAndQualifiersContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParametersAndQualifiersContextAll<'input>> {
@@ -18083,8 +18214,8 @@ where
 		let mut _localctx = ParametersAndQualifiersContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 232, RULE_parametersAndQualifiers);
         let mut _localctx: Rc<ParametersAndQualifiersContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18095,7 +18226,7 @@ where
 			recog.base.set_state(1419);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Struct - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Identifier - 74)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Alignas) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Constexpr) | (1usize << Decltype) | (1usize << Double))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Explicit - 33)) | (1usize << (Extern - 33)) | (1usize << (Float - 33)) | (1usize << (Friend - 33)) | (1usize << (Inline - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Mutable - 33)) | (1usize << (Register - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Static - 33)))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (Struct - 66)) | (1usize << (Thread_local - 66)) | (1usize << (Typedef - 66)) | (1usize << (Typename_ - 66)) | (1usize << (Union - 66)) | (1usize << (Unsigned - 66)) | (1usize << (Virtual - 66)) | (1usize << (Void - 66)) | (1usize << (Volatile - 66)) | (1usize << (Wchar - 66)) | (1usize << (LeftBracket - 66)))) != 0) || _la==Doublecolon || _la==Identifier {
 				{
 				/*InvokeRule parameterDeclarationClause*/
 				recog.base.set_state(1418);
@@ -18164,7 +18295,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18193,14 +18325,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TrailingReturnTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TrailingReturnTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_trailingReturnType(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_trailingReturnType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_trailingReturnType(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_trailingReturnType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TrailingReturnTypeContext<'input>{
@@ -18215,7 +18347,7 @@ impl<'input> CustomRuleContext<'input> for TrailingReturnTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_trailingReturnType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_trailingReturnType }
 }
-antlr_rust::type_id!{TrailingReturnTypeContextExt<'a>}
+antlr_rust::tid!{TrailingReturnTypeContextExt<'a>}
 
 impl<'input> TrailingReturnTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TrailingReturnTypeContextAll<'input>> {
@@ -18257,7 +18389,7 @@ where
 		let mut _localctx = TrailingReturnTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 234, RULE_trailingReturnType);
         let mut _localctx: Rc<TrailingReturnTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18284,7 +18416,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18313,14 +18446,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PointerOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PointerOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pointerOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pointerOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pointerOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pointerOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PointerOperatorContext<'input>{
@@ -18335,7 +18468,7 @@ impl<'input> CustomRuleContext<'input> for PointerOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pointerOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pointerOperator }
 }
-antlr_rust::type_id!{PointerOperatorContextExt<'a>}
+antlr_rust::tid!{PointerOperatorContextExt<'a>}
 
 impl<'input> PointerOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PointerOperatorContextAll<'input>> {
@@ -18390,8 +18523,8 @@ where
 		let mut _localctx = PointerOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 236, RULE_pointerOperator);
         let mut _localctx: Rc<PointerOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1453);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -18482,7 +18615,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18511,14 +18645,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CvqualifierseqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CvqualifierseqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_cvqualifierseq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_cvqualifierseq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_cvqualifierseq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_cvqualifierseq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CvqualifierseqContext<'input>{
@@ -18533,7 +18667,7 @@ impl<'input> CustomRuleContext<'input> for CvqualifierseqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_cvqualifierseq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_cvqualifierseq }
 }
-antlr_rust::type_id!{CvqualifierseqContextExt<'a>}
+antlr_rust::tid!{CvqualifierseqContextExt<'a>}
 
 impl<'input> CvqualifierseqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CvqualifierseqContextAll<'input>> {
@@ -18570,7 +18704,7 @@ where
 		let mut _localctx = CvqualifierseqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 238, RULE_cvqualifierseq);
         let mut _localctx: Rc<CvqualifierseqContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -18599,7 +18733,8 @@ where
 				if _alt==2 || _alt==INVALID_ALT { break }
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18628,14 +18763,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for CvQualifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for CvQualifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_cvQualifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_cvQualifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_cvQualifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_cvQualifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for CvQualifierContext<'input>{
@@ -18650,7 +18785,7 @@ impl<'input> CustomRuleContext<'input> for CvQualifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_cvQualifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_cvQualifier }
 }
-antlr_rust::type_id!{CvQualifierContextExt<'a>}
+antlr_rust::tid!{CvQualifierContextExt<'a>}
 
 impl<'input> CvQualifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CvQualifierContextAll<'input>> {
@@ -18691,8 +18826,8 @@ where
 		let mut _localctx = CvQualifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 240, RULE_cvQualifier);
         let mut _localctx: Rc<CvQualifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18709,7 +18844,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18738,14 +18874,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for RefqualifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for RefqualifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_refqualifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_refqualifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_refqualifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_refqualifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for RefqualifierContext<'input>{
@@ -18760,7 +18896,7 @@ impl<'input> CustomRuleContext<'input> for RefqualifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_refqualifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_refqualifier }
 }
-antlr_rust::type_id!{RefqualifierContextExt<'a>}
+antlr_rust::tid!{RefqualifierContextExt<'a>}
 
 impl<'input> RefqualifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RefqualifierContextAll<'input>> {
@@ -18801,8 +18937,8 @@ where
 		let mut _localctx = RefqualifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 242, RULE_refqualifier);
         let mut _localctx: Rc<RefqualifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18819,7 +18955,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18848,14 +18985,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DeclaratoridContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DeclaratoridContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declaratorid(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_declaratorid(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declaratorid(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_declaratorid(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DeclaratoridContext<'input>{
@@ -18870,7 +19007,7 @@ impl<'input> CustomRuleContext<'input> for DeclaratoridContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declaratorid }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declaratorid }
 }
-antlr_rust::type_id!{DeclaratoridContextExt<'a>}
+antlr_rust::tid!{DeclaratoridContextExt<'a>}
 
 impl<'input> DeclaratoridContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclaratoridContextAll<'input>> {
@@ -18909,8 +19046,8 @@ where
 		let mut _localctx = DeclaratoridContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 244, RULE_declaratorid);
         let mut _localctx: Rc<DeclaratoridContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18931,7 +19068,8 @@ where
 			recog.idExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18960,14 +19098,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TheTypeIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TheTypeIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_theTypeId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_theTypeId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_theTypeId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_theTypeId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TheTypeIdContext<'input>{
@@ -18982,7 +19120,7 @@ impl<'input> CustomRuleContext<'input> for TheTypeIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_theTypeId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_theTypeId }
 }
-antlr_rust::type_id!{TheTypeIdContextExt<'a>}
+antlr_rust::tid!{TheTypeIdContextExt<'a>}
 
 impl<'input> TheTypeIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TheTypeIdContextAll<'input>> {
@@ -19019,7 +19157,7 @@ where
 		let mut _localctx = TheTypeIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 246, RULE_theTypeId);
         let mut _localctx: Rc<TheTypeIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19043,7 +19181,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19072,14 +19211,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AbstractDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AbstractDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_abstractDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_abstractDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_abstractDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_abstractDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AbstractDeclaratorContext<'input>{
@@ -19094,7 +19233,7 @@ impl<'input> CustomRuleContext<'input> for AbstractDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_abstractDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_abstractDeclarator }
 }
-antlr_rust::type_id!{AbstractDeclaratorContextExt<'a>}
+antlr_rust::tid!{AbstractDeclaratorContextExt<'a>}
 
 impl<'input> AbstractDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AbstractDeclaratorContextAll<'input>> {
@@ -19140,7 +19279,7 @@ where
 		let mut _localctx = AbstractDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 248, RULE_abstractDeclarator);
         let mut _localctx: Rc<AbstractDeclaratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1481);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -19198,7 +19337,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19227,14 +19367,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PointerAbstractDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PointerAbstractDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pointerAbstractDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pointerAbstractDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pointerAbstractDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pointerAbstractDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PointerAbstractDeclaratorContext<'input>{
@@ -19249,7 +19389,7 @@ impl<'input> CustomRuleContext<'input> for PointerAbstractDeclaratorContextExt<'
 	fn get_rule_index(&self) -> usize { RULE_pointerAbstractDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pointerAbstractDeclarator }
 }
-antlr_rust::type_id!{PointerAbstractDeclaratorContextExt<'a>}
+antlr_rust::tid!{PointerAbstractDeclaratorContextExt<'a>}
 
 impl<'input> PointerAbstractDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PointerAbstractDeclaratorContextAll<'input>> {
@@ -19289,7 +19429,7 @@ where
 		let mut _localctx = PointerAbstractDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 250, RULE_pointerAbstractDeclarator);
         let mut _localctx: Rc<PointerAbstractDeclaratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(1492);
@@ -19353,7 +19493,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19382,14 +19523,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoPointerAbstractDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoPointerAbstractDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noPointerAbstractDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noPointerAbstractDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noPointerAbstractDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noPointerAbstractDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoPointerAbstractDeclaratorContext<'input>{
@@ -19404,7 +19545,7 @@ impl<'input> CustomRuleContext<'input> for NoPointerAbstractDeclaratorContextExt
 	fn get_rule_index(&self) -> usize { RULE_noPointerAbstractDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noPointerAbstractDeclarator }
 }
-antlr_rust::type_id!{NoPointerAbstractDeclaratorContextExt<'a>}
+antlr_rust::tid!{NoPointerAbstractDeclaratorContextExt<'a>}
 
 impl<'input> NoPointerAbstractDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoPointerAbstractDeclaratorContextAll<'input>> {
@@ -19481,8 +19622,8 @@ where
 	    let mut _localctx: Rc<NoPointerAbstractDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 252;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19507,7 +19648,7 @@ where
 					recog.base.set_state(1498);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 75)) & !0x3f) == 0 && ((1usize << (_la - 75)) & ((1usize << (Typeid_ - 75)) | (1usize << (Typename_ - 75)) | (1usize << (Unsigned - 75)) | (1usize << (Void - 75)) | (1usize << (Wchar - 75)) | (1usize << (LeftParen - 75)) | (1usize << (LeftBracket - 75)) | (1usize << (Plus - 75)) | (1usize << (Minus - 75)) | (1usize << (Star - 75)) | (1usize << (And - 75)) | (1usize << (Or - 75)) | (1usize << (Tilde - 75)) | (1usize << (Not - 75)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 						{
 						/*InvokeRule constantExpression*/
 						recog.base.set_state(1497);
@@ -19597,7 +19738,7 @@ where
 							recog.base.set_state(1515);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 75)) & !0x3f) == 0 && ((1usize << (_la - 75)) & ((1usize << (Typeid_ - 75)) | (1usize << (Typename_ - 75)) | (1usize << (Unsigned - 75)) | (1usize << (Void - 75)) | (1usize << (Wchar - 75)) | (1usize << (LeftParen - 75)) | (1usize << (LeftBracket - 75)) | (1usize << (Plus - 75)) | (1usize << (Minus - 75)) | (1usize << (Star - 75)) | (1usize << (And - 75)) | (1usize << (Or - 75)) | (1usize << (Tilde - 75)) | (1usize << (Not - 75)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule constantExpression*/
 								recog.base.set_state(1514);
@@ -19636,7 +19777,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(193,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19664,14 +19806,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AbstractPackDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AbstractPackDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_abstractPackDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_abstractPackDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_abstractPackDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_abstractPackDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AbstractPackDeclaratorContext<'input>{
@@ -19686,7 +19828,7 @@ impl<'input> CustomRuleContext<'input> for AbstractPackDeclaratorContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_abstractPackDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_abstractPackDeclarator }
 }
-antlr_rust::type_id!{AbstractPackDeclaratorContextExt<'a>}
+antlr_rust::tid!{AbstractPackDeclaratorContextExt<'a>}
 
 impl<'input> AbstractPackDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AbstractPackDeclaratorContextAll<'input>> {
@@ -19726,8 +19868,8 @@ where
 		let mut _localctx = AbstractPackDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 254, RULE_abstractPackDeclarator);
         let mut _localctx: Rc<AbstractPackDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19735,7 +19877,7 @@ where
 			recog.base.set_state(1531);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while _la==Decltype || ((((_la - 93)) & !0x3f) == 0 && ((1usize << (_la - 93)) & ((1usize << (Star - 93)) | (1usize << (And - 93)) | (1usize << (AndAnd - 93)) | (1usize << (Doublecolon - 93)) | (1usize << (Identifier - 93)))) != 0) {
+			while _la==Decltype || ((((_la - 93)) & !0x3f) == 0 && ((1usize << (_la - 93)) & ((1usize << (Star - 93)) | (1usize << (And - 93)) | (1usize << (AndAnd - 93)))) != 0) || _la==Doublecolon || _la==Identifier {
 				{
 				{
 				/*InvokeRule pointerOperator*/
@@ -19753,7 +19895,8 @@ where
 			recog.noPointerAbstractPackDeclarator_rec(0)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19782,14 +19925,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoPointerAbstractPackDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoPointerAbstractPackDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noPointerAbstractPackDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noPointerAbstractPackDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noPointerAbstractPackDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noPointerAbstractPackDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoPointerAbstractPackDeclaratorContext<'input>{
@@ -19804,7 +19947,7 @@ impl<'input> CustomRuleContext<'input> for NoPointerAbstractPackDeclaratorContex
 	fn get_rule_index(&self) -> usize { RULE_noPointerAbstractPackDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noPointerAbstractPackDeclarator }
 }
-antlr_rust::type_id!{NoPointerAbstractPackDeclaratorContextExt<'a>}
+antlr_rust::tid!{NoPointerAbstractPackDeclaratorContextExt<'a>}
 
 impl<'input> NoPointerAbstractPackDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoPointerAbstractPackDeclaratorContextAll<'input>> {
@@ -19870,8 +20013,8 @@ where
 	    let mut _localctx: Rc<NoPointerAbstractPackDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 256;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -19923,7 +20066,7 @@ where
 							recog.base.set_state(1543);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 75)) & !0x3f) == 0 && ((1usize << (_la - 75)) & ((1usize << (Typeid_ - 75)) | (1usize << (Typename_ - 75)) | (1usize << (Unsigned - 75)) | (1usize << (Void - 75)) | (1usize << (Wchar - 75)) | (1usize << (LeftParen - 75)) | (1usize << (LeftBracket - 75)) | (1usize << (Plus - 75)) | (1usize << (Minus - 75)) | (1usize << (Star - 75)) | (1usize << (And - 75)) | (1usize << (Or - 75)) | (1usize << (Tilde - 75)) | (1usize << (Not - 75)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 								{
 								/*InvokeRule constantExpression*/
 								recog.base.set_state(1542);
@@ -19962,7 +20105,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(198,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -19990,14 +20134,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ParameterDeclarationClauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ParameterDeclarationClauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterDeclarationClause(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_parameterDeclarationClause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterDeclarationClause(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_parameterDeclarationClause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ParameterDeclarationClauseContext<'input>{
@@ -20012,7 +20156,7 @@ impl<'input> CustomRuleContext<'input> for ParameterDeclarationClauseContextExt<
 	fn get_rule_index(&self) -> usize { RULE_parameterDeclarationClause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterDeclarationClause }
 }
-antlr_rust::type_id!{ParameterDeclarationClauseContextExt<'a>}
+antlr_rust::tid!{ParameterDeclarationClauseContextExt<'a>}
 
 impl<'input> ParameterDeclarationClauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterDeclarationClauseContextAll<'input>> {
@@ -20056,8 +20200,8 @@ where
 		let mut _localctx = ParameterDeclarationClauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 258, RULE_parameterDeclarationClause);
         let mut _localctx: Rc<ParameterDeclarationClauseContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20089,7 +20233,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20118,14 +20263,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ParameterDeclarationListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ParameterDeclarationListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterDeclarationList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_parameterDeclarationList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterDeclarationList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_parameterDeclarationList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ParameterDeclarationListContext<'input>{
@@ -20140,7 +20285,7 @@ impl<'input> CustomRuleContext<'input> for ParameterDeclarationListContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_parameterDeclarationList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterDeclarationList }
 }
-antlr_rust::type_id!{ParameterDeclarationListContextExt<'a>}
+antlr_rust::tid!{ParameterDeclarationListContextExt<'a>}
 
 impl<'input> ParameterDeclarationListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterDeclarationListContextAll<'input>> {
@@ -20186,7 +20331,7 @@ where
 		let mut _localctx = ParameterDeclarationListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 260, RULE_parameterDeclarationList);
         let mut _localctx: Rc<ParameterDeclarationListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -20218,7 +20363,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(201,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20247,14 +20393,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ParameterDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ParameterDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_parameterDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_parameterDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ParameterDeclarationContext<'input>{
@@ -20269,7 +20415,7 @@ impl<'input> CustomRuleContext<'input> for ParameterDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_parameterDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterDeclaration }
 }
-antlr_rust::type_id!{ParameterDeclarationContextExt<'a>}
+antlr_rust::tid!{ParameterDeclarationContextExt<'a>}
 
 impl<'input> ParameterDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterDeclarationContextAll<'input>> {
@@ -20320,8 +20466,8 @@ where
 		let mut _localctx = ParameterDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 262, RULE_parameterDeclaration);
         let mut _localctx: Rc<ParameterDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20391,7 +20537,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20420,14 +20567,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for FunctionDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for FunctionDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_functionDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_functionDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for FunctionDefinitionContext<'input>{
@@ -20442,7 +20589,7 @@ impl<'input> CustomRuleContext<'input> for FunctionDefinitionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionDefinition }
 }
-antlr_rust::type_id!{FunctionDefinitionContextExt<'a>}
+antlr_rust::tid!{FunctionDefinitionContextExt<'a>}
 
 impl<'input> FunctionDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionDefinitionContextAll<'input>> {
@@ -20488,8 +20635,8 @@ where
 		let mut _localctx = FunctionDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 264, RULE_functionDefinition);
         let mut _localctx: Rc<FunctionDefinitionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -20541,7 +20688,8 @@ where
 			recog.functionBody()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20570,14 +20718,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for FunctionBodyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for FunctionBodyContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionBody(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_functionBody(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionBody(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_functionBody(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for FunctionBodyContext<'input>{
@@ -20592,7 +20740,7 @@ impl<'input> CustomRuleContext<'input> for FunctionBodyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionBody }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionBody }
 }
-antlr_rust::type_id!{FunctionBodyContextExt<'a>}
+antlr_rust::tid!{FunctionBodyContextExt<'a>}
 
 impl<'input> FunctionBodyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionBodyContextAll<'input>> {
@@ -20652,8 +20800,8 @@ where
 		let mut _localctx = FunctionBodyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 266, RULE_functionBody);
         let mut _localctx: Rc<FunctionBodyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1605);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20721,7 +20869,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20750,14 +20899,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitializerContext<'input>{
@@ -20772,7 +20921,7 @@ impl<'input> CustomRuleContext<'input> for InitializerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initializer }
 }
-antlr_rust::type_id!{InitializerContextExt<'a>}
+antlr_rust::tid!{InitializerContextExt<'a>}
 
 impl<'input> InitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitializerContextAll<'input>> {
@@ -20819,7 +20968,7 @@ where
 		let mut _localctx = InitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 268, RULE_initializer);
         let mut _localctx: Rc<InitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1612);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20856,7 +21005,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -20885,14 +21035,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BraceOrEqualInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BraceOrEqualInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_braceOrEqualInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_braceOrEqualInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_braceOrEqualInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_braceOrEqualInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BraceOrEqualInitializerContext<'input>{
@@ -20907,7 +21057,7 @@ impl<'input> CustomRuleContext<'input> for BraceOrEqualInitializerContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_braceOrEqualInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_braceOrEqualInitializer }
 }
-antlr_rust::type_id!{BraceOrEqualInitializerContextExt<'a>}
+antlr_rust::tid!{BraceOrEqualInitializerContextExt<'a>}
 
 impl<'input> BraceOrEqualInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BraceOrEqualInitializerContextAll<'input>> {
@@ -20949,7 +21099,7 @@ where
 		let mut _localctx = BraceOrEqualInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 270, RULE_braceOrEqualInitializer);
         let mut _localctx: Rc<BraceOrEqualInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1617);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -20983,7 +21133,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21012,14 +21163,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitializerClauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitializerClauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initializerClause(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initializerClause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initializerClause(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initializerClause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitializerClauseContext<'input>{
@@ -21034,7 +21185,7 @@ impl<'input> CustomRuleContext<'input> for InitializerClauseContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initializerClause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initializerClause }
 }
-antlr_rust::type_id!{InitializerClauseContextExt<'a>}
+antlr_rust::tid!{InitializerClauseContextExt<'a>}
 
 impl<'input> InitializerClauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitializerClauseContextAll<'input>> {
@@ -21071,7 +21222,7 @@ where
 		let mut _localctx = InitializerClauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 272, RULE_initializerClause);
         let mut _localctx: Rc<InitializerClauseContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1621);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21108,7 +21259,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21137,14 +21289,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for InitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for InitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_initializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_initializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for InitializerListContext<'input>{
@@ -21159,7 +21311,7 @@ impl<'input> CustomRuleContext<'input> for InitializerListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initializerList }
 }
-antlr_rust::type_id!{InitializerListContextExt<'a>}
+antlr_rust::tid!{InitializerListContextExt<'a>}
 
 impl<'input> InitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitializerListContextAll<'input>> {
@@ -21214,8 +21366,8 @@ where
 		let mut _localctx = InitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 274, RULE_initializerList);
         let mut _localctx: Rc<InitializerListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -21269,7 +21421,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(216,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21298,14 +21451,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BracedInitListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BracedInitListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_bracedInitList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_bracedInitList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_bracedInitList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_bracedInitList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BracedInitListContext<'input>{
@@ -21320,7 +21473,7 @@ impl<'input> CustomRuleContext<'input> for BracedInitListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_bracedInitList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_bracedInitList }
 }
-antlr_rust::type_id!{BracedInitListContextExt<'a>}
+antlr_rust::tid!{BracedInitListContextExt<'a>}
 
 impl<'input> BracedInitListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BracedInitListContextAll<'input>> {
@@ -21369,8 +21522,8 @@ where
 		let mut _localctx = BracedInitListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 276, RULE_bracedInitList);
         let mut _localctx: Rc<BracedInitListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21381,7 +21534,7 @@ where
 			recog.base.set_state(1642);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (LeftBrace - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 				{
 				/*InvokeRule initializerList*/
 				recog.base.set_state(1638);
@@ -21405,7 +21558,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21434,14 +21588,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_className(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_className(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_className(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_className(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassNameContext<'input>{
@@ -21456,7 +21610,7 @@ impl<'input> CustomRuleContext<'input> for ClassNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_className }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_className }
 }
-antlr_rust::type_id!{ClassNameContextExt<'a>}
+antlr_rust::tid!{ClassNameContextExt<'a>}
 
 impl<'input> ClassNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassNameContextAll<'input>> {
@@ -21495,7 +21649,7 @@ where
 		let mut _localctx = ClassNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 278, RULE_className);
         let mut _localctx: Rc<ClassNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1648);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21523,7 +21677,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21552,14 +21707,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassSpecifierContext<'input>{
@@ -21574,7 +21729,7 @@ impl<'input> CustomRuleContext<'input> for ClassSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classSpecifier }
 }
-antlr_rust::type_id!{ClassSpecifierContextExt<'a>}
+antlr_rust::tid!{ClassSpecifierContextExt<'a>}
 
 impl<'input> ClassSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassSpecifierContextAll<'input>> {
@@ -21621,8 +21776,8 @@ where
 		let mut _localctx = ClassSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 280, RULE_classSpecifier);
         let mut _localctx: Rc<ClassSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21637,7 +21792,7 @@ where
 			recog.base.set_state(1653);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Operator - 10)) | (1usize << (Private - 10)) | (1usize << (Protected - 10)) | (1usize << (Public - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Colon - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0) {
+			if ((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Operator - 44)) | (1usize << (Private - 44)) | (1usize << (Protected - 44)) | (1usize << (Public - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Colon - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 				{
 				/*InvokeRule memberSpecification*/
 				recog.base.set_state(1652);
@@ -21650,7 +21805,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21679,14 +21835,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassHeadContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassHeadContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classHead(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classHead(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classHead(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classHead(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassHeadContext<'input>{
@@ -21701,7 +21857,7 @@ impl<'input> CustomRuleContext<'input> for ClassHeadContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classHead }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classHead }
 }
-antlr_rust::type_id!{ClassHeadContextExt<'a>}
+antlr_rust::tid!{ClassHeadContextExt<'a>}
 
 impl<'input> ClassHeadContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassHeadContextAll<'input>> {
@@ -21752,8 +21908,8 @@ where
 		let mut _localctx = ClassHeadContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 282, RULE_classHead);
         let mut _localctx: Rc<ClassHeadContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1680);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -21867,7 +22023,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -21896,14 +22053,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassHeadNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassHeadNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classHeadName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classHeadName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classHeadName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classHeadName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassHeadNameContext<'input>{
@@ -21918,7 +22075,7 @@ impl<'input> CustomRuleContext<'input> for ClassHeadNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classHeadName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classHeadName }
 }
-antlr_rust::type_id!{ClassHeadNameContextExt<'a>}
+antlr_rust::tid!{ClassHeadNameContextExt<'a>}
 
 impl<'input> ClassHeadNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassHeadNameContextAll<'input>> {
@@ -21955,7 +22112,7 @@ where
 		let mut _localctx = ClassHeadNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 284, RULE_classHeadName);
         let mut _localctx: Rc<ClassHeadNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -21979,7 +22136,8 @@ where
 			recog.className()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22008,14 +22166,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassVirtSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassVirtSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classVirtSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classVirtSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classVirtSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classVirtSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassVirtSpecifierContext<'input>{
@@ -22030,7 +22188,7 @@ impl<'input> CustomRuleContext<'input> for ClassVirtSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classVirtSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classVirtSpecifier }
 }
-antlr_rust::type_id!{ClassVirtSpecifierContextExt<'a>}
+antlr_rust::tid!{ClassVirtSpecifierContextExt<'a>}
 
 impl<'input> ClassVirtSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassVirtSpecifierContextAll<'input>> {
@@ -22066,7 +22224,7 @@ where
 		let mut _localctx = ClassVirtSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 286, RULE_classVirtSpecifier);
         let mut _localctx: Rc<ClassVirtSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22075,7 +22233,8 @@ where
 			recog.base.match_token(Final,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22104,14 +22263,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassKeyContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassKeyContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classKey(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classKey(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classKey(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classKey(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassKeyContext<'input>{
@@ -22126,7 +22285,7 @@ impl<'input> CustomRuleContext<'input> for ClassKeyContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classKey }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classKey }
 }
-antlr_rust::type_id!{ClassKeyContextExt<'a>}
+antlr_rust::tid!{ClassKeyContextExt<'a>}
 
 impl<'input> ClassKeyContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassKeyContextAll<'input>> {
@@ -22167,8 +22326,8 @@ where
 		let mut _localctx = ClassKeyContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 288, RULE_classKey);
         let mut _localctx: Rc<ClassKeyContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22185,7 +22344,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22214,14 +22374,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemberSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemberSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memberSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memberSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memberSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memberSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemberSpecificationContext<'input>{
@@ -22236,7 +22396,7 @@ impl<'input> CustomRuleContext<'input> for MemberSpecificationContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_memberSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memberSpecification }
 }
-antlr_rust::type_id!{MemberSpecificationContextExt<'a>}
+antlr_rust::tid!{MemberSpecificationContextExt<'a>}
 
 impl<'input> MemberSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemberSpecificationContextAll<'input>> {
@@ -22288,8 +22448,8 @@ where
 		let mut _localctx = MemberSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 290, RULE_memberSpecification);
         let mut _localctx: Rc<MemberSpecificationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22337,10 +22497,11 @@ where
 				recog.base.set_state(1697); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !(((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)) | (1usize << (Inline - 10)) | (1usize << (Int - 10)) | (1usize << (Long - 10)) | (1usize << (Mutable - 10)) | (1usize << (Operator - 10)) | (1usize << (Private - 10)) | (1usize << (Protected - 10)) | (1usize << (Public - 10)) | (1usize << (Register - 10)) | (1usize << (Short - 10)) | (1usize << (Signed - 10)) | (1usize << (Static - 10)) | (1usize << (Static_assert - 10)) | (1usize << (Struct - 10)) | (1usize << (Template - 10)) | (1usize << (Thread_local - 10)))) != 0) || ((((_la - 74)) & !0x3f) == 0 && ((1usize << (_la - 74)) & ((1usize << (Typedef - 74)) | (1usize << (Typename_ - 74)) | (1usize << (Union - 74)) | (1usize << (Unsigned - 74)) | (1usize << (Using - 74)) | (1usize << (Virtual - 74)) | (1usize << (Void - 74)) | (1usize << (Volatile - 74)) | (1usize << (Wchar - 74)) | (1usize << (LeftParen - 74)) | (1usize << (LeftBracket - 74)) | (1usize << (Star - 74)) | (1usize << (And - 74)) | (1usize << (Tilde - 74)) | (1usize << (AndAnd - 74)) | (1usize << (Colon - 74)) | (1usize << (Doublecolon - 74)) | (1usize << (Semi - 74)) | (1usize << (Ellipsis - 74)) | (1usize << (Identifier - 74)))) != 0)) {break}
+				if !(((((_la - 10)) & !0x3f) == 0 && ((1usize << (_la - 10)) & ((1usize << (Alignas - 10)) | (1usize << (Auto - 10)) | (1usize << (Bool - 10)) | (1usize << (Char - 10)) | (1usize << (Char16 - 10)) | (1usize << (Char32 - 10)) | (1usize << (Class - 10)) | (1usize << (Const - 10)) | (1usize << (Constexpr - 10)) | (1usize << (Decltype - 10)) | (1usize << (Double - 10)) | (1usize << (Enum - 10)) | (1usize << (Explicit - 10)) | (1usize << (Extern - 10)) | (1usize << (Float - 10)) | (1usize << (Friend - 10)))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Inline - 44)) | (1usize << (Int - 44)) | (1usize << (Long - 44)) | (1usize << (Mutable - 44)) | (1usize << (Operator - 44)) | (1usize << (Private - 44)) | (1usize << (Protected - 44)) | (1usize << (Public - 44)) | (1usize << (Register - 44)) | (1usize << (Short - 44)) | (1usize << (Signed - 44)) | (1usize << (Static - 44)) | (1usize << (Static_assert - 44)) | (1usize << (Struct - 44)) | (1usize << (Template - 44)) | (1usize << (Thread_local - 44)) | (1usize << (Typedef - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Typename_ - 76)) | (1usize << (Union - 76)) | (1usize << (Unsigned - 76)) | (1usize << (Using - 76)) | (1usize << (Virtual - 76)) | (1usize << (Void - 76)) | (1usize << (Volatile - 76)) | (1usize << (Wchar - 76)) | (1usize << (LeftParen - 76)) | (1usize << (LeftBracket - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Colon - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Semi - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22369,14 +22530,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemberdeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemberdeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memberdeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memberdeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memberdeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memberdeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemberdeclarationContext<'input>{
@@ -22391,7 +22552,7 @@ impl<'input> CustomRuleContext<'input> for MemberdeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_memberdeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memberdeclaration }
 }
-antlr_rust::type_id!{MemberdeclarationContextExt<'a>}
+antlr_rust::tid!{MemberdeclarationContextExt<'a>}
 
 impl<'input> MemberdeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemberdeclarationContextAll<'input>> {
@@ -22454,8 +22615,8 @@ where
 		let mut _localctx = MemberdeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 292, RULE_memberdeclaration);
         let mut _localctx: Rc<MemberdeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1715);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -22495,7 +22656,7 @@ where
 					recog.base.set_state(1706);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Alignas) | (1usize << Decltype) | (1usize << Operator))) != 0) || ((((_la - 85)) & !0x3f) == 0 && ((1usize << (_la - 85)) & ((1usize << (LeftParen - 85)) | (1usize << (LeftBracket - 85)) | (1usize << (Star - 85)) | (1usize << (And - 85)) | (1usize << (Tilde - 85)) | (1usize << (AndAnd - 85)) | (1usize << (Colon - 85)) | (1usize << (Doublecolon - 85)) | (1usize << (Ellipsis - 85)) | (1usize << (Identifier - 85)))) != 0) {
+					if _la==Alignas || _la==Decltype || _la==Operator || ((((_la - 85)) & !0x3f) == 0 && ((1usize << (_la - 85)) & ((1usize << (LeftParen - 85)) | (1usize << (LeftBracket - 85)) | (1usize << (Star - 85)) | (1usize << (And - 85)) | (1usize << (Tilde - 85)))) != 0) || ((((_la - 118)) & !0x3f) == 0 && ((1usize << (_la - 118)) & ((1usize << (AndAnd - 118)) | (1usize << (Colon - 118)) | (1usize << (Doublecolon - 118)) | (1usize << (Ellipsis - 118)) | (1usize << (Identifier - 118)))) != 0) {
 						{
 						/*InvokeRule memberDeclaratorList*/
 						recog.base.set_state(1705);
@@ -22578,7 +22739,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22607,14 +22769,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemberDeclaratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemberDeclaratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memberDeclaratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memberDeclaratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memberDeclaratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memberDeclaratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemberDeclaratorListContext<'input>{
@@ -22629,7 +22791,7 @@ impl<'input> CustomRuleContext<'input> for MemberDeclaratorListContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_memberDeclaratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memberDeclaratorList }
 }
-antlr_rust::type_id!{MemberDeclaratorListContextExt<'a>}
+antlr_rust::tid!{MemberDeclaratorListContextExt<'a>}
 
 impl<'input> MemberDeclaratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemberDeclaratorListContextAll<'input>> {
@@ -22675,8 +22837,8 @@ where
 		let mut _localctx = MemberDeclaratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 294, RULE_memberDeclaratorList);
         let mut _localctx: Rc<MemberDeclaratorListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -22705,7 +22867,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22734,14 +22897,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemberDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemberDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memberDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memberDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memberDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memberDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemberDeclaratorContext<'input>{
@@ -22756,7 +22919,7 @@ impl<'input> CustomRuleContext<'input> for MemberDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_memberDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memberDeclarator }
 }
-antlr_rust::type_id!{MemberDeclaratorContextExt<'a>}
+antlr_rust::tid!{MemberDeclaratorContextExt<'a>}
 
 impl<'input> MemberDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemberDeclaratorContextAll<'input>> {
@@ -22815,8 +22978,8 @@ where
 		let mut _localctx = MemberDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 296, RULE_memberDeclarator);
         let mut _localctx: Rc<MemberDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1745);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -22844,8 +23007,8 @@ where
 						2 =>{
 							{
 							recog.base.set_state(1727);
-							if !({ this.IsPureSpecifierAllowed() }) {
-								Err(FailedPredicateError::new(&mut recog.base, Some(" this.IsPureSpecifierAllowed() ".to_owned()), None))?;
+							if !({recog.IsPureSpecifierAllowed(_localctx.deref()) }) {
+								Err(FailedPredicateError::new(&mut recog.base, Some("recog.IsPureSpecifierAllowed() ".to_owned()), None))?;
 							}
 							/*InvokeRule pureSpecifier*/
 							recog.base.set_state(1728);
@@ -22857,8 +23020,8 @@ where
 						3 =>{
 							{
 							recog.base.set_state(1729);
-							if !({ this.IsPureSpecifierAllowed() }) {
-								Err(FailedPredicateError::new(&mut recog.base, Some(" this.IsPureSpecifierAllowed() ".to_owned()), None))?;
+							if !({recog.IsPureSpecifierAllowed(_localctx.deref()) }) {
+								Err(FailedPredicateError::new(&mut recog.base, Some("recog.IsPureSpecifierAllowed() ".to_owned()), None))?;
 							}
 							/*InvokeRule virtualSpecifierSeq*/
 							recog.base.set_state(1730);
@@ -22935,7 +23098,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -22964,14 +23128,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for VirtualSpecifierSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for VirtualSpecifierSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_virtualSpecifierSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_virtualSpecifierSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_virtualSpecifierSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_virtualSpecifierSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for VirtualSpecifierSeqContext<'input>{
@@ -22986,7 +23150,7 @@ impl<'input> CustomRuleContext<'input> for VirtualSpecifierSeqContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_virtualSpecifierSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_virtualSpecifierSeq }
 }
-antlr_rust::type_id!{VirtualSpecifierSeqContextExt<'a>}
+antlr_rust::tid!{VirtualSpecifierSeqContextExt<'a>}
 
 impl<'input> VirtualSpecifierSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VirtualSpecifierSeqContextAll<'input>> {
@@ -23023,8 +23187,8 @@ where
 		let mut _localctx = VirtualSpecifierSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 298, RULE_virtualSpecifierSeq);
         let mut _localctx: Rc<VirtualSpecifierSeqContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23047,7 +23211,8 @@ where
 				if !(_la==Final || _la==Override) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23076,14 +23241,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for VirtualSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for VirtualSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_virtualSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_virtualSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_virtualSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_virtualSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for VirtualSpecifierContext<'input>{
@@ -23098,7 +23263,7 @@ impl<'input> CustomRuleContext<'input> for VirtualSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_virtualSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_virtualSpecifier }
 }
-antlr_rust::type_id!{VirtualSpecifierContextExt<'a>}
+antlr_rust::tid!{VirtualSpecifierContextExt<'a>}
 
 impl<'input> VirtualSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VirtualSpecifierContextAll<'input>> {
@@ -23139,8 +23304,8 @@ where
 		let mut _localctx = VirtualSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 300, RULE_virtualSpecifier);
         let mut _localctx: Rc<VirtualSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23157,7 +23322,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23186,14 +23352,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for PureSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for PureSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pureSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_pureSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pureSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_pureSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for PureSpecifierContext<'input>{
@@ -23208,7 +23374,7 @@ impl<'input> CustomRuleContext<'input> for PureSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pureSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pureSpecifier }
 }
-antlr_rust::type_id!{PureSpecifierContextExt<'a>}
+antlr_rust::tid!{PureSpecifierContextExt<'a>}
 
 impl<'input> PureSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PureSpecifierContextAll<'input>> {
@@ -23249,7 +23415,7 @@ where
 		let mut _localctx = PureSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 302, RULE_pureSpecifier);
         let mut _localctx: Rc<PureSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23261,7 +23427,8 @@ where
 			recog.base.match_token(IntegerLiteral,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23290,14 +23457,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BaseClauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BaseClauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_baseClause(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_baseClause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_baseClause(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_baseClause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BaseClauseContext<'input>{
@@ -23312,7 +23479,7 @@ impl<'input> CustomRuleContext<'input> for BaseClauseContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_baseClause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_baseClause }
 }
-antlr_rust::type_id!{BaseClauseContextExt<'a>}
+antlr_rust::tid!{BaseClauseContextExt<'a>}
 
 impl<'input> BaseClauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BaseClauseContextAll<'input>> {
@@ -23351,7 +23518,7 @@ where
 		let mut _localctx = BaseClauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 304, RULE_baseClause);
         let mut _localctx: Rc<BaseClauseContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23364,7 +23531,8 @@ where
 			recog.baseSpecifierList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23393,14 +23561,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BaseSpecifierListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BaseSpecifierListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_baseSpecifierList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_baseSpecifierList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_baseSpecifierList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_baseSpecifierList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BaseSpecifierListContext<'input>{
@@ -23415,7 +23583,7 @@ impl<'input> CustomRuleContext<'input> for BaseSpecifierListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_baseSpecifierList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_baseSpecifierList }
 }
-antlr_rust::type_id!{BaseSpecifierListContextExt<'a>}
+antlr_rust::tid!{BaseSpecifierListContextExt<'a>}
 
 impl<'input> BaseSpecifierListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BaseSpecifierListContextAll<'input>> {
@@ -23470,8 +23638,8 @@ where
 		let mut _localctx = BaseSpecifierListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 306, RULE_baseSpecifierList);
         let mut _localctx: Rc<BaseSpecifierListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23522,7 +23690,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23551,14 +23720,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BaseSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BaseSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_baseSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_baseSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_baseSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_baseSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BaseSpecifierContext<'input>{
@@ -23573,7 +23742,7 @@ impl<'input> CustomRuleContext<'input> for BaseSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_baseSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_baseSpecifier }
 }
-antlr_rust::type_id!{BaseSpecifierContextExt<'a>}
+antlr_rust::tid!{BaseSpecifierContextExt<'a>}
 
 impl<'input> BaseSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BaseSpecifierContextAll<'input>> {
@@ -23618,8 +23787,8 @@ where
 		let mut _localctx = BaseSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 308, RULE_baseSpecifier);
         let mut _localctx: Rc<BaseSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23658,7 +23827,7 @@ where
 					recog.base.set_state(1780);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Private) | (1usize << Protected) | (1usize << Public))) != 0) {
+					if ((((_la - 54)) & !0x3f) == 0 && ((1usize << (_la - 54)) & ((1usize << (Private - 54)) | (1usize << (Protected - 54)) | (1usize << (Public - 54)))) != 0) {
 						{
 						/*InvokeRule accessSpecifier*/
 						recog.base.set_state(1779);
@@ -23702,7 +23871,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23731,14 +23901,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ClassOrDeclTypeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ClassOrDeclTypeContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classOrDeclType(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_classOrDeclType(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classOrDeclType(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_classOrDeclType(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ClassOrDeclTypeContext<'input>{
@@ -23753,7 +23923,7 @@ impl<'input> CustomRuleContext<'input> for ClassOrDeclTypeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classOrDeclType }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classOrDeclType }
 }
-antlr_rust::type_id!{ClassOrDeclTypeContextExt<'a>}
+antlr_rust::tid!{ClassOrDeclTypeContextExt<'a>}
 
 impl<'input> ClassOrDeclTypeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassOrDeclTypeContextAll<'input>> {
@@ -23793,7 +23963,7 @@ where
 		let mut _localctx = ClassOrDeclTypeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 310, RULE_classOrDeclType);
         let mut _localctx: Rc<ClassOrDeclTypeContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1796);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -23836,7 +24006,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23865,14 +24036,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for BaseTypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for BaseTypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_baseTypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_baseTypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_baseTypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_baseTypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for BaseTypeSpecifierContext<'input>{
@@ -23887,7 +24058,7 @@ impl<'input> CustomRuleContext<'input> for BaseTypeSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_baseTypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_baseTypeSpecifier }
 }
-antlr_rust::type_id!{BaseTypeSpecifierContextExt<'a>}
+antlr_rust::tid!{BaseTypeSpecifierContextExt<'a>}
 
 impl<'input> BaseTypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BaseTypeSpecifierContextAll<'input>> {
@@ -23921,7 +24092,7 @@ where
 		let mut _localctx = BaseTypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 312, RULE_baseTypeSpecifier);
         let mut _localctx: Rc<BaseTypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -23931,7 +24102,8 @@ where
 			recog.classOrDeclType()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -23960,14 +24132,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for AccessSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for AccessSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_accessSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_accessSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_accessSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_accessSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for AccessSpecifierContext<'input>{
@@ -23982,7 +24154,7 @@ impl<'input> CustomRuleContext<'input> for AccessSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_accessSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_accessSpecifier }
 }
-antlr_rust::type_id!{AccessSpecifierContextExt<'a>}
+antlr_rust::tid!{AccessSpecifierContextExt<'a>}
 
 impl<'input> AccessSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AccessSpecifierContextAll<'input>> {
@@ -24028,15 +24200,15 @@ where
 		let mut _localctx = AccessSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 314, RULE_accessSpecifier);
         let mut _localctx: Rc<AccessSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(1800);
 			_la = recog.base.input.la(1);
-			if { !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Private) | (1usize << Protected) | (1usize << Public))) != 0)) } {
+			if { !(((((_la - 54)) & !0x3f) == 0 && ((1usize << (_la - 54)) & ((1usize << (Private - 54)) | (1usize << (Protected - 54)) | (1usize << (Public - 54)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -24046,7 +24218,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24075,14 +24248,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConversionFunctionIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConversionFunctionIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conversionFunctionId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_conversionFunctionId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conversionFunctionId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_conversionFunctionId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConversionFunctionIdContext<'input>{
@@ -24097,7 +24270,7 @@ impl<'input> CustomRuleContext<'input> for ConversionFunctionIdContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_conversionFunctionId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conversionFunctionId }
 }
-antlr_rust::type_id!{ConversionFunctionIdContextExt<'a>}
+antlr_rust::tid!{ConversionFunctionIdContextExt<'a>}
 
 impl<'input> ConversionFunctionIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConversionFunctionIdContextAll<'input>> {
@@ -24136,7 +24309,7 @@ where
 		let mut _localctx = ConversionFunctionIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 316, RULE_conversionFunctionId);
         let mut _localctx: Rc<ConversionFunctionIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24149,7 +24322,8 @@ where
 			recog.conversionTypeId()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24178,14 +24352,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConversionTypeIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConversionTypeIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conversionTypeId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_conversionTypeId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conversionTypeId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_conversionTypeId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConversionTypeIdContext<'input>{
@@ -24200,7 +24374,7 @@ impl<'input> CustomRuleContext<'input> for ConversionTypeIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_conversionTypeId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conversionTypeId }
 }
-antlr_rust::type_id!{ConversionTypeIdContextExt<'a>}
+antlr_rust::tid!{ConversionTypeIdContextExt<'a>}
 
 impl<'input> ConversionTypeIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConversionTypeIdContextAll<'input>> {
@@ -24237,7 +24411,7 @@ where
 		let mut _localctx = ConversionTypeIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 318, RULE_conversionTypeId);
         let mut _localctx: Rc<ConversionTypeIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24261,7 +24435,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24290,14 +24465,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConversionDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConversionDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conversionDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_conversionDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conversionDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_conversionDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConversionDeclaratorContext<'input>{
@@ -24312,7 +24487,7 @@ impl<'input> CustomRuleContext<'input> for ConversionDeclaratorContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_conversionDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conversionDeclarator }
 }
-antlr_rust::type_id!{ConversionDeclaratorContextExt<'a>}
+antlr_rust::tid!{ConversionDeclaratorContextExt<'a>}
 
 impl<'input> ConversionDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConversionDeclaratorContextAll<'input>> {
@@ -24349,7 +24524,7 @@ where
 		let mut _localctx = ConversionDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 320, RULE_conversionDeclarator);
         let mut _localctx: Rc<ConversionDeclaratorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24373,7 +24548,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24402,14 +24578,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ConstructorInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ConstructorInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constructorInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_constructorInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constructorInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_constructorInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ConstructorInitializerContext<'input>{
@@ -24424,7 +24600,7 @@ impl<'input> CustomRuleContext<'input> for ConstructorInitializerContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_constructorInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constructorInitializer }
 }
-antlr_rust::type_id!{ConstructorInitializerContextExt<'a>}
+antlr_rust::tid!{ConstructorInitializerContextExt<'a>}
 
 impl<'input> ConstructorInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstructorInitializerContextAll<'input>> {
@@ -24463,7 +24639,7 @@ where
 		let mut _localctx = ConstructorInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 322, RULE_constructorInitializer);
         let mut _localctx: Rc<ConstructorInitializerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24476,7 +24652,8 @@ where
 			recog.memInitializerList()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24505,14 +24682,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemInitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemInitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memInitializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memInitializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memInitializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memInitializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemInitializerListContext<'input>{
@@ -24527,7 +24704,7 @@ impl<'input> CustomRuleContext<'input> for MemInitializerListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_memInitializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memInitializerList }
 }
-antlr_rust::type_id!{MemInitializerListContextExt<'a>}
+antlr_rust::tid!{MemInitializerListContextExt<'a>}
 
 impl<'input> MemInitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemInitializerListContextAll<'input>> {
@@ -24582,8 +24759,8 @@ where
 		let mut _localctx = MemInitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 324, RULE_memInitializerList);
         let mut _localctx: Rc<MemInitializerListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24634,7 +24811,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24663,14 +24841,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MemInitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MemInitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_memInitializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_memInitializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_memInitializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_memInitializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MemInitializerContext<'input>{
@@ -24685,7 +24863,7 @@ impl<'input> CustomRuleContext<'input> for MemInitializerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_memInitializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_memInitializer }
 }
-antlr_rust::type_id!{MemInitializerContextExt<'a>}
+antlr_rust::tid!{MemInitializerContextExt<'a>}
 
 impl<'input> MemInitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MemInitializerContextAll<'input>> {
@@ -24735,8 +24913,8 @@ where
 		let mut _localctx = MemInitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 326, RULE_memInitializer);
         let mut _localctx: Rc<MemInitializerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -24757,7 +24935,7 @@ where
 					recog.base.set_state(1833);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (LeftBrace - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (LeftBrace - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 						{
 						/*InvokeRule expressionList*/
 						recog.base.set_state(1832);
@@ -24785,7 +24963,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24814,14 +24993,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for MeminitializeridContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for MeminitializeridContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_meminitializerid(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_meminitializerid(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_meminitializerid(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_meminitializerid(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for MeminitializeridContext<'input>{
@@ -24836,7 +25015,7 @@ impl<'input> CustomRuleContext<'input> for MeminitializeridContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_meminitializerid }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_meminitializerid }
 }
-antlr_rust::type_id!{MeminitializeridContextExt<'a>}
+antlr_rust::tid!{MeminitializeridContextExt<'a>}
 
 impl<'input> MeminitializeridContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MeminitializeridContextAll<'input>> {
@@ -24875,7 +25054,7 @@ where
 		let mut _localctx = MeminitializeridContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 328, RULE_meminitializerid);
         let mut _localctx: Rc<MeminitializeridContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1841);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -24903,7 +25082,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -24932,14 +25112,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for OperatorFunctionIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for OperatorFunctionIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_operatorFunctionId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_operatorFunctionId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_operatorFunctionId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_operatorFunctionId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for OperatorFunctionIdContext<'input>{
@@ -24954,7 +25134,7 @@ impl<'input> CustomRuleContext<'input> for OperatorFunctionIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_operatorFunctionId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_operatorFunctionId }
 }
-antlr_rust::type_id!{OperatorFunctionIdContextExt<'a>}
+antlr_rust::tid!{OperatorFunctionIdContextExt<'a>}
 
 impl<'input> OperatorFunctionIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<OperatorFunctionIdContextAll<'input>> {
@@ -24993,7 +25173,7 @@ where
 		let mut _localctx = OperatorFunctionIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 330, RULE_operatorFunctionId);
         let mut _localctx: Rc<OperatorFunctionIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25006,7 +25186,8 @@ where
 			recog.theOperator()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25035,14 +25216,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LiteralOperatorIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LiteralOperatorIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_literalOperatorId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_literalOperatorId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_literalOperatorId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_literalOperatorId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LiteralOperatorIdContext<'input>{
@@ -25057,7 +25238,7 @@ impl<'input> CustomRuleContext<'input> for LiteralOperatorIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literalOperatorId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literalOperatorId }
 }
-antlr_rust::type_id!{LiteralOperatorIdContextExt<'a>}
+antlr_rust::tid!{LiteralOperatorIdContextExt<'a>}
 
 impl<'input> LiteralOperatorIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LiteralOperatorIdContextAll<'input>> {
@@ -25108,7 +25289,7 @@ where
 		let mut _localctx = LiteralOperatorIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 332, RULE_literalOperatorId);
         let mut _localctx: Rc<LiteralOperatorIdContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25143,7 +25324,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25172,14 +25354,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateDeclarationContext<'input>{
@@ -25194,7 +25376,7 @@ impl<'input> CustomRuleContext<'input> for TemplateDeclarationContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_templateDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateDeclaration }
 }
-antlr_rust::type_id!{TemplateDeclarationContextExt<'a>}
+antlr_rust::tid!{TemplateDeclarationContextExt<'a>}
 
 impl<'input> TemplateDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateDeclarationContextAll<'input>> {
@@ -25246,7 +25428,7 @@ where
 		let mut _localctx = TemplateDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 334, RULE_templateDeclaration);
         let mut _localctx: Rc<TemplateDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25269,7 +25451,8 @@ where
 			recog.declaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25298,14 +25481,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateparameterListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateparameterListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateparameterList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateparameterList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateparameterList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateparameterList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateparameterListContext<'input>{
@@ -25320,7 +25503,7 @@ impl<'input> CustomRuleContext<'input> for TemplateparameterListContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_templateparameterList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateparameterList }
 }
-antlr_rust::type_id!{TemplateparameterListContextExt<'a>}
+antlr_rust::tid!{TemplateparameterListContextExt<'a>}
 
 impl<'input> TemplateparameterListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateparameterListContextAll<'input>> {
@@ -25366,8 +25549,8 @@ where
 		let mut _localctx = TemplateparameterListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 336, RULE_templateparameterList);
         let mut _localctx: Rc<TemplateparameterListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25396,7 +25579,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25425,14 +25609,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateParameterContext<'input>{
@@ -25447,7 +25631,7 @@ impl<'input> CustomRuleContext<'input> for TemplateParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_templateParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateParameter }
 }
-antlr_rust::type_id!{TemplateParameterContextExt<'a>}
+antlr_rust::tid!{TemplateParameterContextExt<'a>}
 
 impl<'input> TemplateParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateParameterContextAll<'input>> {
@@ -25484,7 +25668,7 @@ where
 		let mut _localctx = TemplateParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 338, RULE_templateParameter);
         let mut _localctx: Rc<TemplateParameterContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1868);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -25513,7 +25697,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25542,14 +25727,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeParameterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeParameterContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeParameter(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeParameter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeParameter(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeParameter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeParameterContext<'input>{
@@ -25564,7 +25749,7 @@ impl<'input> CustomRuleContext<'input> for TypeParameterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeParameter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeParameter }
 }
-antlr_rust::type_id!{TypeParameterContextExt<'a>}
+antlr_rust::tid!{TypeParameterContextExt<'a>}
 
 impl<'input> TypeParameterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeParameterContextAll<'input>> {
@@ -25641,8 +25826,8 @@ where
 		let mut _localctx = TypeParameterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 340, RULE_typeParameter);
         let mut _localctx: Rc<TypeParameterContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25747,7 +25932,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25776,14 +25962,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for SimpleTemplateIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for SimpleTemplateIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simpleTemplateId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_simpleTemplateId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simpleTemplateId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_simpleTemplateId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for SimpleTemplateIdContext<'input>{
@@ -25798,7 +25984,7 @@ impl<'input> CustomRuleContext<'input> for SimpleTemplateIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simpleTemplateId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simpleTemplateId }
 }
-antlr_rust::type_id!{SimpleTemplateIdContextExt<'a>}
+antlr_rust::tid!{SimpleTemplateIdContextExt<'a>}
 
 impl<'input> SimpleTemplateIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SimpleTemplateIdContextAll<'input>> {
@@ -25845,8 +26031,8 @@ where
 		let mut _localctx = SimpleTemplateIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 342, RULE_simpleTemplateId);
         let mut _localctx: Rc<SimpleTemplateIdContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -25861,7 +26047,7 @@ where
 			recog.base.set_state(1897);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Enum) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Float - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (New - 33)) | (1usize << (Noexcept - 33)) | (1usize << (Operator - 33)) | (1usize << (Reinterpret_cast - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Sizeof - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)))) != 0) || ((((_la - 97)) & !0x3f) == 0 && ((1usize << (_la - 97)) & ((1usize << (And - 97)) | (1usize << (Or - 97)) | (1usize << (Tilde - 97)) | (1usize << (Not - 97)) | (1usize << (PlusPlus - 97)) | (1usize << (MinusMinus - 97)) | (1usize << (Doublecolon - 97)))) != 0) || _la==Identifier {
 				{
 				/*InvokeRule templateArgumentList*/
 				recog.base.set_state(1896);
@@ -25874,7 +26060,8 @@ where
 			recog.base.match_token(Greater,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -25903,14 +26090,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateIdContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateIdContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateId(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateId(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateId(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateId(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateIdContext<'input>{
@@ -25925,7 +26112,7 @@ impl<'input> CustomRuleContext<'input> for TemplateIdContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_templateId }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateId }
 }
-antlr_rust::type_id!{TemplateIdContextExt<'a>}
+antlr_rust::tid!{TemplateIdContextExt<'a>}
 
 impl<'input> TemplateIdContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateIdContextAll<'input>> {
@@ -25978,8 +26165,8 @@ where
 		let mut _localctx = TemplateIdContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 344, RULE_templateId);
         let mut _localctx: Rc<TemplateIdContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1912);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -26030,7 +26217,7 @@ where
 					recog.base.set_state(1908);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Enum) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Float - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (New - 33)) | (1usize << (Noexcept - 33)) | (1usize << (Operator - 33)) | (1usize << (Reinterpret_cast - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)) | (1usize << (Sizeof - 33)))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (Struct - 65)) | (1usize << (This - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Union - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Volatile - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)))) != 0) || ((((_la - 97)) & !0x3f) == 0 && ((1usize << (_la - 97)) & ((1usize << (And - 97)) | (1usize << (Or - 97)) | (1usize << (Tilde - 97)) | (1usize << (Not - 97)) | (1usize << (PlusPlus - 97)) | (1usize << (MinusMinus - 97)) | (1usize << (Doublecolon - 97)))) != 0) || _la==Identifier {
 						{
 						/*InvokeRule templateArgumentList*/
 						recog.base.set_state(1907);
@@ -26047,7 +26234,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26076,14 +26264,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateNameContext<'input>{
@@ -26098,7 +26286,7 @@ impl<'input> CustomRuleContext<'input> for TemplateNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_templateName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateName }
 }
-antlr_rust::type_id!{TemplateNameContextExt<'a>}
+antlr_rust::tid!{TemplateNameContextExt<'a>}
 
 impl<'input> TemplateNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateNameContextAll<'input>> {
@@ -26134,7 +26322,7 @@ where
 		let mut _localctx = TemplateNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 346, RULE_templateName);
         let mut _localctx: Rc<TemplateNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26143,7 +26331,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26172,14 +26361,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateArgumentListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateArgumentListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateArgumentList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateArgumentList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateArgumentList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateArgumentList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateArgumentListContext<'input>{
@@ -26194,7 +26383,7 @@ impl<'input> CustomRuleContext<'input> for TemplateArgumentListContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_templateArgumentList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateArgumentList }
 }
-antlr_rust::type_id!{TemplateArgumentListContextExt<'a>}
+antlr_rust::tid!{TemplateArgumentListContextExt<'a>}
 
 impl<'input> TemplateArgumentListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateArgumentListContextAll<'input>> {
@@ -26249,8 +26438,8 @@ where
 		let mut _localctx = TemplateArgumentListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 348, RULE_templateArgumentList);
         let mut _localctx: Rc<TemplateArgumentListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26301,7 +26490,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26330,14 +26520,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TemplateArgumentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TemplateArgumentContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_templateArgument(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_templateArgument(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_templateArgument(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_templateArgument(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TemplateArgumentContext<'input>{
@@ -26352,7 +26542,7 @@ impl<'input> CustomRuleContext<'input> for TemplateArgumentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_templateArgument }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_templateArgument }
 }
-antlr_rust::type_id!{TemplateArgumentContextExt<'a>}
+antlr_rust::tid!{TemplateArgumentContextExt<'a>}
 
 impl<'input> TemplateArgumentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TemplateArgumentContextAll<'input>> {
@@ -26392,7 +26582,7 @@ where
 		let mut _localctx = TemplateArgumentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 350, RULE_templateArgument);
         let mut _localctx: Rc<TemplateArgumentContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1933);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -26432,7 +26622,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26461,14 +26652,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeNameSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeNameSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeNameSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeNameSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeNameSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeNameSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeNameSpecifierContext<'input>{
@@ -26483,7 +26674,7 @@ impl<'input> CustomRuleContext<'input> for TypeNameSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeNameSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeNameSpecifier }
 }
-antlr_rust::type_id!{TypeNameSpecifierContextExt<'a>}
+antlr_rust::tid!{TypeNameSpecifierContextExt<'a>}
 
 impl<'input> TypeNameSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeNameSpecifierContextAll<'input>> {
@@ -26535,8 +26726,8 @@ where
 		let mut _localctx = TypeNameSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 352, RULE_typeNameSpecifier);
         let mut _localctx: Rc<TypeNameSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26582,7 +26773,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26611,14 +26803,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExplicitInstantiationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExplicitInstantiationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_explicitInstantiation(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_explicitInstantiation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_explicitInstantiation(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_explicitInstantiation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExplicitInstantiationContext<'input>{
@@ -26633,7 +26825,7 @@ impl<'input> CustomRuleContext<'input> for ExplicitInstantiationContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_explicitInstantiation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_explicitInstantiation }
 }
-antlr_rust::type_id!{ExplicitInstantiationContextExt<'a>}
+antlr_rust::tid!{ExplicitInstantiationContextExt<'a>}
 
 impl<'input> ExplicitInstantiationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExplicitInstantiationContextAll<'input>> {
@@ -26677,8 +26869,8 @@ where
 		let mut _localctx = ExplicitInstantiationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 354, RULE_explicitInstantiation);
         let mut _localctx: Rc<ExplicitInstantiationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26702,7 +26894,8 @@ where
 			recog.declaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26731,14 +26924,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExplicitSpecializationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExplicitSpecializationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_explicitSpecialization(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_explicitSpecialization(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_explicitSpecialization(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_explicitSpecialization(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExplicitSpecializationContext<'input>{
@@ -26753,7 +26946,7 @@ impl<'input> CustomRuleContext<'input> for ExplicitSpecializationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_explicitSpecialization }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_explicitSpecialization }
 }
-antlr_rust::type_id!{ExplicitSpecializationContextExt<'a>}
+antlr_rust::tid!{ExplicitSpecializationContextExt<'a>}
 
 impl<'input> ExplicitSpecializationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExplicitSpecializationContextAll<'input>> {
@@ -26802,7 +26995,7 @@ where
 		let mut _localctx = ExplicitSpecializationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 356, RULE_explicitSpecialization);
         let mut _localctx: Rc<ExplicitSpecializationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26821,7 +27014,8 @@ where
 			recog.declaration()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26850,14 +27044,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TryBlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TryBlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_tryBlock(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_tryBlock(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_tryBlock(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_tryBlock(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TryBlockContext<'input>{
@@ -26872,7 +27066,7 @@ impl<'input> CustomRuleContext<'input> for TryBlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_tryBlock }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_tryBlock }
 }
-antlr_rust::type_id!{TryBlockContextExt<'a>}
+antlr_rust::tid!{TryBlockContextExt<'a>}
 
 impl<'input> TryBlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TryBlockContextAll<'input>> {
@@ -26914,7 +27108,7 @@ where
 		let mut _localctx = TryBlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 358, RULE_tryBlock);
         let mut _localctx: Rc<TryBlockContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -26931,7 +27125,8 @@ where
 			recog.handlerSeq()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -26960,14 +27155,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for FunctionTryBlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for FunctionTryBlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionTryBlock(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_functionTryBlock(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionTryBlock(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_functionTryBlock(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for FunctionTryBlockContext<'input>{
@@ -26982,7 +27177,7 @@ impl<'input> CustomRuleContext<'input> for FunctionTryBlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionTryBlock }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionTryBlock }
 }
-antlr_rust::type_id!{FunctionTryBlockContextExt<'a>}
+antlr_rust::tid!{FunctionTryBlockContextExt<'a>}
 
 impl<'input> FunctionTryBlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionTryBlockContextAll<'input>> {
@@ -27027,8 +27222,8 @@ where
 		let mut _localctx = FunctionTryBlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 360, RULE_functionTryBlock);
         let mut _localctx: Rc<FunctionTryBlockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27057,7 +27252,8 @@ where
 			recog.handlerSeq()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27086,14 +27282,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for HandlerSeqContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for HandlerSeqContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_handlerSeq(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_handlerSeq(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_handlerSeq(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_handlerSeq(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for HandlerSeqContext<'input>{
@@ -27108,7 +27304,7 @@ impl<'input> CustomRuleContext<'input> for HandlerSeqContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_handlerSeq }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_handlerSeq }
 }
-antlr_rust::type_id!{HandlerSeqContextExt<'a>}
+antlr_rust::tid!{HandlerSeqContextExt<'a>}
 
 impl<'input> HandlerSeqContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<HandlerSeqContextAll<'input>> {
@@ -27145,8 +27341,8 @@ where
 		let mut _localctx = HandlerSeqContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 362, RULE_handlerSeq);
         let mut _localctx: Rc<HandlerSeqContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27169,7 +27365,8 @@ where
 				if !(_la==Catch) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27198,14 +27395,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for HandlerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for HandlerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_handler(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_handler(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_handler(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_handler(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for HandlerContext<'input>{
@@ -27220,7 +27417,7 @@ impl<'input> CustomRuleContext<'input> for HandlerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_handler }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_handler }
 }
-antlr_rust::type_id!{HandlerContextExt<'a>}
+antlr_rust::tid!{HandlerContextExt<'a>}
 
 impl<'input> HandlerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<HandlerContextAll<'input>> {
@@ -27272,7 +27469,7 @@ where
 		let mut _localctx = HandlerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 364, RULE_handler);
         let mut _localctx: Rc<HandlerContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27295,7 +27492,8 @@ where
 			recog.compoundStatement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27324,14 +27522,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExceptionDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExceptionDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exceptionDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_exceptionDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exceptionDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_exceptionDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExceptionDeclarationContext<'input>{
@@ -27346,7 +27544,7 @@ impl<'input> CustomRuleContext<'input> for ExceptionDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_exceptionDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exceptionDeclaration }
 }
-antlr_rust::type_id!{ExceptionDeclarationContextExt<'a>}
+antlr_rust::tid!{ExceptionDeclarationContextExt<'a>}
 
 impl<'input> ExceptionDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExceptionDeclarationContextAll<'input>> {
@@ -27394,8 +27592,8 @@ where
 		let mut _localctx = ExceptionDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 366, RULE_exceptionDeclaration);
         let mut _localctx: Rc<ExceptionDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1986);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -27463,7 +27661,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27492,14 +27691,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ThrowExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ThrowExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_throwExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_throwExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_throwExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_throwExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ThrowExpressionContext<'input>{
@@ -27514,7 +27713,7 @@ impl<'input> CustomRuleContext<'input> for ThrowExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_throwExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_throwExpression }
 }
-antlr_rust::type_id!{ThrowExpressionContextExt<'a>}
+antlr_rust::tid!{ThrowExpressionContextExt<'a>}
 
 impl<'input> ThrowExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ThrowExpressionContextAll<'input>> {
@@ -27553,8 +27752,8 @@ where
 		let mut _localctx = ThrowExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 368, RULE_throwExpression);
         let mut _localctx: Rc<ThrowExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27565,7 +27764,7 @@ where
 			recog.base.set_state(1990);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << New) | (1usize << Noexcept) | (1usize << Operator) | (1usize << Reinterpret_cast) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof))) != 0) || ((((_la - 65)) & !0x3f) == 0 && ((1usize << (_la - 65)) & ((1usize << (Static_cast - 65)) | (1usize << (This - 65)) | (1usize << (Throw - 65)) | (1usize << (Typeid_ - 65)) | (1usize << (Typename_ - 65)) | (1usize << (Unsigned - 65)) | (1usize << (Void - 65)) | (1usize << (Wchar - 65)) | (1usize << (LeftParen - 65)) | (1usize << (LeftBracket - 65)) | (1usize << (Plus - 65)) | (1usize << (Minus - 65)) | (1usize << (Star - 65)) | (1usize << (And - 65)) | (1usize << (Or - 65)) | (1usize << (Tilde - 65)) | (1usize << (Not - 65)) | (1usize << (PlusPlus - 65)) | (1usize << (MinusMinus - 65)) | (1usize << (Doublecolon - 65)))) != 0) || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << IntegerLiteral) | (1usize << CharacterLiteral) | (1usize << FloatingLiteral) | (1usize << StringLiteral) | (1usize << BooleanLiteral) | (1usize << PointerLiteral) | (1usize << UserDefinedLiteral) | (1usize << Alignof) | (1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Const_cast) | (1usize << Decltype) | (1usize << Delete) | (1usize << Double) | (1usize << Dynamic_cast))) != 0) || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Float - 39)) | (1usize << (Int - 39)) | (1usize << (Long - 39)) | (1usize << (New - 39)) | (1usize << (Noexcept - 39)) | (1usize << (Operator - 39)) | (1usize << (Reinterpret_cast - 39)) | (1usize << (Short - 39)) | (1usize << (Signed - 39)) | (1usize << (Sizeof - 39)) | (1usize << (Static_cast - 39)) | (1usize << (This - 39)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (Throw - 71)) | (1usize << (Typeid_ - 71)) | (1usize << (Typename_ - 71)) | (1usize << (Unsigned - 71)) | (1usize << (Void - 71)) | (1usize << (Wchar - 71)) | (1usize << (LeftParen - 71)) | (1usize << (LeftBracket - 71)) | (1usize << (Plus - 71)) | (1usize << (Minus - 71)) | (1usize << (Star - 71)) | (1usize << (And - 71)) | (1usize << (Or - 71)) | (1usize << (Tilde - 71)) | (1usize << (Not - 71)))) != 0) || ((((_la - 120)) & !0x3f) == 0 && ((1usize << (_la - 120)) & ((1usize << (PlusPlus - 120)) | (1usize << (MinusMinus - 120)) | (1usize << (Doublecolon - 120)) | (1usize << (Identifier - 120)))) != 0) {
 				{
 				/*InvokeRule assignmentExpression*/
 				recog.base.set_state(1989);
@@ -27575,7 +27774,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27604,14 +27804,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for ExceptionSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for ExceptionSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exceptionSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_exceptionSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exceptionSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_exceptionSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for ExceptionSpecificationContext<'input>{
@@ -27626,7 +27826,7 @@ impl<'input> CustomRuleContext<'input> for ExceptionSpecificationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_exceptionSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exceptionSpecification }
 }
-antlr_rust::type_id!{ExceptionSpecificationContextExt<'a>}
+antlr_rust::tid!{ExceptionSpecificationContextExt<'a>}
 
 impl<'input> ExceptionSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExceptionSpecificationContextAll<'input>> {
@@ -27663,7 +27863,7 @@ where
 		let mut _localctx = ExceptionSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 370, RULE_exceptionSpecification);
         let mut _localctx: Rc<ExceptionSpecificationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1994);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -27694,7 +27894,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27723,14 +27924,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for DynamicExceptionSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for DynamicExceptionSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dynamicExceptionSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_dynamicExceptionSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dynamicExceptionSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_dynamicExceptionSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for DynamicExceptionSpecificationContext<'input>{
@@ -27745,7 +27946,7 @@ impl<'input> CustomRuleContext<'input> for DynamicExceptionSpecificationContextE
 	fn get_rule_index(&self) -> usize { RULE_dynamicExceptionSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dynamicExceptionSpecification }
 }
-antlr_rust::type_id!{DynamicExceptionSpecificationContextExt<'a>}
+antlr_rust::tid!{DynamicExceptionSpecificationContextExt<'a>}
 
 impl<'input> DynamicExceptionSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DynamicExceptionSpecificationContextAll<'input>> {
@@ -27794,8 +27995,8 @@ where
 		let mut _localctx = DynamicExceptionSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 372, RULE_dynamicExceptionSpecification);
         let mut _localctx: Rc<DynamicExceptionSpecificationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27809,7 +28010,7 @@ where
 			recog.base.set_state(1999);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if ((((_la - 13)) & !0x3f) == 0 && ((1usize << (_la - 13)) & ((1usize << (Auto - 13)) | (1usize << (Bool - 13)) | (1usize << (Char - 13)) | (1usize << (Char16 - 13)) | (1usize << (Char32 - 13)) | (1usize << (Class - 13)) | (1usize << (Const - 13)) | (1usize << (Decltype - 13)) | (1usize << (Double - 13)) | (1usize << (Enum - 13)) | (1usize << (Float - 13)) | (1usize << (Int - 13)) | (1usize << (Long - 13)) | (1usize << (Short - 13)) | (1usize << (Signed - 13)) | (1usize << (Struct - 13)) | (1usize << (Typename_ - 13)))) != 0) || ((((_la - 77)) & !0x3f) == 0 && ((1usize << (_la - 77)) & ((1usize << (Union - 77)) | (1usize << (Unsigned - 77)) | (1usize << (Void - 77)) | (1usize << (Volatile - 77)) | (1usize << (Wchar - 77)) | (1usize << (Doublecolon - 77)) | (1usize << (Identifier - 77)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Auto) | (1usize << Bool) | (1usize << Char) | (1usize << Char16) | (1usize << Char32) | (1usize << Class) | (1usize << Const) | (1usize << Decltype) | (1usize << Double))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (Enum - 33)) | (1usize << (Float - 33)) | (1usize << (Int - 33)) | (1usize << (Long - 33)) | (1usize << (Short - 33)) | (1usize << (Signed - 33)))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (Struct - 66)) | (1usize << (Typename_ - 66)) | (1usize << (Union - 66)) | (1usize << (Unsigned - 66)) | (1usize << (Void - 66)) | (1usize << (Volatile - 66)) | (1usize << (Wchar - 66)))) != 0) || _la==Doublecolon || _la==Identifier {
 				{
 				/*InvokeRule typeIdList*/
 				recog.base.set_state(1998);
@@ -27822,7 +28023,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -27851,14 +28053,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TypeIdListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TypeIdListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeIdList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_typeIdList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeIdList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_typeIdList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TypeIdListContext<'input>{
@@ -27873,7 +28075,7 @@ impl<'input> CustomRuleContext<'input> for TypeIdListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeIdList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeIdList }
 }
-antlr_rust::type_id!{TypeIdListContextExt<'a>}
+antlr_rust::tid!{TypeIdListContextExt<'a>}
 
 impl<'input> TypeIdListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeIdListContextAll<'input>> {
@@ -27928,8 +28130,8 @@ where
 		let mut _localctx = TypeIdListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 374, RULE_typeIdList);
         let mut _localctx: Rc<TypeIdListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -27980,7 +28182,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -28009,14 +28212,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for NoeExceptSpecificationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for NoeExceptSpecificationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_noeExceptSpecification(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_noeExceptSpecification(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_noeExceptSpecification(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_noeExceptSpecification(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for NoeExceptSpecificationContext<'input>{
@@ -28031,7 +28234,7 @@ impl<'input> CustomRuleContext<'input> for NoeExceptSpecificationContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_noeExceptSpecification }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_noeExceptSpecification }
 }
-antlr_rust::type_id!{NoeExceptSpecificationContextExt<'a>}
+antlr_rust::tid!{NoeExceptSpecificationContextExt<'a>}
 
 impl<'input> NoeExceptSpecificationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NoeExceptSpecificationContextAll<'input>> {
@@ -28080,7 +28283,7 @@ where
 		let mut _localctx = NoeExceptSpecificationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 376, RULE_noeExceptSpecification);
         let mut _localctx: Rc<NoeExceptSpecificationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2023);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -28117,7 +28320,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -28146,14 +28350,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for TheOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for TheOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_theOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_theOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_theOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_theOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for TheOperatorContext<'input>{
@@ -28168,7 +28372,7 @@ impl<'input> CustomRuleContext<'input> for TheOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_theOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_theOperator }
 }
-antlr_rust::type_id!{TheOperatorContextExt<'a>}
+antlr_rust::tid!{TheOperatorContextExt<'a>}
 
 impl<'input> TheOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TheOperatorContextAll<'input>> {
@@ -28402,7 +28606,7 @@ where
 		let mut _localctx = TheOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 378, RULE_theOperator);
         let mut _localctx: Rc<TheOperatorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(2076);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -28843,7 +29047,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -28872,14 +29077,14 @@ ph:PhantomData<&'input str>
 impl<'input> CPP14ParserContext<'input> for LiteralContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CPP14ParserListener<'input> + 'a> for LiteralContext<'input>{
-	fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_literal(self);
-	}
-	fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
-		listener.exit_literal(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_literal(self);
+		}
+		fn exit(&self,listener: &mut (dyn CPP14ParserListener<'input> + 'a)) {
+			listener.exit_literal(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CPP14ParserVisitor<'input> + 'a> for LiteralContext<'input>{
@@ -28894,7 +29099,7 @@ impl<'input> CustomRuleContext<'input> for LiteralContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literal }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literal }
 }
-antlr_rust::type_id!{LiteralContextExt<'a>}
+antlr_rust::tid!{LiteralContextExt<'a>}
 
 impl<'input> LiteralContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CPP14ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LiteralContextAll<'input>> {
@@ -28960,8 +29165,8 @@ where
 		let mut _localctx = LiteralContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 380, RULE_literal);
         let mut _localctx: Rc<LiteralContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -28978,7 +29183,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),

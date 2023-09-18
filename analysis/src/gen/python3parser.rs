@@ -5,6 +5,7 @@
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+#![allow(unused_braces)]
 use antlr_rust::PredictionContextCache;
 use antlr_rust::parser::{Parser, BaseParser, ParserRecog, ParserNodeType};
 use antlr_rust::token_stream::TokenStream;
@@ -338,7 +339,7 @@ use std::any::{Any,TypeId};
 
 
 type BaseParserType<'input, I> =
-	BaseParser<'input,Python3ParserExt, I, Python3ParserContextType , dyn Python3ParserListener<'input> + 'input >;
+	BaseParser<'input,Python3ParserExt<'input>, I, Python3ParserContextType , dyn Python3ParserListener<'input> + 'input >;
 
 type TokenType<'input> = <LocalTokenFactory<'input> as TokenFactory<'input>>::Tok;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
@@ -370,7 +371,7 @@ where
     }
 
     pub fn with_strategy(input: I, strategy: H) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
 		let interpreter = Arc::new(ParserATNSimulator::new(
 			_ATN.clone(),
 			_decision_to_DFA.clone(),
@@ -381,6 +382,7 @@ where
 				input,
 				Arc::clone(&interpreter),
 				Python3ParserExt{
+					_pd: Default::default(),
 				}
 			),
 			interpreter,
@@ -418,6 +420,8 @@ pub trait Python3ParserContext<'input>:
 	ParserRuleContext<'input, TF=LocalTokenFactory<'input>, Ctx=Python3ParserContextType>
 {}
 
+antlr_rust::coerce_from!{ 'input : Python3ParserContext<'input> }
+
 impl<'input, 'x, T> VisitableDyn<T> for dyn Python3ParserContext<'input> + 'input
 where
     T: Python3ParserVisitor<'input> + 'x,
@@ -430,14 +434,12 @@ where
 impl<'input> Python3ParserContext<'input> for TerminalNode<'input,Python3ParserContextType> {}
 impl<'input> Python3ParserContext<'input> for ErrorNode<'input,Python3ParserContextType> {}
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn Python3ParserContext<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn Python3ParserContext<'input> + 'input }
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn Python3ParserListener<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn Python3ParserListener<'input> + 'input }
 
 pub struct Python3ParserContextType;
-antlr_rust::type_id!{Python3ParserContextType}
+antlr_rust::tid!{Python3ParserContextType}
 
 impl<'input> ParserNodeType<'input> for Python3ParserContextType{
 	type TF = LocalTokenFactory<'input>;
@@ -466,20 +468,28 @@ where
     }
 }
 
-pub struct Python3ParserExt{
+pub struct Python3ParserExt<'input>{
+	_pd: PhantomData<&'input str>,
 }
 
-impl Python3ParserExt{
+impl<'input> Python3ParserExt<'input>{
+	pub const fn CannotBeDotLpEq(&self) -> bool {
+		true
+	}
+
+	pub const fn CannotBePlusMinus(&self) -> bool {
+		true
+	}
 }
+antlr_rust::tid! { Python3ParserExt<'a> }
 
-
-impl<'input> TokenAware<'input> for Python3ParserExt{
+impl<'input> TokenAware<'input> for Python3ParserExt<'input>{
 	type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for Python3ParserExt{}
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for Python3ParserExt<'input>{}
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for Python3ParserExt{
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for Python3ParserExt<'input>{
 	fn get_grammar_file_name(&self) -> & str{ "Python3Parser.g4"}
 
    	fn get_rule_names(&self) -> &[& str] {&ruleNames}
@@ -508,7 +518,7 @@ where
 		) -> bool {
 		match pred_index {
 				0=>{
-					 this.CannotBePlusMinus() 
+					 recog.CannotBePlusMinus() 
 				}
 			_ => true
 		}
@@ -518,7 +528,7 @@ where
 		) -> bool {
 		match pred_index {
 				1=>{
-					 this.CannotBePlusMinus() 
+					 recog.CannotBePlusMinus() 
 				}
 			_ => true
 		}
@@ -528,7 +538,7 @@ where
 		) -> bool {
 		match pred_index {
 				2=>{
-					 this.CannotBeDotLpEq() 
+					 recog.CannotBeDotLpEq() 
 				}
 			_ => true
 		}
@@ -538,7 +548,7 @@ where
 		) -> bool {
 		match pred_index {
 				3=>{
-					 this.CannotBeDotLpEq() 
+					 recog.CannotBeDotLpEq() 
 				}
 			_ => true
 		}
@@ -586,14 +596,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Single_inputContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Single_inputContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_single_input(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_single_input(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_single_input(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_single_input(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Single_inputContext<'input>{
@@ -608,7 +618,7 @@ impl<'input> CustomRuleContext<'input> for Single_inputContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_single_input }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_single_input }
 }
-antlr_rust::type_id!{Single_inputContextExt<'a>}
+antlr_rust::tid!{Single_inputContextExt<'a>}
 
 impl<'input> Single_inputContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Single_inputContextAll<'input>> {
@@ -650,7 +660,7 @@ where
 		let mut _localctx = Single_inputContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 0, RULE_single_input);
         let mut _localctx: Rc<Single_inputContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(243);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -692,7 +702,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -721,14 +732,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for File_inputContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for File_inputContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_file_input(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_file_input(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_file_input(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_file_input(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for File_inputContext<'input>{
@@ -743,7 +754,7 @@ impl<'input> CustomRuleContext<'input> for File_inputContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_file_input }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_file_input }
 }
-antlr_rust::type_id!{File_inputContextExt<'a>}
+antlr_rust::tid!{File_inputContextExt<'a>}
 
 impl<'input> File_inputContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<File_inputContextAll<'input>> {
@@ -794,8 +805,8 @@ where
 		let mut _localctx = File_inputContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 2, RULE_file_input);
         let mut _localctx: Rc<File_inputContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -803,7 +814,7 @@ where
 			recog.base.set_state(249);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << ASSERT) | (1usize << ASYNC) | (1usize << AWAIT) | (1usize << BREAK) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DEF) | (1usize << DEL) | (1usize << FALSE) | (1usize << FOR) | (1usize << FROM) | (1usize << GLOBAL) | (1usize << IF) | (1usize << IMPORT) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NONLOCAL) | (1usize << NOT) | (1usize << PASS) | (1usize << RAISE) | (1usize << RETURN) | (1usize << TRUE) | (1usize << TRY) | (1usize << UNDERSCORE) | (1usize << WHILE) | (1usize << WITH) | (1usize << YIELD) | (1usize << NEWLINE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)) | (1usize << (AT - 64)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << ASSERT) | (1usize << ASYNC) | (1usize << AWAIT) | (1usize << BREAK) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DEF) | (1usize << DEL) | (1usize << FALSE) | (1usize << FOR) | (1usize << FROM) | (1usize << GLOBAL) | (1usize << IF) | (1usize << IMPORT) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (NONLOCAL - 32)) | (1usize << (NOT - 32)) | (1usize << (PASS - 32)) | (1usize << (RAISE - 32)) | (1usize << (RETURN - 32)) | (1usize << (TRUE - 32)) | (1usize << (TRY - 32)) | (1usize << (UNDERSCORE - 32)) | (1usize << (WHILE - 32)) | (1usize << (WITH - 32)) | (1usize << (YIELD - 32)) | (1usize << (NEWLINE - 32)) | (1usize << (NAME - 32)) | (1usize << (ELLIPSIS - 32)) | (1usize << (STAR - 32)) | (1usize << (OPEN_PAREN - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)) | (1usize << (AT - 64)))) != 0) {
 				{
 				recog.base.set_state(247);
 				recog.err_handler.sync(&mut recog.base)?;
@@ -842,7 +853,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -871,14 +883,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Eval_inputContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Eval_inputContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_eval_input(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_eval_input(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_eval_input(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_eval_input(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Eval_inputContext<'input>{
@@ -893,7 +905,7 @@ impl<'input> CustomRuleContext<'input> for Eval_inputContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_eval_input }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_eval_input }
 }
-antlr_rust::type_id!{Eval_inputContextExt<'a>}
+antlr_rust::tid!{Eval_inputContextExt<'a>}
 
 impl<'input> Eval_inputContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Eval_inputContextAll<'input>> {
@@ -941,8 +953,8 @@ where
 		let mut _localctx = Eval_inputContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 4, RULE_eval_input);
         let mut _localctx: Rc<Eval_inputContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -970,7 +982,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -999,14 +1012,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for DecoratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for DecoratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_decorator(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_decorator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_decorator(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_decorator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for DecoratorContext<'input>{
@@ -1021,7 +1034,7 @@ impl<'input> CustomRuleContext<'input> for DecoratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_decorator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_decorator }
 }
-antlr_rust::type_id!{DecoratorContextExt<'a>}
+antlr_rust::tid!{DecoratorContextExt<'a>}
 
 impl<'input> DecoratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DecoratorContextAll<'input>> {
@@ -1078,8 +1091,8 @@ where
 		let mut _localctx = DecoratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 6, RULE_decorator);
         let mut _localctx: Rc<DecoratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1102,7 +1115,7 @@ where
 				recog.base.set_state(267);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN) | (1usize << POWER))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (POWER - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 					{
 					/*InvokeRule arglist*/
 					recog.base.set_state(266);
@@ -1121,7 +1134,8 @@ where
 			recog.base.match_token(NEWLINE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1150,14 +1164,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for DecoratorsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for DecoratorsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_decorators(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_decorators(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_decorators(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_decorators(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for DecoratorsContext<'input>{
@@ -1172,7 +1186,7 @@ impl<'input> CustomRuleContext<'input> for DecoratorsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_decorators }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_decorators }
 }
-antlr_rust::type_id!{DecoratorsContextExt<'a>}
+antlr_rust::tid!{DecoratorsContextExt<'a>}
 
 impl<'input> DecoratorsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DecoratorsContextAll<'input>> {
@@ -1209,8 +1223,8 @@ where
 		let mut _localctx = DecoratorsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 8, RULE_decorators);
         let mut _localctx: Rc<DecoratorsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1233,7 +1247,8 @@ where
 				if !(_la==AT) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1262,14 +1277,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for DecoratedContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for DecoratedContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_decorated(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_decorated(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_decorated(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_decorated(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for DecoratedContext<'input>{
@@ -1284,7 +1299,7 @@ impl<'input> CustomRuleContext<'input> for DecoratedContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_decorated }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_decorated }
 }
-antlr_rust::type_id!{DecoratedContextExt<'a>}
+antlr_rust::tid!{DecoratedContextExt<'a>}
 
 impl<'input> DecoratedContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DecoratedContextAll<'input>> {
@@ -1327,7 +1342,7 @@ where
 		let mut _localctx = DecoratedContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 10, RULE_decorated);
         let mut _localctx: Rc<DecoratedContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1372,7 +1387,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1401,14 +1417,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Async_funcdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Async_funcdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_async_funcdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_async_funcdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_async_funcdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_async_funcdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Async_funcdefContext<'input>{
@@ -1423,7 +1439,7 @@ impl<'input> CustomRuleContext<'input> for Async_funcdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_async_funcdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_async_funcdef }
 }
-antlr_rust::type_id!{Async_funcdefContextExt<'a>}
+antlr_rust::tid!{Async_funcdefContextExt<'a>}
 
 impl<'input> Async_funcdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Async_funcdefContextAll<'input>> {
@@ -1462,7 +1478,7 @@ where
 		let mut _localctx = Async_funcdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 12, RULE_async_funcdef);
         let mut _localctx: Rc<Async_funcdefContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1475,7 +1491,8 @@ where
 			recog.funcdef()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1504,14 +1521,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for FuncdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for FuncdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_funcdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_funcdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_funcdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_funcdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for FuncdefContext<'input>{
@@ -1526,7 +1543,7 @@ impl<'input> CustomRuleContext<'input> for FuncdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_funcdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_funcdef }
 }
-antlr_rust::type_id!{FuncdefContextExt<'a>}
+antlr_rust::tid!{FuncdefContextExt<'a>}
 
 impl<'input> FuncdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FuncdefContextAll<'input>> {
@@ -1584,8 +1601,8 @@ where
 		let mut _localctx = FuncdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 14, RULE_funcdef);
         let mut _localctx: Rc<FuncdefContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1624,7 +1641,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1653,14 +1671,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ParametersContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ParametersContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameters(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_parameters(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameters(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_parameters(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ParametersContext<'input>{
@@ -1675,7 +1693,7 @@ impl<'input> CustomRuleContext<'input> for ParametersContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_parameters }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameters }
 }
-antlr_rust::type_id!{ParametersContextExt<'a>}
+antlr_rust::tid!{ParametersContextExt<'a>}
 
 impl<'input> ParametersContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParametersContextAll<'input>> {
@@ -1719,8 +1737,8 @@ where
 		let mut _localctx = ParametersContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 16, RULE_parameters);
         let mut _localctx: Rc<ParametersContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1731,7 +1749,7 @@ where
 			recog.base.set_state(300);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << POWER))) != 0) {
+			if _la==MATCH || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (UNDERSCORE - 40)) | (1usize << (NAME - 40)) | (1usize << (STAR - 40)) | (1usize << (POWER - 40)))) != 0) {
 				{
 				/*InvokeRule typedargslist*/
 				recog.base.set_state(299);
@@ -1744,7 +1762,8 @@ where
 			recog.base.match_token(CLOSE_PAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1773,14 +1792,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for TypedargslistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for TypedargslistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typedargslist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_typedargslist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typedargslist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_typedargslist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for TypedargslistContext<'input>{
@@ -1795,7 +1814,7 @@ impl<'input> CustomRuleContext<'input> for TypedargslistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typedargslist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typedargslist }
 }
-antlr_rust::type_id!{TypedargslistContextExt<'a>}
+antlr_rust::tid!{TypedargslistContextExt<'a>}
 
 impl<'input> TypedargslistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypedargslistContextAll<'input>> {
@@ -1866,8 +1885,8 @@ where
 		let mut _localctx = TypedargslistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 18, RULE_typedargslist);
         let mut _localctx: Rc<TypedargslistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -1954,7 +1973,7 @@ where
 						    	recog.base.set_state(323);
 						    	recog.err_handler.sync(&mut recog.base)?;
 						    	_la = recog.base.input.la(1);
-						    	if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME))) != 0) {
+						    	if ((((_la - 30)) & !0x3f) == 0 && ((1usize << (_la - 30)) & ((1usize << (MATCH - 30)) | (1usize << (UNDERSCORE - 30)) | (1usize << (NAME - 30)))) != 0) {
 						    		{
 						    		/*InvokeRule tfpdef*/
 						    		recog.base.set_state(322);
@@ -2084,7 +2103,7 @@ where
 					recog.base.set_state(357);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME))) != 0) {
+					if ((((_la - 30)) & !0x3f) == 0 && ((1usize << (_la - 30)) & ((1usize << (MATCH - 30)) | (1usize << (UNDERSCORE - 30)) | (1usize << (NAME - 30)))) != 0) {
 						{
 						/*InvokeRule tfpdef*/
 						recog.base.set_state(356);
@@ -2196,7 +2215,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2225,14 +2245,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for TfpdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for TfpdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_tfpdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_tfpdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_tfpdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_tfpdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for TfpdefContext<'input>{
@@ -2247,7 +2267,7 @@ impl<'input> CustomRuleContext<'input> for TfpdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_tfpdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_tfpdef }
 }
-antlr_rust::type_id!{TfpdefContextExt<'a>}
+antlr_rust::tid!{TfpdefContextExt<'a>}
 
 impl<'input> TfpdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TfpdefContextAll<'input>> {
@@ -2289,8 +2309,8 @@ where
 		let mut _localctx = TfpdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 20, RULE_tfpdef);
         let mut _localctx: Rc<TfpdefContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2315,7 +2335,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2344,14 +2365,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for VarargslistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for VarargslistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_varargslist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_varargslist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_varargslist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_varargslist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for VarargslistContext<'input>{
@@ -2366,7 +2387,7 @@ impl<'input> CustomRuleContext<'input> for VarargslistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_varargslist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_varargslist }
 }
-antlr_rust::type_id!{VarargslistContextExt<'a>}
+antlr_rust::tid!{VarargslistContextExt<'a>}
 
 impl<'input> VarargslistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VarargslistContextAll<'input>> {
@@ -2437,8 +2458,8 @@ where
 		let mut _localctx = VarargslistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 22, RULE_varargslist);
         let mut _localctx: Rc<VarargslistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -2525,7 +2546,7 @@ where
 						    	recog.base.set_state(411);
 						    	recog.err_handler.sync(&mut recog.base)?;
 						    	_la = recog.base.input.la(1);
-						    	if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME))) != 0) {
+						    	if ((((_la - 30)) & !0x3f) == 0 && ((1usize << (_la - 30)) & ((1usize << (MATCH - 30)) | (1usize << (UNDERSCORE - 30)) | (1usize << (NAME - 30)))) != 0) {
 						    		{
 						    		/*InvokeRule vfpdef*/
 						    		recog.base.set_state(410);
@@ -2655,7 +2676,7 @@ where
 					recog.base.set_state(445);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME))) != 0) {
+					if ((((_la - 30)) & !0x3f) == 0 && ((1usize << (_la - 30)) & ((1usize << (MATCH - 30)) | (1usize << (UNDERSCORE - 30)) | (1usize << (NAME - 30)))) != 0) {
 						{
 						/*InvokeRule vfpdef*/
 						recog.base.set_state(444);
@@ -2767,7 +2788,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2796,14 +2818,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for VfpdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for VfpdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_vfpdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_vfpdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_vfpdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_vfpdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for VfpdefContext<'input>{
@@ -2818,7 +2840,7 @@ impl<'input> CustomRuleContext<'input> for VfpdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_vfpdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_vfpdef }
 }
-antlr_rust::type_id!{VfpdefContextExt<'a>}
+antlr_rust::tid!{VfpdefContextExt<'a>}
 
 impl<'input> VfpdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VfpdefContextAll<'input>> {
@@ -2852,7 +2874,7 @@ where
 		let mut _localctx = VfpdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 24, RULE_vfpdef);
         let mut _localctx: Rc<VfpdefContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2862,7 +2884,8 @@ where
 			recog.name()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2891,14 +2914,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for StmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for StmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for StmtContext<'input>{
@@ -2913,7 +2936,7 @@ impl<'input> CustomRuleContext<'input> for StmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_stmt }
 }
-antlr_rust::type_id!{StmtContextExt<'a>}
+antlr_rust::tid!{StmtContextExt<'a>}
 
 impl<'input> StmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StmtContextAll<'input>> {
@@ -2950,7 +2973,7 @@ where
 		let mut _localctx = StmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 26, RULE_stmt);
         let mut _localctx: Rc<StmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(479);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2979,7 +3002,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3008,14 +3032,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Simple_stmtsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Simple_stmtsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simple_stmts(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_simple_stmts(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simple_stmts(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_simple_stmts(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Simple_stmtsContext<'input>{
@@ -3030,7 +3054,7 @@ impl<'input> CustomRuleContext<'input> for Simple_stmtsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simple_stmts }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simple_stmts }
 }
-antlr_rust::type_id!{Simple_stmtsContextExt<'a>}
+antlr_rust::tid!{Simple_stmtsContextExt<'a>}
 
 impl<'input> Simple_stmtsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Simple_stmtsContextAll<'input>> {
@@ -3081,8 +3105,8 @@ where
 		let mut _localctx = Simple_stmtsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 28, RULE_simple_stmts);
         let mut _localctx: Rc<Simple_stmtsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -3128,7 +3152,8 @@ where
 			recog.base.match_token(NEWLINE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3157,14 +3182,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Simple_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Simple_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_simple_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_simple_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_simple_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_simple_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Simple_stmtContext<'input>{
@@ -3179,7 +3204,7 @@ impl<'input> CustomRuleContext<'input> for Simple_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_simple_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_simple_stmt }
 }
-antlr_rust::type_id!{Simple_stmtContextExt<'a>}
+antlr_rust::tid!{Simple_stmtContextExt<'a>}
 
 impl<'input> Simple_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Simple_stmtContextAll<'input>> {
@@ -3234,7 +3259,7 @@ where
 		let mut _localctx = Simple_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 30, RULE_simple_stmt);
         let mut _localctx: Rc<Simple_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3327,7 +3352,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3356,14 +3382,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Expr_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Expr_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expr_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_expr_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expr_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_expr_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Expr_stmtContext<'input>{
@@ -3378,7 +3404,7 @@ impl<'input> CustomRuleContext<'input> for Expr_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expr_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expr_stmt }
 }
-antlr_rust::type_id!{Expr_stmtContextExt<'a>}
+antlr_rust::tid!{Expr_stmtContextExt<'a>}
 
 impl<'input> Expr_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Expr_stmtContextAll<'input>> {
@@ -3439,8 +3465,8 @@ where
 		let mut _localctx = Expr_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 32, RULE_expr_stmt);
         let mut _localctx: Rc<Expr_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3552,7 +3578,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3581,14 +3608,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for AnnassignContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for AnnassignContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_annassign(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_annassign(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_annassign(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_annassign(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for AnnassignContext<'input>{
@@ -3603,7 +3630,7 @@ impl<'input> CustomRuleContext<'input> for AnnassignContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_annassign }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_annassign }
 }
-antlr_rust::type_id!{AnnassignContextExt<'a>}
+antlr_rust::tid!{AnnassignContextExt<'a>}
 
 impl<'input> AnnassignContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AnnassignContextAll<'input>> {
@@ -3650,8 +3677,8 @@ where
 		let mut _localctx = AnnassignContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 34, RULE_annassign);
         let mut _localctx: Rc<AnnassignContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3679,7 +3706,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3708,14 +3736,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Testlist_star_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Testlist_star_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_testlist_star_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_testlist_star_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_testlist_star_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_testlist_star_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Testlist_star_exprContext<'input>{
@@ -3730,7 +3758,7 @@ impl<'input> CustomRuleContext<'input> for Testlist_star_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_testlist_star_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_testlist_star_expr }
 }
-antlr_rust::type_id!{Testlist_star_exprContextExt<'a>}
+antlr_rust::tid!{Testlist_star_exprContextExt<'a>}
 
 impl<'input> Testlist_star_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Testlist_star_exprContextAll<'input>> {
@@ -3782,8 +3810,8 @@ where
 		let mut _localctx = Testlist_star_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 36, RULE_testlist_star_expr);
         let mut _localctx: Rc<Testlist_star_exprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -3872,7 +3900,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3901,14 +3930,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for AugassignContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for AugassignContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_augassign(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_augassign(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_augassign(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_augassign(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for AugassignContext<'input>{
@@ -3923,7 +3952,7 @@ impl<'input> CustomRuleContext<'input> for AugassignContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_augassign }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_augassign }
 }
-antlr_rust::type_id!{AugassignContextExt<'a>}
+antlr_rust::tid!{AugassignContextExt<'a>}
 
 impl<'input> AugassignContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AugassignContextAll<'input>> {
@@ -4019,8 +4048,8 @@ where
 		let mut _localctx = AugassignContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 38, RULE_augassign);
         let mut _localctx: Rc<AugassignContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4037,7 +4066,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4066,14 +4096,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Del_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Del_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_del_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_del_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_del_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_del_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Del_stmtContext<'input>{
@@ -4088,7 +4118,7 @@ impl<'input> CustomRuleContext<'input> for Del_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_del_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_del_stmt }
 }
-antlr_rust::type_id!{Del_stmtContextExt<'a>}
+antlr_rust::tid!{Del_stmtContextExt<'a>}
 
 impl<'input> Del_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Del_stmtContextAll<'input>> {
@@ -4127,7 +4157,7 @@ where
 		let mut _localctx = Del_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 40, RULE_del_stmt);
         let mut _localctx: Rc<Del_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4140,7 +4170,8 @@ where
 			recog.exprlist()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4169,14 +4200,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Pass_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Pass_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pass_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_pass_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pass_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_pass_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Pass_stmtContext<'input>{
@@ -4191,7 +4222,7 @@ impl<'input> CustomRuleContext<'input> for Pass_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pass_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pass_stmt }
 }
-antlr_rust::type_id!{Pass_stmtContextExt<'a>}
+antlr_rust::tid!{Pass_stmtContextExt<'a>}
 
 impl<'input> Pass_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Pass_stmtContextAll<'input>> {
@@ -4227,7 +4258,7 @@ where
 		let mut _localctx = Pass_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 42, RULE_pass_stmt);
         let mut _localctx: Rc<Pass_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4236,7 +4267,8 @@ where
 			recog.base.match_token(PASS,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4265,14 +4297,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Flow_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Flow_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_flow_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_flow_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_flow_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_flow_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Flow_stmtContext<'input>{
@@ -4287,7 +4319,7 @@ impl<'input> CustomRuleContext<'input> for Flow_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_flow_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_flow_stmt }
 }
-antlr_rust::type_id!{Flow_stmtContextExt<'a>}
+antlr_rust::tid!{Flow_stmtContextExt<'a>}
 
 impl<'input> Flow_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Flow_stmtContextAll<'input>> {
@@ -4333,7 +4365,7 @@ where
 		let mut _localctx = Flow_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 44, RULE_flow_stmt);
         let mut _localctx: Rc<Flow_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(558);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4400,7 +4432,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4429,14 +4462,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Break_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Break_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_break_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_break_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_break_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_break_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Break_stmtContext<'input>{
@@ -4451,7 +4484,7 @@ impl<'input> CustomRuleContext<'input> for Break_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_break_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_break_stmt }
 }
-antlr_rust::type_id!{Break_stmtContextExt<'a>}
+antlr_rust::tid!{Break_stmtContextExt<'a>}
 
 impl<'input> Break_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Break_stmtContextAll<'input>> {
@@ -4487,7 +4520,7 @@ where
 		let mut _localctx = Break_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 46, RULE_break_stmt);
         let mut _localctx: Rc<Break_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4496,7 +4529,8 @@ where
 			recog.base.match_token(BREAK,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4525,14 +4559,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Continue_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Continue_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_continue_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_continue_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_continue_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_continue_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Continue_stmtContext<'input>{
@@ -4547,7 +4581,7 @@ impl<'input> CustomRuleContext<'input> for Continue_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_continue_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_continue_stmt }
 }
-antlr_rust::type_id!{Continue_stmtContextExt<'a>}
+antlr_rust::tid!{Continue_stmtContextExt<'a>}
 
 impl<'input> Continue_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Continue_stmtContextAll<'input>> {
@@ -4583,7 +4617,7 @@ where
 		let mut _localctx = Continue_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 48, RULE_continue_stmt);
         let mut _localctx: Rc<Continue_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4592,7 +4626,8 @@ where
 			recog.base.match_token(CONTINUE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4621,14 +4656,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Return_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Return_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_return_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_return_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_return_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_return_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Return_stmtContext<'input>{
@@ -4643,7 +4678,7 @@ impl<'input> CustomRuleContext<'input> for Return_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_return_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_return_stmt }
 }
-antlr_rust::type_id!{Return_stmtContextExt<'a>}
+antlr_rust::tid!{Return_stmtContextExt<'a>}
 
 impl<'input> Return_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Return_stmtContextAll<'input>> {
@@ -4682,8 +4717,8 @@ where
 		let mut _localctx = Return_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 50, RULE_return_stmt);
         let mut _localctx: Rc<Return_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4694,7 +4729,7 @@ where
 			recog.base.set_state(566);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 				{
 				/*InvokeRule testlist*/
 				recog.base.set_state(565);
@@ -4704,7 +4739,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4733,14 +4769,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Yield_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Yield_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_yield_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_yield_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_yield_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_yield_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Yield_stmtContext<'input>{
@@ -4755,7 +4791,7 @@ impl<'input> CustomRuleContext<'input> for Yield_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_yield_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_yield_stmt }
 }
-antlr_rust::type_id!{Yield_stmtContextExt<'a>}
+antlr_rust::tid!{Yield_stmtContextExt<'a>}
 
 impl<'input> Yield_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Yield_stmtContextAll<'input>> {
@@ -4789,7 +4825,7 @@ where
 		let mut _localctx = Yield_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 52, RULE_yield_stmt);
         let mut _localctx: Rc<Yield_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4799,7 +4835,8 @@ where
 			recog.yield_expr()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4828,14 +4865,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Raise_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Raise_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_raise_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_raise_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_raise_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_raise_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Raise_stmtContext<'input>{
@@ -4850,7 +4887,7 @@ impl<'input> CustomRuleContext<'input> for Raise_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_raise_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_raise_stmt }
 }
-antlr_rust::type_id!{Raise_stmtContextExt<'a>}
+antlr_rust::tid!{Raise_stmtContextExt<'a>}
 
 impl<'input> Raise_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Raise_stmtContextAll<'input>> {
@@ -4897,8 +4934,8 @@ where
 		let mut _localctx = Raise_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 54, RULE_raise_stmt);
         let mut _localctx: Rc<Raise_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4909,7 +4946,7 @@ where
 			recog.base.set_state(576);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 				{
 				/*InvokeRule test*/
 				recog.base.set_state(571);
@@ -4934,7 +4971,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4963,14 +5001,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Import_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Import_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_import_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_import_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_import_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_import_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Import_stmtContext<'input>{
@@ -4985,7 +5023,7 @@ impl<'input> CustomRuleContext<'input> for Import_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_import_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_import_stmt }
 }
-antlr_rust::type_id!{Import_stmtContextExt<'a>}
+antlr_rust::tid!{Import_stmtContextExt<'a>}
 
 impl<'input> Import_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Import_stmtContextAll<'input>> {
@@ -5022,7 +5060,7 @@ where
 		let mut _localctx = Import_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 56, RULE_import_stmt);
         let mut _localctx: Rc<Import_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(580);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5053,7 +5091,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5082,14 +5121,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Import_nameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Import_nameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_import_name(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_import_name(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_import_name(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_import_name(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Import_nameContext<'input>{
@@ -5104,7 +5143,7 @@ impl<'input> CustomRuleContext<'input> for Import_nameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_import_name }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_import_name }
 }
-antlr_rust::type_id!{Import_nameContextExt<'a>}
+antlr_rust::tid!{Import_nameContextExt<'a>}
 
 impl<'input> Import_nameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Import_nameContextAll<'input>> {
@@ -5143,7 +5182,7 @@ where
 		let mut _localctx = Import_nameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 58, RULE_import_name);
         let mut _localctx: Rc<Import_nameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5156,7 +5195,8 @@ where
 			recog.dotted_as_names()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5185,14 +5225,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Import_fromContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Import_fromContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_import_from(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_import_from(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_import_from(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_import_from(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Import_fromContext<'input>{
@@ -5207,7 +5247,7 @@ impl<'input> CustomRuleContext<'input> for Import_fromContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_import_from }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_import_from }
 }
-antlr_rust::type_id!{Import_fromContextExt<'a>}
+antlr_rust::tid!{Import_fromContextExt<'a>}
 
 impl<'input> Import_fromContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Import_fromContextAll<'input>> {
@@ -5287,8 +5327,8 @@ where
 		let mut _localctx = Import_fromContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 60, RULE_import_from);
         let mut _localctx: Rc<Import_fromContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5408,7 +5448,8 @@ where
 			}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5437,14 +5478,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Import_as_nameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Import_as_nameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_import_as_name(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_import_as_name(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_import_as_name(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_import_as_name(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Import_as_nameContext<'input>{
@@ -5459,7 +5500,7 @@ impl<'input> CustomRuleContext<'input> for Import_as_nameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_import_as_name }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_import_as_name }
 }
-antlr_rust::type_id!{Import_as_nameContextExt<'a>}
+antlr_rust::tid!{Import_as_nameContextExt<'a>}
 
 impl<'input> Import_as_nameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Import_as_nameContextAll<'input>> {
@@ -5501,8 +5542,8 @@ where
 		let mut _localctx = Import_as_nameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 62, RULE_import_as_name);
         let mut _localctx: Rc<Import_as_nameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5527,7 +5568,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5556,14 +5598,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Dotted_as_nameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Dotted_as_nameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dotted_as_name(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_dotted_as_name(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dotted_as_name(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_dotted_as_name(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Dotted_as_nameContext<'input>{
@@ -5578,7 +5620,7 @@ impl<'input> CustomRuleContext<'input> for Dotted_as_nameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dotted_as_name }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dotted_as_name }
 }
-antlr_rust::type_id!{Dotted_as_nameContextExt<'a>}
+antlr_rust::tid!{Dotted_as_nameContextExt<'a>}
 
 impl<'input> Dotted_as_nameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Dotted_as_nameContextAll<'input>> {
@@ -5620,8 +5662,8 @@ where
 		let mut _localctx = Dotted_as_nameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 64, RULE_dotted_as_name);
         let mut _localctx: Rc<Dotted_as_nameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5646,7 +5688,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5675,14 +5718,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Import_as_namesContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Import_as_namesContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_import_as_names(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_import_as_names(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_import_as_names(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_import_as_names(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Import_as_namesContext<'input>{
@@ -5697,7 +5740,7 @@ impl<'input> CustomRuleContext<'input> for Import_as_namesContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_import_as_names }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_import_as_names }
 }
-antlr_rust::type_id!{Import_as_namesContextExt<'a>}
+antlr_rust::tid!{Import_as_namesContextExt<'a>}
 
 impl<'input> Import_as_namesContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Import_as_namesContextAll<'input>> {
@@ -5743,8 +5786,8 @@ where
 		let mut _localctx = Import_as_namesContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 66, RULE_import_as_names);
         let mut _localctx: Rc<Import_as_namesContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -5787,7 +5830,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5816,14 +5860,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Dotted_as_namesContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Dotted_as_namesContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dotted_as_names(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_dotted_as_names(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dotted_as_names(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_dotted_as_names(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Dotted_as_namesContext<'input>{
@@ -5838,7 +5882,7 @@ impl<'input> CustomRuleContext<'input> for Dotted_as_namesContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dotted_as_names }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dotted_as_names }
 }
-antlr_rust::type_id!{Dotted_as_namesContextExt<'a>}
+antlr_rust::tid!{Dotted_as_namesContextExt<'a>}
 
 impl<'input> Dotted_as_namesContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Dotted_as_namesContextAll<'input>> {
@@ -5884,8 +5928,8 @@ where
 		let mut _localctx = Dotted_as_namesContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 68, RULE_dotted_as_names);
         let mut _localctx: Rc<Dotted_as_namesContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5914,7 +5958,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5943,14 +5988,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Dotted_nameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Dotted_nameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dotted_name(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_dotted_name(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dotted_name(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_dotted_name(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Dotted_nameContext<'input>{
@@ -5965,7 +6010,7 @@ impl<'input> CustomRuleContext<'input> for Dotted_nameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dotted_name }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dotted_name }
 }
-antlr_rust::type_id!{Dotted_nameContextExt<'a>}
+antlr_rust::tid!{Dotted_nameContextExt<'a>}
 
 impl<'input> Dotted_nameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Dotted_nameContextAll<'input>> {
@@ -6011,8 +6056,8 @@ where
 		let mut _localctx = Dotted_nameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 70, RULE_dotted_name);
         let mut _localctx: Rc<Dotted_nameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6041,7 +6086,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6070,14 +6116,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Global_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Global_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_global_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_global_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_global_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_global_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Global_stmtContext<'input>{
@@ -6092,7 +6138,7 @@ impl<'input> CustomRuleContext<'input> for Global_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_global_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_global_stmt }
 }
-antlr_rust::type_id!{Global_stmtContextExt<'a>}
+antlr_rust::tid!{Global_stmtContextExt<'a>}
 
 impl<'input> Global_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Global_stmtContextAll<'input>> {
@@ -6143,8 +6189,8 @@ where
 		let mut _localctx = Global_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 72, RULE_global_stmt);
         let mut _localctx: Rc<Global_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6176,7 +6222,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6205,14 +6252,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Nonlocal_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Nonlocal_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_nonlocal_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_nonlocal_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_nonlocal_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_nonlocal_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Nonlocal_stmtContext<'input>{
@@ -6227,7 +6274,7 @@ impl<'input> CustomRuleContext<'input> for Nonlocal_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_nonlocal_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_nonlocal_stmt }
 }
-antlr_rust::type_id!{Nonlocal_stmtContextExt<'a>}
+antlr_rust::tid!{Nonlocal_stmtContextExt<'a>}
 
 impl<'input> Nonlocal_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Nonlocal_stmtContextAll<'input>> {
@@ -6278,8 +6325,8 @@ where
 		let mut _localctx = Nonlocal_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 74, RULE_nonlocal_stmt);
         let mut _localctx: Rc<Nonlocal_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6311,7 +6358,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6340,14 +6388,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Assert_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Assert_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assert_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_assert_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assert_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_assert_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Assert_stmtContext<'input>{
@@ -6362,7 +6410,7 @@ impl<'input> CustomRuleContext<'input> for Assert_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assert_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assert_stmt }
 }
-antlr_rust::type_id!{Assert_stmtContextExt<'a>}
+antlr_rust::tid!{Assert_stmtContextExt<'a>}
 
 impl<'input> Assert_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Assert_stmtContextAll<'input>> {
@@ -6409,8 +6457,8 @@ where
 		let mut _localctx = Assert_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 76, RULE_assert_stmt);
         let mut _localctx: Rc<Assert_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6438,7 +6486,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6467,14 +6516,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Compound_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Compound_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compound_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_compound_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compound_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_compound_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Compound_stmtContext<'input>{
@@ -6489,7 +6538,7 @@ impl<'input> CustomRuleContext<'input> for Compound_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_compound_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compound_stmt }
 }
-antlr_rust::type_id!{Compound_stmtContextExt<'a>}
+antlr_rust::tid!{Compound_stmtContextExt<'a>}
 
 impl<'input> Compound_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Compound_stmtContextAll<'input>> {
@@ -6550,7 +6599,7 @@ where
 		let mut _localctx = Compound_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 78, RULE_compound_stmt);
         let mut _localctx: Rc<Compound_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(680);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6677,7 +6726,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6706,14 +6756,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Async_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Async_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_async_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_async_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_async_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_async_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Async_stmtContext<'input>{
@@ -6728,7 +6778,7 @@ impl<'input> CustomRuleContext<'input> for Async_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_async_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_async_stmt }
 }
-antlr_rust::type_id!{Async_stmtContextExt<'a>}
+antlr_rust::tid!{Async_stmtContextExt<'a>}
 
 impl<'input> Async_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Async_stmtContextAll<'input>> {
@@ -6773,7 +6823,7 @@ where
 		let mut _localctx = Async_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 80, RULE_async_stmt);
         let mut _localctx: Rc<Async_stmtContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6817,7 +6867,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6846,14 +6897,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for If_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for If_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_if_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_if_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_if_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_if_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for If_stmtContext<'input>{
@@ -6868,7 +6919,7 @@ impl<'input> CustomRuleContext<'input> for If_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_if_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_if_stmt }
 }
-antlr_rust::type_id!{If_stmtContextExt<'a>}
+antlr_rust::tid!{If_stmtContextExt<'a>}
 
 impl<'input> If_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<If_stmtContextAll<'input>> {
@@ -6939,8 +6990,8 @@ where
 		let mut _localctx = If_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 82, RULE_if_stmt);
         let mut _localctx: Rc<If_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7004,7 +7055,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7033,14 +7085,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for While_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for While_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_while_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_while_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_while_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_while_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for While_stmtContext<'input>{
@@ -7055,7 +7107,7 @@ impl<'input> CustomRuleContext<'input> for While_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_while_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_while_stmt }
 }
-antlr_rust::type_id!{While_stmtContextExt<'a>}
+antlr_rust::tid!{While_stmtContextExt<'a>}
 
 impl<'input> While_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<While_stmtContextAll<'input>> {
@@ -7114,8 +7166,8 @@ where
 		let mut _localctx = While_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 84, RULE_while_stmt);
         let mut _localctx: Rc<While_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7153,7 +7205,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7182,14 +7235,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for For_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for For_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_for_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_for_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_for_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_for_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for For_stmtContext<'input>{
@@ -7204,7 +7257,7 @@ impl<'input> CustomRuleContext<'input> for For_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_for_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_for_stmt }
 }
-antlr_rust::type_id!{For_stmtContextExt<'a>}
+antlr_rust::tid!{For_stmtContextExt<'a>}
 
 impl<'input> For_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<For_stmtContextAll<'input>> {
@@ -7271,8 +7324,8 @@ where
 		let mut _localctx = For_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 86, RULE_for_stmt);
         let mut _localctx: Rc<For_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7317,7 +7370,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7346,14 +7400,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Try_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Try_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_try_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_try_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_try_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_try_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Try_stmtContext<'input>{
@@ -7368,7 +7422,7 @@ impl<'input> CustomRuleContext<'input> for Try_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_try_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_try_stmt }
 }
-antlr_rust::type_id!{Try_stmtContextExt<'a>}
+antlr_rust::tid!{Try_stmtContextExt<'a>}
 
 impl<'input> Try_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Try_stmtContextAll<'input>> {
@@ -7435,8 +7489,8 @@ where
 		let mut _localctx = Try_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 88, RULE_try_stmt);
         let mut _localctx: Rc<Try_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7541,7 +7595,8 @@ where
 			}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7570,14 +7625,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for With_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for With_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_with_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_with_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_with_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_with_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for With_stmtContext<'input>{
@@ -7592,7 +7647,7 @@ impl<'input> CustomRuleContext<'input> for With_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_with_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_with_stmt }
 }
-antlr_rust::type_id!{With_stmtContextExt<'a>}
+antlr_rust::tid!{With_stmtContextExt<'a>}
 
 impl<'input> With_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<With_stmtContextAll<'input>> {
@@ -7651,8 +7706,8 @@ where
 		let mut _localctx = With_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 90, RULE_with_stmt);
         let mut _localctx: Rc<With_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7691,7 +7746,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7720,14 +7776,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for With_itemContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for With_itemContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_with_item(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_with_item(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_with_item(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_with_item(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for With_itemContext<'input>{
@@ -7742,7 +7798,7 @@ impl<'input> CustomRuleContext<'input> for With_itemContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_with_item }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_with_item }
 }
-antlr_rust::type_id!{With_itemContextExt<'a>}
+antlr_rust::tid!{With_itemContextExt<'a>}
 
 impl<'input> With_itemContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<With_itemContextAll<'input>> {
@@ -7784,8 +7840,8 @@ where
 		let mut _localctx = With_itemContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 92, RULE_with_item);
         let mut _localctx: Rc<With_itemContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7810,7 +7866,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7839,14 +7896,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Except_clauseContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Except_clauseContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_except_clause(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_except_clause(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_except_clause(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_except_clause(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Except_clauseContext<'input>{
@@ -7861,7 +7918,7 @@ impl<'input> CustomRuleContext<'input> for Except_clauseContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_except_clause }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_except_clause }
 }
-antlr_rust::type_id!{Except_clauseContextExt<'a>}
+antlr_rust::tid!{Except_clauseContextExt<'a>}
 
 impl<'input> Except_clauseContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Except_clauseContextAll<'input>> {
@@ -7908,8 +7965,8 @@ where
 		let mut _localctx = Except_clauseContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 94, RULE_except_clause);
         let mut _localctx: Rc<Except_clauseContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7920,7 +7977,7 @@ where
 			recog.base.set_state(776);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 				{
 				/*InvokeRule test*/
 				recog.base.set_state(771);
@@ -7945,7 +8002,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7974,14 +8032,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for BlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for BlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_block(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_block(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_block(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_block(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for BlockContext<'input>{
@@ -7996,7 +8054,7 @@ impl<'input> CustomRuleContext<'input> for BlockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_block }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_block }
 }
-antlr_rust::type_id!{BlockContextExt<'a>}
+antlr_rust::tid!{BlockContextExt<'a>}
 
 impl<'input> BlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockContextAll<'input>> {
@@ -8051,8 +8109,8 @@ where
 		let mut _localctx = BlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 96, RULE_block);
         let mut _localctx: Rc<BlockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(788);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8098,7 +8156,7 @@ where
 						recog.base.set_state(784); 
 						recog.err_handler.sync(&mut recog.base)?;
 						_la = recog.base.input.la(1);
-						if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << ASSERT) | (1usize << ASYNC) | (1usize << AWAIT) | (1usize << BREAK) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DEF) | (1usize << DEL) | (1usize << FALSE) | (1usize << FOR) | (1usize << FROM) | (1usize << GLOBAL) | (1usize << IF) | (1usize << IMPORT) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NONLOCAL) | (1usize << NOT) | (1usize << PASS) | (1usize << RAISE) | (1usize << RETURN) | (1usize << TRUE) | (1usize << TRY) | (1usize << UNDERSCORE) | (1usize << WHILE) | (1usize << WITH) | (1usize << YIELD) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)) | (1usize << (AT - 64)))) != 0)) {break}
+						if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << ASSERT) | (1usize << ASYNC) | (1usize << AWAIT) | (1usize << BREAK) | (1usize << CLASS) | (1usize << CONTINUE) | (1usize << DEF) | (1usize << DEL) | (1usize << FALSE) | (1usize << FOR) | (1usize << FROM) | (1usize << GLOBAL) | (1usize << IF) | (1usize << IMPORT) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (NONLOCAL - 32)) | (1usize << (NOT - 32)) | (1usize << (PASS - 32)) | (1usize << (RAISE - 32)) | (1usize << (RETURN - 32)) | (1usize << (TRUE - 32)) | (1usize << (TRY - 32)) | (1usize << (UNDERSCORE - 32)) | (1usize << (WHILE - 32)) | (1usize << (WITH - 32)) | (1usize << (YIELD - 32)) | (1usize << (NAME - 32)) | (1usize << (ELLIPSIS - 32)) | (1usize << (STAR - 32)) | (1usize << (OPEN_PAREN - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)) | (1usize << (AT - 64)))) != 0)) {break}
 					}
 					recog.base.set_state(786);
 					recog.base.match_token(DEDENT,&mut recog.err_handler)?;
@@ -8108,7 +8166,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8137,14 +8196,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Match_stmtContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Match_stmtContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_match_stmt(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_match_stmt(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_match_stmt(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_match_stmt(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Match_stmtContext<'input>{
@@ -8159,7 +8218,7 @@ impl<'input> CustomRuleContext<'input> for Match_stmtContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_match_stmt }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_match_stmt }
 }
-antlr_rust::type_id!{Match_stmtContextExt<'a>}
+antlr_rust::tid!{Match_stmtContextExt<'a>}
 
 impl<'input> Match_stmtContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Match_stmtContextAll<'input>> {
@@ -8224,8 +8283,8 @@ where
 		let mut _localctx = Match_stmtContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 98, RULE_match_stmt);
         let mut _localctx: Rc<Match_stmtContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8267,7 +8326,8 @@ where
 			recog.base.match_token(DEDENT,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8296,14 +8356,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Subject_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Subject_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_subject_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_subject_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_subject_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_subject_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Subject_exprContext<'input>{
@@ -8318,7 +8378,7 @@ impl<'input> CustomRuleContext<'input> for Subject_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_subject_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_subject_expr }
 }
-antlr_rust::type_id!{Subject_exprContextExt<'a>}
+antlr_rust::tid!{Subject_exprContextExt<'a>}
 
 impl<'input> Subject_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Subject_exprContextAll<'input>> {
@@ -8363,8 +8423,8 @@ where
 		let mut _localctx = Subject_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 100, RULE_subject_expr);
         let mut _localctx: Rc<Subject_exprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(808);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8408,7 +8468,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8437,14 +8498,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Star_named_expressionsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Star_named_expressionsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_star_named_expressions(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_star_named_expressions(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_star_named_expressions(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_star_named_expressions(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Star_named_expressionsContext<'input>{
@@ -8459,7 +8520,7 @@ impl<'input> CustomRuleContext<'input> for Star_named_expressionsContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_star_named_expressions }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_star_named_expressions }
 }
-antlr_rust::type_id!{Star_named_expressionsContextExt<'a>}
+antlr_rust::tid!{Star_named_expressionsContextExt<'a>}
 
 impl<'input> Star_named_expressionsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Star_named_expressionsContextAll<'input>> {
@@ -8505,8 +8566,8 @@ where
 		let mut _localctx = Star_named_expressionsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 102, RULE_star_named_expressions);
         let mut _localctx: Rc<Star_named_expressionsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8529,7 +8590,7 @@ where
 				recog.base.set_state(814); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0)) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0)) {break}
 			}
 			recog.base.set_state(817);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8543,7 +8604,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8572,14 +8634,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Star_named_expressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Star_named_expressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_star_named_expression(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_star_named_expression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_star_named_expression(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_star_named_expression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Star_named_expressionContext<'input>{
@@ -8594,7 +8656,7 @@ impl<'input> CustomRuleContext<'input> for Star_named_expressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_star_named_expression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_star_named_expression }
 }
-antlr_rust::type_id!{Star_named_expressionContextExt<'a>}
+antlr_rust::tid!{Star_named_expressionContextExt<'a>}
 
 impl<'input> Star_named_expressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Star_named_expressionContextAll<'input>> {
@@ -8636,7 +8698,7 @@ where
 		let mut _localctx = Star_named_expressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 104, RULE_star_named_expression);
         let mut _localctx: Rc<Star_named_expressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(822);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8672,7 +8734,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8701,14 +8764,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Case_blockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Case_blockContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_case_block(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_case_block(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_case_block(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_case_block(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Case_blockContext<'input>{
@@ -8723,7 +8786,7 @@ impl<'input> CustomRuleContext<'input> for Case_blockContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_case_block }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_case_block }
 }
-antlr_rust::type_id!{Case_blockContextExt<'a>}
+antlr_rust::tid!{Case_blockContextExt<'a>}
 
 impl<'input> Case_blockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Case_blockContextAll<'input>> {
@@ -8773,8 +8836,8 @@ where
 		let mut _localctx = Case_blockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 106, RULE_case_block);
         let mut _localctx: Rc<Case_blockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8806,7 +8869,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8835,14 +8899,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for GuardContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for GuardContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_guard(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_guard(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_guard(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_guard(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for GuardContext<'input>{
@@ -8857,7 +8921,7 @@ impl<'input> CustomRuleContext<'input> for GuardContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_guard }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_guard }
 }
-antlr_rust::type_id!{GuardContextExt<'a>}
+antlr_rust::tid!{GuardContextExt<'a>}
 
 impl<'input> GuardContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GuardContextAll<'input>> {
@@ -8896,7 +8960,7 @@ where
 		let mut _localctx = GuardContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 108, RULE_guard);
         let mut _localctx: Rc<GuardContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8909,7 +8973,8 @@ where
 			recog.test()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8938,14 +9003,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for PatternsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for PatternsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_patterns(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_patterns(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_patterns(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_patterns(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for PatternsContext<'input>{
@@ -8960,7 +9025,7 @@ impl<'input> CustomRuleContext<'input> for PatternsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_patterns }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_patterns }
 }
-antlr_rust::type_id!{PatternsContextExt<'a>}
+antlr_rust::tid!{PatternsContextExt<'a>}
 
 impl<'input> PatternsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PatternsContextAll<'input>> {
@@ -8997,7 +9062,7 @@ where
 		let mut _localctx = PatternsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 110, RULE_patterns);
         let mut _localctx: Rc<PatternsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(837);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9026,7 +9091,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9055,14 +9121,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for PatternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for PatternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for PatternContext<'input>{
@@ -9077,7 +9143,7 @@ impl<'input> CustomRuleContext<'input> for PatternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pattern }
 }
-antlr_rust::type_id!{PatternContextExt<'a>}
+antlr_rust::tid!{PatternContextExt<'a>}
 
 impl<'input> PatternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PatternContextAll<'input>> {
@@ -9114,7 +9180,7 @@ where
 		let mut _localctx = PatternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 112, RULE_pattern);
         let mut _localctx: Rc<PatternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(841);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9143,7 +9209,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9172,14 +9239,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for As_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for As_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_as_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_as_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_as_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_as_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for As_patternContext<'input>{
@@ -9194,7 +9261,7 @@ impl<'input> CustomRuleContext<'input> for As_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_as_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_as_pattern }
 }
-antlr_rust::type_id!{As_patternContextExt<'a>}
+antlr_rust::tid!{As_patternContextExt<'a>}
 
 impl<'input> As_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<As_patternContextAll<'input>> {
@@ -9236,7 +9303,7 @@ where
 		let mut _localctx = As_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 114, RULE_as_pattern);
         let mut _localctx: Rc<As_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9253,7 +9320,8 @@ where
 			recog.pattern_capture_target()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9282,14 +9350,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Or_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Or_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_or_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_or_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_or_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_or_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Or_patternContext<'input>{
@@ -9304,7 +9372,7 @@ impl<'input> CustomRuleContext<'input> for Or_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_or_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_or_pattern }
 }
-antlr_rust::type_id!{Or_patternContextExt<'a>}
+antlr_rust::tid!{Or_patternContextExt<'a>}
 
 impl<'input> Or_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Or_patternContextAll<'input>> {
@@ -9350,8 +9418,8 @@ where
 		let mut _localctx = Or_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 116, RULE_or_pattern);
         let mut _localctx: Rc<Or_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9380,7 +9448,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9409,14 +9478,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Closed_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Closed_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_closed_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_closed_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_closed_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_closed_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Closed_patternContext<'input>{
@@ -9431,7 +9500,7 @@ impl<'input> CustomRuleContext<'input> for Closed_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_closed_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_closed_pattern }
 }
-antlr_rust::type_id!{Closed_patternContextExt<'a>}
+antlr_rust::tid!{Closed_patternContextExt<'a>}
 
 impl<'input> Closed_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Closed_patternContextAll<'input>> {
@@ -9486,7 +9555,7 @@ where
 		let mut _localctx = Closed_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 118, RULE_closed_pattern);
         let mut _localctx: Rc<Closed_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(863);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9581,7 +9650,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9610,14 +9680,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Literal_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Literal_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_literal_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_literal_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_literal_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_literal_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Literal_patternContext<'input>{
@@ -9632,7 +9702,7 @@ impl<'input> CustomRuleContext<'input> for Literal_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literal_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literal_pattern }
 }
-antlr_rust::type_id!{Literal_patternContextExt<'a>}
+antlr_rust::tid!{Literal_patternContextExt<'a>}
 
 impl<'input> Literal_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Literal_patternContextAll<'input>> {
@@ -9687,7 +9757,7 @@ where
 		let mut _localctx = Literal_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 120, RULE_literal_pattern);
         let mut _localctx: Rc<Literal_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(873);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9701,8 +9771,8 @@ where
 					recog.signed_number()?;
 
 					recog.base.set_state(866);
-					if !({ this.CannotBePlusMinus() }) {
-						Err(FailedPredicateError::new(&mut recog.base, Some(" this.CannotBePlusMinus() ".to_owned()), None))?;
+					if !({ recog.CannotBePlusMinus() }) {
+						Err(FailedPredicateError::new(&mut recog.base, Some(" recog.CannotBePlusMinus() ".to_owned()), None))?;
 					}
 					}
 				}
@@ -9761,7 +9831,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9790,14 +9861,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Literal_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Literal_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_literal_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_literal_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_literal_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_literal_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Literal_exprContext<'input>{
@@ -9812,7 +9883,7 @@ impl<'input> CustomRuleContext<'input> for Literal_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_literal_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_literal_expr }
 }
-antlr_rust::type_id!{Literal_exprContextExt<'a>}
+antlr_rust::tid!{Literal_exprContextExt<'a>}
 
 impl<'input> Literal_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Literal_exprContextAll<'input>> {
@@ -9867,7 +9938,7 @@ where
 		let mut _localctx = Literal_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 122, RULE_literal_expr);
         let mut _localctx: Rc<Literal_exprContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(883);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9881,8 +9952,8 @@ where
 					recog.signed_number()?;
 
 					recog.base.set_state(876);
-					if !({ this.CannotBePlusMinus() }) {
-						Err(FailedPredicateError::new(&mut recog.base, Some(" this.CannotBePlusMinus() ".to_owned()), None))?;
+					if !({ recog.CannotBePlusMinus() }) {
+						Err(FailedPredicateError::new(&mut recog.base, Some(" recog.CannotBePlusMinus() ".to_owned()), None))?;
 					}
 					}
 				}
@@ -9941,7 +10012,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9970,14 +10042,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Complex_numberContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Complex_numberContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_complex_number(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_complex_number(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_complex_number(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_complex_number(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Complex_numberContext<'input>{
@@ -9992,7 +10064,7 @@ impl<'input> CustomRuleContext<'input> for Complex_numberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_complex_number }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_complex_number }
 }
-antlr_rust::type_id!{Complex_numberContextExt<'a>}
+antlr_rust::tid!{Complex_numberContextExt<'a>}
 
 impl<'input> Complex_numberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Complex_numberContextAll<'input>> {
@@ -10039,7 +10111,7 @@ where
 		let mut _localctx = Complex_numberContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 124, RULE_complex_number);
         let mut _localctx: Rc<Complex_numberContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(893);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10082,7 +10154,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10111,14 +10184,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Signed_numberContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Signed_numberContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_signed_number(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_signed_number(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_signed_number(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_signed_number(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Signed_numberContext<'input>{
@@ -10133,7 +10206,7 @@ impl<'input> CustomRuleContext<'input> for Signed_numberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_signed_number }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_signed_number }
 }
-antlr_rust::type_id!{Signed_numberContextExt<'a>}
+antlr_rust::tid!{Signed_numberContextExt<'a>}
 
 impl<'input> Signed_numberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Signed_numberContextAll<'input>> {
@@ -10174,7 +10247,7 @@ where
 		let mut _localctx = Signed_numberContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 126, RULE_signed_number);
         let mut _localctx: Rc<Signed_numberContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(898);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10206,7 +10279,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10235,14 +10309,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Signed_real_numberContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Signed_real_numberContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_signed_real_number(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_signed_real_number(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_signed_real_number(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_signed_real_number(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Signed_real_numberContext<'input>{
@@ -10257,7 +10331,7 @@ impl<'input> CustomRuleContext<'input> for Signed_real_numberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_signed_real_number }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_signed_real_number }
 }
-antlr_rust::type_id!{Signed_real_numberContextExt<'a>}
+antlr_rust::tid!{Signed_real_numberContextExt<'a>}
 
 impl<'input> Signed_real_numberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Signed_real_numberContextAll<'input>> {
@@ -10296,7 +10370,7 @@ where
 		let mut _localctx = Signed_real_numberContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 128, RULE_signed_real_number);
         let mut _localctx: Rc<Signed_real_numberContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(903);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10330,7 +10404,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10359,14 +10434,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Real_numberContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Real_numberContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_real_number(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_real_number(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_real_number(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_real_number(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Real_numberContext<'input>{
@@ -10381,7 +10456,7 @@ impl<'input> CustomRuleContext<'input> for Real_numberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_real_number }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_real_number }
 }
-antlr_rust::type_id!{Real_numberContextExt<'a>}
+antlr_rust::tid!{Real_numberContextExt<'a>}
 
 impl<'input> Real_numberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Real_numberContextAll<'input>> {
@@ -10417,7 +10492,7 @@ where
 		let mut _localctx = Real_numberContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 130, RULE_real_number);
         let mut _localctx: Rc<Real_numberContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10426,7 +10501,8 @@ where
 			recog.base.match_token(NUMBER,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10455,14 +10531,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Imaginary_numberContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Imaginary_numberContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_imaginary_number(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_imaginary_number(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_imaginary_number(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_imaginary_number(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Imaginary_numberContext<'input>{
@@ -10477,7 +10553,7 @@ impl<'input> CustomRuleContext<'input> for Imaginary_numberContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_imaginary_number }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_imaginary_number }
 }
-antlr_rust::type_id!{Imaginary_numberContextExt<'a>}
+antlr_rust::tid!{Imaginary_numberContextExt<'a>}
 
 impl<'input> Imaginary_numberContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Imaginary_numberContextAll<'input>> {
@@ -10513,7 +10589,7 @@ where
 		let mut _localctx = Imaginary_numberContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 132, RULE_imaginary_number);
         let mut _localctx: Rc<Imaginary_numberContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10522,7 +10598,8 @@ where
 			recog.base.match_token(NUMBER,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10551,14 +10628,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Capture_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Capture_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_capture_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_capture_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_capture_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_capture_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Capture_patternContext<'input>{
@@ -10573,7 +10650,7 @@ impl<'input> CustomRuleContext<'input> for Capture_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_capture_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_capture_pattern }
 }
-antlr_rust::type_id!{Capture_patternContextExt<'a>}
+antlr_rust::tid!{Capture_patternContextExt<'a>}
 
 impl<'input> Capture_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Capture_patternContextAll<'input>> {
@@ -10607,7 +10684,7 @@ where
 		let mut _localctx = Capture_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 134, RULE_capture_pattern);
         let mut _localctx: Rc<Capture_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10617,7 +10694,8 @@ where
 			recog.pattern_capture_target()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10646,14 +10724,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Pattern_capture_targetContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Pattern_capture_targetContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pattern_capture_target(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_pattern_capture_target(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pattern_capture_target(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_pattern_capture_target(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Pattern_capture_targetContext<'input>{
@@ -10668,7 +10746,7 @@ impl<'input> CustomRuleContext<'input> for Pattern_capture_targetContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_pattern_capture_target }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pattern_capture_target }
 }
-antlr_rust::type_id!{Pattern_capture_targetContextExt<'a>}
+antlr_rust::tid!{Pattern_capture_targetContextExt<'a>}
 
 impl<'input> Pattern_capture_targetContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Pattern_capture_targetContextAll<'input>> {
@@ -10702,7 +10780,7 @@ where
 		let mut _localctx = Pattern_capture_targetContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 136, RULE_pattern_capture_target);
         let mut _localctx: Rc<Pattern_capture_targetContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10712,11 +10790,12 @@ where
 			recog.name()?;
 
 			recog.base.set_state(912);
-			if !({ this.CannotBeDotLpEq() }) {
-				Err(FailedPredicateError::new(&mut recog.base, Some(" this.CannotBeDotLpEq() ".to_owned()), None))?;
+			if !({ recog.CannotBeDotLpEq() }) {
+				Err(FailedPredicateError::new(&mut recog.base, Some(" recog.CannotBeDotLpEq() ".to_owned()), None))?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10745,14 +10824,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Wildcard_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Wildcard_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_wildcard_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_wildcard_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_wildcard_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_wildcard_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Wildcard_patternContext<'input>{
@@ -10767,7 +10846,7 @@ impl<'input> CustomRuleContext<'input> for Wildcard_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_wildcard_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_wildcard_pattern }
 }
-antlr_rust::type_id!{Wildcard_patternContextExt<'a>}
+antlr_rust::tid!{Wildcard_patternContextExt<'a>}
 
 impl<'input> Wildcard_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Wildcard_patternContextAll<'input>> {
@@ -10803,7 +10882,7 @@ where
 		let mut _localctx = Wildcard_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 138, RULE_wildcard_pattern);
         let mut _localctx: Rc<Wildcard_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10812,7 +10891,8 @@ where
 			recog.base.match_token(UNDERSCORE,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10841,14 +10921,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Value_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Value_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_value_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_value_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_value_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_value_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Value_patternContext<'input>{
@@ -10863,7 +10943,7 @@ impl<'input> CustomRuleContext<'input> for Value_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_value_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_value_pattern }
 }
-antlr_rust::type_id!{Value_patternContextExt<'a>}
+antlr_rust::tid!{Value_patternContextExt<'a>}
 
 impl<'input> Value_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Value_patternContextAll<'input>> {
@@ -10897,7 +10977,7 @@ where
 		let mut _localctx = Value_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 140, RULE_value_pattern);
         let mut _localctx: Rc<Value_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10907,11 +10987,12 @@ where
 			recog.attr()?;
 
 			recog.base.set_state(917);
-			if !({ this.CannotBeDotLpEq() }) {
-				Err(FailedPredicateError::new(&mut recog.base, Some(" this.CannotBeDotLpEq() ".to_owned()), None))?;
+			if !({ recog.CannotBeDotLpEq() }) {
+				Err(FailedPredicateError::new(&mut recog.base, Some(" recog.CannotBeDotLpEq() ".to_owned()), None))?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10940,14 +11021,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for AttrContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for AttrContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_attr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_attr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_attr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_attr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for AttrContext<'input>{
@@ -10962,7 +11043,7 @@ impl<'input> CustomRuleContext<'input> for AttrContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_attr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_attr }
 }
-antlr_rust::type_id!{AttrContextExt<'a>}
+antlr_rust::tid!{AttrContextExt<'a>}
 
 impl<'input> AttrContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AttrContextAll<'input>> {
@@ -11008,7 +11089,7 @@ where
 		let mut _localctx = AttrContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 142, RULE_attr);
         let mut _localctx: Rc<AttrContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -11044,7 +11125,8 @@ where
 				if _alt==2 || _alt==INVALID_ALT { break }
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11073,14 +11155,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Name_or_attrContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Name_or_attrContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_name_or_attr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_name_or_attr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_name_or_attr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_name_or_attr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Name_or_attrContext<'input>{
@@ -11095,7 +11177,7 @@ impl<'input> CustomRuleContext<'input> for Name_or_attrContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_name_or_attr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_name_or_attr }
 }
-antlr_rust::type_id!{Name_or_attrContextExt<'a>}
+antlr_rust::tid!{Name_or_attrContextExt<'a>}
 
 impl<'input> Name_or_attrContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Name_or_attrContextAll<'input>> {
@@ -11132,7 +11214,7 @@ where
 		let mut _localctx = Name_or_attrContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 144, RULE_name_or_attr);
         let mut _localctx: Rc<Name_or_attrContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(928);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11161,7 +11243,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11190,14 +11273,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Group_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Group_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_group_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_group_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_group_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_group_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Group_patternContext<'input>{
@@ -11212,7 +11295,7 @@ impl<'input> CustomRuleContext<'input> for Group_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_group_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_group_pattern }
 }
-antlr_rust::type_id!{Group_patternContextExt<'a>}
+antlr_rust::tid!{Group_patternContextExt<'a>}
 
 impl<'input> Group_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Group_patternContextAll<'input>> {
@@ -11256,7 +11339,7 @@ where
 		let mut _localctx = Group_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 146, RULE_group_pattern);
         let mut _localctx: Rc<Group_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11272,7 +11355,8 @@ where
 			recog.base.match_token(CLOSE_PAREN,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11301,14 +11385,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Sequence_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Sequence_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_sequence_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_sequence_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_sequence_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_sequence_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Sequence_patternContext<'input>{
@@ -11323,7 +11407,7 @@ impl<'input> CustomRuleContext<'input> for Sequence_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_sequence_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_sequence_pattern }
 }
-antlr_rust::type_id!{Sequence_patternContextExt<'a>}
+antlr_rust::tid!{Sequence_patternContextExt<'a>}
 
 impl<'input> Sequence_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Sequence_patternContextAll<'input>> {
@@ -11380,8 +11464,8 @@ where
 		let mut _localctx = Sequence_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 148, RULE_sequence_pattern);
         let mut _localctx: Rc<Sequence_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(944);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11397,7 +11481,7 @@ where
 					recog.base.set_state(936);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (MINUS - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 38)) & !0x3f) == 0 && ((1usize << (_la - 38)) & ((1usize << (TRUE - 38)) | (1usize << (UNDERSCORE - 38)) | (1usize << (NAME - 38)) | (1usize << (STAR - 38)) | (1usize << (OPEN_PAREN - 38)) | (1usize << (OPEN_BRACK - 38)))) != 0) || _la==MINUS || _la==OPEN_BRACE {
 						{
 						/*InvokeRule maybe_sequence_pattern*/
 						recog.base.set_state(935);
@@ -11423,7 +11507,7 @@ where
 					recog.base.set_state(941);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (MINUS - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 38)) & !0x3f) == 0 && ((1usize << (_la - 38)) & ((1usize << (TRUE - 38)) | (1usize << (UNDERSCORE - 38)) | (1usize << (NAME - 38)) | (1usize << (STAR - 38)) | (1usize << (OPEN_PAREN - 38)) | (1usize << (OPEN_BRACK - 38)))) != 0) || _la==MINUS || _la==OPEN_BRACE {
 						{
 						/*InvokeRule open_sequence_pattern*/
 						recog.base.set_state(940);
@@ -11440,7 +11524,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11469,14 +11554,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Open_sequence_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Open_sequence_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_open_sequence_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_open_sequence_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_open_sequence_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_open_sequence_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Open_sequence_patternContext<'input>{
@@ -11491,7 +11576,7 @@ impl<'input> CustomRuleContext<'input> for Open_sequence_patternContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_open_sequence_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_open_sequence_pattern }
 }
-antlr_rust::type_id!{Open_sequence_patternContextExt<'a>}
+antlr_rust::tid!{Open_sequence_patternContextExt<'a>}
 
 impl<'input> Open_sequence_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Open_sequence_patternContextAll<'input>> {
@@ -11533,8 +11618,8 @@ where
 		let mut _localctx = Open_sequence_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 150, RULE_open_sequence_pattern);
         let mut _localctx: Rc<Open_sequence_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11549,7 +11634,7 @@ where
 			recog.base.set_state(949);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (MINUS - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << FALSE) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 38)) & !0x3f) == 0 && ((1usize << (_la - 38)) & ((1usize << (TRUE - 38)) | (1usize << (UNDERSCORE - 38)) | (1usize << (NAME - 38)) | (1usize << (STAR - 38)) | (1usize << (OPEN_PAREN - 38)) | (1usize << (OPEN_BRACK - 38)))) != 0) || _la==MINUS || _la==OPEN_BRACE {
 				{
 				/*InvokeRule maybe_sequence_pattern*/
 				recog.base.set_state(948);
@@ -11559,7 +11644,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11588,14 +11674,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Maybe_sequence_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Maybe_sequence_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_maybe_sequence_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_maybe_sequence_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_maybe_sequence_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_maybe_sequence_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Maybe_sequence_patternContext<'input>{
@@ -11610,7 +11696,7 @@ impl<'input> CustomRuleContext<'input> for Maybe_sequence_patternContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_maybe_sequence_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_maybe_sequence_pattern }
 }
-antlr_rust::type_id!{Maybe_sequence_patternContextExt<'a>}
+antlr_rust::tid!{Maybe_sequence_patternContextExt<'a>}
 
 impl<'input> Maybe_sequence_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Maybe_sequence_patternContextAll<'input>> {
@@ -11656,8 +11742,8 @@ where
 		let mut _localctx = Maybe_sequence_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 152, RULE_maybe_sequence_pattern);
         let mut _localctx: Rc<Maybe_sequence_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -11700,7 +11786,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11729,14 +11816,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Maybe_star_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Maybe_star_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_maybe_star_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_maybe_star_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_maybe_star_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_maybe_star_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Maybe_star_patternContext<'input>{
@@ -11751,7 +11838,7 @@ impl<'input> CustomRuleContext<'input> for Maybe_star_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_maybe_star_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_maybe_star_pattern }
 }
-antlr_rust::type_id!{Maybe_star_patternContextExt<'a>}
+antlr_rust::tid!{Maybe_star_patternContextExt<'a>}
 
 impl<'input> Maybe_star_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Maybe_star_patternContextAll<'input>> {
@@ -11788,7 +11875,7 @@ where
 		let mut _localctx = Maybe_star_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 154, RULE_maybe_star_pattern);
         let mut _localctx: Rc<Maybe_star_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(964);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11820,7 +11907,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11849,14 +11937,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Star_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Star_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_star_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_star_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_star_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_star_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Star_patternContext<'input>{
@@ -11871,7 +11959,7 @@ impl<'input> CustomRuleContext<'input> for Star_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_star_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_star_pattern }
 }
-antlr_rust::type_id!{Star_patternContextExt<'a>}
+antlr_rust::tid!{Star_patternContextExt<'a>}
 
 impl<'input> Star_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Star_patternContextAll<'input>> {
@@ -11913,7 +12001,7 @@ where
 		let mut _localctx = Star_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 156, RULE_star_pattern);
         let mut _localctx: Rc<Star_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(970);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11948,7 +12036,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11977,14 +12066,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Mapping_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Mapping_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_mapping_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_mapping_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_mapping_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_mapping_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Mapping_patternContext<'input>{
@@ -11999,7 +12088,7 @@ impl<'input> CustomRuleContext<'input> for Mapping_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_mapping_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_mapping_pattern }
 }
-antlr_rust::type_id!{Mapping_patternContextExt<'a>}
+antlr_rust::tid!{Mapping_patternContextExt<'a>}
 
 impl<'input> Mapping_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Mapping_patternContextAll<'input>> {
@@ -12055,8 +12144,8 @@ where
 		let mut _localctx = Mapping_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 158, RULE_mapping_pattern);
         let mut _localctx: Rc<Mapping_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(997);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12167,7 +12256,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12196,14 +12286,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Items_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Items_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_items_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_items_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_items_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_items_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Items_patternContext<'input>{
@@ -12218,7 +12308,7 @@ impl<'input> CustomRuleContext<'input> for Items_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_items_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_items_pattern }
 }
-antlr_rust::type_id!{Items_patternContextExt<'a>}
+antlr_rust::tid!{Items_patternContextExt<'a>}
 
 impl<'input> Items_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Items_patternContextAll<'input>> {
@@ -12264,7 +12354,7 @@ where
 		let mut _localctx = Items_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 160, RULE_items_pattern);
         let mut _localctx: Rc<Items_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -12296,7 +12386,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(128,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12325,14 +12416,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Key_value_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Key_value_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_key_value_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_key_value_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_key_value_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_key_value_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Key_value_patternContext<'input>{
@@ -12347,7 +12438,7 @@ impl<'input> CustomRuleContext<'input> for Key_value_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_key_value_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_key_value_pattern }
 }
-antlr_rust::type_id!{Key_value_patternContextExt<'a>}
+antlr_rust::tid!{Key_value_patternContextExt<'a>}
 
 impl<'input> Key_value_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Key_value_patternContextAll<'input>> {
@@ -12392,7 +12483,7 @@ where
 		let mut _localctx = Key_value_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 162, RULE_key_value_pattern);
         let mut _localctx: Rc<Key_value_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12430,7 +12521,8 @@ where
 			recog.pattern()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12459,14 +12551,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Double_star_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Double_star_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_double_star_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_double_star_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_double_star_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_double_star_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Double_star_patternContext<'input>{
@@ -12481,7 +12573,7 @@ impl<'input> CustomRuleContext<'input> for Double_star_patternContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_double_star_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_double_star_pattern }
 }
-antlr_rust::type_id!{Double_star_patternContextExt<'a>}
+antlr_rust::tid!{Double_star_patternContextExt<'a>}
 
 impl<'input> Double_star_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Double_star_patternContextAll<'input>> {
@@ -12520,7 +12612,7 @@ where
 		let mut _localctx = Double_star_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 164, RULE_double_star_pattern);
         let mut _localctx: Rc<Double_star_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12533,7 +12625,8 @@ where
 			recog.pattern_capture_target()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12562,14 +12655,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Class_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Class_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_class_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_class_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_class_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_class_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Class_patternContext<'input>{
@@ -12584,7 +12677,7 @@ impl<'input> CustomRuleContext<'input> for Class_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_class_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_class_pattern }
 }
-antlr_rust::type_id!{Class_patternContextExt<'a>}
+antlr_rust::tid!{Class_patternContextExt<'a>}
 
 impl<'input> Class_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Class_patternContextAll<'input>> {
@@ -12643,8 +12736,8 @@ where
 		let mut _localctx = Class_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 166, RULE_class_pattern);
         let mut _localctx: Rc<Class_patternContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1047);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12771,7 +12864,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12800,14 +12894,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Positional_patternsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Positional_patternsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_positional_patterns(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_positional_patterns(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_positional_patterns(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_positional_patterns(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Positional_patternsContext<'input>{
@@ -12822,7 +12916,7 @@ impl<'input> CustomRuleContext<'input> for Positional_patternsContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_positional_patterns }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_positional_patterns }
 }
-antlr_rust::type_id!{Positional_patternsContextExt<'a>}
+antlr_rust::tid!{Positional_patternsContextExt<'a>}
 
 impl<'input> Positional_patternsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Positional_patternsContextAll<'input>> {
@@ -12868,7 +12962,7 @@ where
 		let mut _localctx = Positional_patternsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 168, RULE_positional_patterns);
         let mut _localctx: Rc<Positional_patternsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -12900,7 +12994,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(134,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12929,14 +13024,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Keyword_patternsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Keyword_patternsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_keyword_patterns(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_keyword_patterns(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_keyword_patterns(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_keyword_patterns(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Keyword_patternsContext<'input>{
@@ -12951,7 +13046,7 @@ impl<'input> CustomRuleContext<'input> for Keyword_patternsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_keyword_patterns }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_keyword_patterns }
 }
-antlr_rust::type_id!{Keyword_patternsContextExt<'a>}
+antlr_rust::tid!{Keyword_patternsContextExt<'a>}
 
 impl<'input> Keyword_patternsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Keyword_patternsContextAll<'input>> {
@@ -12997,7 +13092,7 @@ where
 		let mut _localctx = Keyword_patternsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 170, RULE_keyword_patterns);
         let mut _localctx: Rc<Keyword_patternsContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -13029,7 +13124,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(135,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13058,14 +13154,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Keyword_patternContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Keyword_patternContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_keyword_pattern(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_keyword_pattern(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_keyword_pattern(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_keyword_pattern(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Keyword_patternContext<'input>{
@@ -13080,7 +13176,7 @@ impl<'input> CustomRuleContext<'input> for Keyword_patternContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_keyword_pattern }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_keyword_pattern }
 }
-antlr_rust::type_id!{Keyword_patternContextExt<'a>}
+antlr_rust::tid!{Keyword_patternContextExt<'a>}
 
 impl<'input> Keyword_patternContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Keyword_patternContextAll<'input>> {
@@ -13122,7 +13218,7 @@ where
 		let mut _localctx = Keyword_patternContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 172, RULE_keyword_pattern);
         let mut _localctx: Rc<Keyword_patternContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13139,7 +13235,8 @@ where
 			recog.pattern()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13168,14 +13265,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for TestContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for TestContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_test(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_test(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_test(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_test(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for TestContext<'input>{
@@ -13190,7 +13287,7 @@ impl<'input> CustomRuleContext<'input> for TestContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_test }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_test }
 }
-antlr_rust::type_id!{TestContextExt<'a>}
+antlr_rust::tid!{TestContextExt<'a>}
 
 impl<'input> TestContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TestContextAll<'input>> {
@@ -13243,8 +13340,8 @@ where
 		let mut _localctx = TestContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 174, RULE_test);
         let mut _localctx: Rc<TestContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1078);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13298,7 +13395,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13327,14 +13425,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Test_nocondContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Test_nocondContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_test_nocond(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_test_nocond(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_test_nocond(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_test_nocond(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Test_nocondContext<'input>{
@@ -13349,7 +13447,7 @@ impl<'input> CustomRuleContext<'input> for Test_nocondContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_test_nocond }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_test_nocond }
 }
-antlr_rust::type_id!{Test_nocondContextExt<'a>}
+antlr_rust::tid!{Test_nocondContextExt<'a>}
 
 impl<'input> Test_nocondContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Test_nocondContextAll<'input>> {
@@ -13386,7 +13484,7 @@ where
 		let mut _localctx = Test_nocondContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 176, RULE_test_nocond);
         let mut _localctx: Rc<Test_nocondContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1082);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13418,7 +13516,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13447,14 +13546,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for LambdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for LambdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_lambdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_lambdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for LambdefContext<'input>{
@@ -13469,7 +13568,7 @@ impl<'input> CustomRuleContext<'input> for LambdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdef }
 }
-antlr_rust::type_id!{LambdefContextExt<'a>}
+antlr_rust::tid!{LambdefContextExt<'a>}
 
 impl<'input> LambdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LambdefContextAll<'input>> {
@@ -13516,8 +13615,8 @@ where
 		let mut _localctx = LambdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 178, RULE_lambdef);
         let mut _localctx: Rc<LambdefContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13528,7 +13627,7 @@ where
 			recog.base.set_state(1086);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << POWER))) != 0) {
+			if _la==MATCH || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (UNDERSCORE - 40)) | (1usize << (NAME - 40)) | (1usize << (STAR - 40)) | (1usize << (POWER - 40)))) != 0) {
 				{
 				/*InvokeRule varargslist*/
 				recog.base.set_state(1085);
@@ -13545,7 +13644,8 @@ where
 			recog.test()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13574,14 +13674,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Lambdef_nocondContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Lambdef_nocondContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_lambdef_nocond(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_lambdef_nocond(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_lambdef_nocond(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_lambdef_nocond(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Lambdef_nocondContext<'input>{
@@ -13596,7 +13696,7 @@ impl<'input> CustomRuleContext<'input> for Lambdef_nocondContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_lambdef_nocond }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_lambdef_nocond }
 }
-antlr_rust::type_id!{Lambdef_nocondContextExt<'a>}
+antlr_rust::tid!{Lambdef_nocondContextExt<'a>}
 
 impl<'input> Lambdef_nocondContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Lambdef_nocondContextAll<'input>> {
@@ -13643,8 +13743,8 @@ where
 		let mut _localctx = Lambdef_nocondContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 180, RULE_lambdef_nocond);
         let mut _localctx: Rc<Lambdef_nocondContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13655,7 +13755,7 @@ where
 			recog.base.set_state(1093);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << STAR) | (1usize << POWER))) != 0) {
+			if _la==MATCH || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (UNDERSCORE - 40)) | (1usize << (NAME - 40)) | (1usize << (STAR - 40)) | (1usize << (POWER - 40)))) != 0) {
 				{
 				/*InvokeRule varargslist*/
 				recog.base.set_state(1092);
@@ -13672,7 +13772,8 @@ where
 			recog.test_nocond()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13701,14 +13802,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Or_testContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Or_testContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_or_test(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_or_test(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_or_test(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_or_test(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Or_testContext<'input>{
@@ -13723,7 +13824,7 @@ impl<'input> CustomRuleContext<'input> for Or_testContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_or_test }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_or_test }
 }
-antlr_rust::type_id!{Or_testContextExt<'a>}
+antlr_rust::tid!{Or_testContextExt<'a>}
 
 impl<'input> Or_testContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Or_testContextAll<'input>> {
@@ -13769,8 +13870,8 @@ where
 		let mut _localctx = Or_testContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 182, RULE_or_test);
         let mut _localctx: Rc<Or_testContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13799,7 +13900,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13828,14 +13930,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for And_testContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for And_testContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_and_test(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_and_test(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_and_test(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_and_test(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for And_testContext<'input>{
@@ -13850,7 +13952,7 @@ impl<'input> CustomRuleContext<'input> for And_testContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_and_test }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_and_test }
 }
-antlr_rust::type_id!{And_testContextExt<'a>}
+antlr_rust::tid!{And_testContextExt<'a>}
 
 impl<'input> And_testContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<And_testContextAll<'input>> {
@@ -13896,8 +13998,8 @@ where
 		let mut _localctx = And_testContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 184, RULE_and_test);
         let mut _localctx: Rc<And_testContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13926,7 +14028,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13955,14 +14058,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Not_testContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Not_testContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_not_test(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_not_test(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_not_test(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_not_test(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Not_testContext<'input>{
@@ -13977,7 +14080,7 @@ impl<'input> CustomRuleContext<'input> for Not_testContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_not_test }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_not_test }
 }
-antlr_rust::type_id!{Not_testContextExt<'a>}
+antlr_rust::tid!{Not_testContextExt<'a>}
 
 impl<'input> Not_testContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Not_testContextAll<'input>> {
@@ -14019,7 +14122,7 @@ where
 		let mut _localctx = Not_testContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 186, RULE_not_test);
         let mut _localctx: Rc<Not_testContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1117);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -14054,7 +14157,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14083,14 +14187,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ComparisonContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ComparisonContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_comparison(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_comparison(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_comparison(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_comparison(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ComparisonContext<'input>{
@@ -14105,7 +14209,7 @@ impl<'input> CustomRuleContext<'input> for ComparisonContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_comparison }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_comparison }
 }
-antlr_rust::type_id!{ComparisonContextExt<'a>}
+antlr_rust::tid!{ComparisonContextExt<'a>}
 
 impl<'input> ComparisonContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ComparisonContextAll<'input>> {
@@ -14148,7 +14252,7 @@ where
 		let mut _localctx = ComparisonContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 188, RULE_comparison);
         let mut _localctx: Rc<ComparisonContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -14181,7 +14285,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(144,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14210,14 +14315,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Comp_opContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Comp_opContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_comp_op(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_comp_op(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_comp_op(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_comp_op(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Comp_opContext<'input>{
@@ -14232,7 +14337,7 @@ impl<'input> CustomRuleContext<'input> for Comp_opContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_comp_op }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_comp_op }
 }
-antlr_rust::type_id!{Comp_opContextExt<'a>}
+antlr_rust::tid!{Comp_opContextExt<'a>}
 
 impl<'input> Comp_opContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Comp_opContextAll<'input>> {
@@ -14313,7 +14418,7 @@ where
 		let mut _localctx = Comp_opContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 190, RULE_comp_op);
         let mut _localctx: Rc<Comp_opContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1141);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -14436,7 +14541,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14465,14 +14571,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Star_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Star_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_star_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_star_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_star_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_star_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Star_exprContext<'input>{
@@ -14487,7 +14593,7 @@ impl<'input> CustomRuleContext<'input> for Star_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_star_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_star_expr }
 }
-antlr_rust::type_id!{Star_exprContextExt<'a>}
+antlr_rust::tid!{Star_exprContextExt<'a>}
 
 impl<'input> Star_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Star_exprContextAll<'input>> {
@@ -14526,7 +14632,7 @@ where
 		let mut _localctx = Star_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 192, RULE_star_expr);
         let mut _localctx: Rc<Star_exprContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14539,7 +14645,8 @@ where
 			recog.expr_rec(0)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14568,14 +14675,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ExprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ExprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ExprContext<'input>{
@@ -14590,7 +14697,7 @@ impl<'input> CustomRuleContext<'input> for ExprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expr }
 }
-antlr_rust::type_id!{ExprContextExt<'a>}
+antlr_rust::tid!{ExprContextExt<'a>}
 
 impl<'input> ExprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExprContextAll<'input>> {
@@ -14720,8 +14827,8 @@ where
 	    let mut _localctx: Rc<ExprContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 194;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14968,7 +15075,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(149,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14996,14 +15104,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Atom_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Atom_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_atom_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_atom_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_atom_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_atom_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Atom_exprContext<'input>{
@@ -15018,7 +15126,7 @@ impl<'input> CustomRuleContext<'input> for Atom_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_atom_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_atom_expr }
 }
-antlr_rust::type_id!{Atom_exprContextExt<'a>}
+antlr_rust::tid!{Atom_exprContextExt<'a>}
 
 impl<'input> Atom_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Atom_exprContextAll<'input>> {
@@ -15063,8 +15171,8 @@ where
 		let mut _localctx = Atom_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 196, RULE_atom_expr);
         let mut _localctx: Rc<Atom_exprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -15104,7 +15212,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(151,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15133,14 +15242,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for AtomContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for AtomContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_atom(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_atom(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_atom(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_atom(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for AtomContext<'input>{
@@ -15155,7 +15264,7 @@ impl<'input> CustomRuleContext<'input> for AtomContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_atom }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_atom }
 }
-antlr_rust::type_id!{AtomContextExt<'a>}
+antlr_rust::tid!{AtomContextExt<'a>}
 
 impl<'input> AtomContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AtomContextAll<'input>> {
@@ -15262,8 +15371,8 @@ where
 		let mut _localctx = AtomContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 198, RULE_atom);
         let mut _localctx: Rc<AtomContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			recog.base.set_state(1219);
@@ -15325,7 +15434,7 @@ where
 					recog.base.set_state(1200);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 						{
 						/*InvokeRule testlist_comp*/
 						recog.base.set_state(1199);
@@ -15351,7 +15460,7 @@ where
 					recog.base.set_state(1205);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN) | (1usize << POWER))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (POWER - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 						{
 						/*InvokeRule dictorsetmaker*/
 						recog.base.set_state(1204);
@@ -15464,7 +15573,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15493,14 +15603,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for NameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for NameContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_name(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_name(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_name(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_name(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for NameContext<'input>{
@@ -15515,7 +15625,7 @@ impl<'input> CustomRuleContext<'input> for NameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_name }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_name }
 }
-antlr_rust::type_id!{NameContextExt<'a>}
+antlr_rust::tid!{NameContextExt<'a>}
 
 impl<'input> NameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NameContextAll<'input>> {
@@ -15561,15 +15671,15 @@ where
 		let mut _localctx = NameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 200, RULE_name);
         let mut _localctx: Rc<NameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(1221);
 			_la = recog.base.input.la(1);
-			if { !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << MATCH) | (1usize << UNDERSCORE) | (1usize << NAME))) != 0)) } {
+			if { !(((((_la - 30)) & !0x3f) == 0 && ((1usize << (_la - 30)) & ((1usize << (MATCH - 30)) | (1usize << (UNDERSCORE - 30)) | (1usize << (NAME - 30)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -15579,7 +15689,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15608,14 +15719,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Testlist_compContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Testlist_compContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_testlist_comp(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_testlist_comp(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_testlist_comp(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_testlist_comp(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Testlist_compContext<'input>{
@@ -15630,7 +15741,7 @@ impl<'input> CustomRuleContext<'input> for Testlist_compContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_testlist_comp }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_testlist_comp }
 }
-antlr_rust::type_id!{Testlist_compContextExt<'a>}
+antlr_rust::tid!{Testlist_compContextExt<'a>}
 
 impl<'input> Testlist_compContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Testlist_compContextAll<'input>> {
@@ -15685,8 +15796,8 @@ where
 		let mut _localctx = Testlist_compContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 202, RULE_testlist_comp);
         let mut _localctx: Rc<Testlist_compContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -15796,7 +15907,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -15825,14 +15937,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for TrailerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for TrailerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_trailer(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_trailer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_trailer(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_trailer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for TrailerContext<'input>{
@@ -15847,7 +15959,7 @@ impl<'input> CustomRuleContext<'input> for TrailerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_trailer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_trailer }
 }
-antlr_rust::type_id!{TrailerContextExt<'a>}
+antlr_rust::tid!{TrailerContextExt<'a>}
 
 impl<'input> TrailerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TrailerContextAll<'input>> {
@@ -15912,8 +16024,8 @@ where
 		let mut _localctx = TrailerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 204, RULE_trailer);
         let mut _localctx: Rc<TrailerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1254);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -15929,7 +16041,7 @@ where
 					recog.base.set_state(1245);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN) | (1usize << POWER))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (POWER - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 						{
 						/*InvokeRule arglist*/
 						recog.base.set_state(1244);
@@ -15979,7 +16091,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16008,14 +16121,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for SubscriptlistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for SubscriptlistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_subscriptlist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_subscriptlist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_subscriptlist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_subscriptlist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for SubscriptlistContext<'input>{
@@ -16030,7 +16143,7 @@ impl<'input> CustomRuleContext<'input> for SubscriptlistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_subscriptlist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_subscriptlist }
 }
-antlr_rust::type_id!{SubscriptlistContextExt<'a>}
+antlr_rust::tid!{SubscriptlistContextExt<'a>}
 
 impl<'input> SubscriptlistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SubscriptlistContextAll<'input>> {
@@ -16076,8 +16189,8 @@ where
 		let mut _localctx = SubscriptlistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 206, RULE_subscriptlist);
         let mut _localctx: Rc<SubscriptlistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -16120,7 +16233,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16149,14 +16263,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Subscript_Context<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Subscript_Context<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_subscript_(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_subscript_(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_subscript_(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_subscript_(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Subscript_Context<'input>{
@@ -16171,7 +16285,7 @@ impl<'input> CustomRuleContext<'input> for Subscript_ContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_subscript_ }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_subscript_ }
 }
-antlr_rust::type_id!{Subscript_ContextExt<'a>}
+antlr_rust::tid!{Subscript_ContextExt<'a>}
 
 impl<'input> Subscript_ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Subscript_ContextAll<'input>> {
@@ -16216,8 +16330,8 @@ where
 		let mut _localctx = Subscript_ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 208, RULE_subscript_);
         let mut _localctx: Rc<Subscript_ContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1278);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -16240,7 +16354,7 @@ where
 					recog.base.set_state(1269);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 						{
 						/*InvokeRule test*/
 						recog.base.set_state(1268);
@@ -16255,7 +16369,7 @@ where
 					recog.base.set_state(1273);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 						{
 						/*InvokeRule test*/
 						recog.base.set_state(1272);
@@ -16281,7 +16395,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16310,14 +16425,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for SliceopContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for SliceopContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_sliceop(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_sliceop(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_sliceop(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_sliceop(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for SliceopContext<'input>{
@@ -16332,7 +16447,7 @@ impl<'input> CustomRuleContext<'input> for SliceopContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_sliceop }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_sliceop }
 }
-antlr_rust::type_id!{SliceopContextExt<'a>}
+antlr_rust::tid!{SliceopContextExt<'a>}
 
 impl<'input> SliceopContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SliceopContextAll<'input>> {
@@ -16371,8 +16486,8 @@ where
 		let mut _localctx = SliceopContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 210, RULE_sliceop);
         let mut _localctx: Rc<SliceopContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -16383,7 +16498,7 @@ where
 			recog.base.set_state(1282);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 				{
 				/*InvokeRule test*/
 				recog.base.set_state(1281);
@@ -16393,7 +16508,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16422,14 +16538,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ExprlistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ExprlistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exprlist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_exprlist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exprlist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_exprlist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ExprlistContext<'input>{
@@ -16444,7 +16560,7 @@ impl<'input> CustomRuleContext<'input> for ExprlistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_exprlist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exprlist }
 }
-antlr_rust::type_id!{ExprlistContextExt<'a>}
+antlr_rust::tid!{ExprlistContextExt<'a>}
 
 impl<'input> ExprlistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExprlistContextAll<'input>> {
@@ -16496,8 +16612,8 @@ where
 		let mut _localctx = ExprlistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 212, RULE_exprlist);
         let mut _localctx: Rc<ExprlistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -16585,7 +16701,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16614,14 +16731,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for TestlistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for TestlistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_testlist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_testlist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_testlist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_testlist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for TestlistContext<'input>{
@@ -16636,7 +16753,7 @@ impl<'input> CustomRuleContext<'input> for TestlistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_testlist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_testlist }
 }
-antlr_rust::type_id!{TestlistContextExt<'a>}
+antlr_rust::tid!{TestlistContextExt<'a>}
 
 impl<'input> TestlistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TestlistContextAll<'input>> {
@@ -16682,8 +16799,8 @@ where
 		let mut _localctx = TestlistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 214, RULE_testlist);
         let mut _localctx: Rc<TestlistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -16726,7 +16843,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -16755,14 +16873,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for DictorsetmakerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for DictorsetmakerContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_dictorsetmaker(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_dictorsetmaker(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_dictorsetmaker(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_dictorsetmaker(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for DictorsetmakerContext<'input>{
@@ -16777,7 +16895,7 @@ impl<'input> CustomRuleContext<'input> for DictorsetmakerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_dictorsetmaker }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_dictorsetmaker }
 }
-antlr_rust::type_id!{DictorsetmakerContextExt<'a>}
+antlr_rust::tid!{DictorsetmakerContextExt<'a>}
 
 impl<'input> DictorsetmakerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DictorsetmakerContextAll<'input>> {
@@ -16856,8 +16974,8 @@ where
 		let mut _localctx = DictorsetmakerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 216, RULE_dictorsetmaker);
         let mut _localctx: Rc<DictorsetmakerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -17109,7 +17227,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17138,14 +17257,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ClassdefContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ClassdefContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_classdef(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_classdef(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_classdef(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_classdef(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ClassdefContext<'input>{
@@ -17160,7 +17279,7 @@ impl<'input> CustomRuleContext<'input> for ClassdefContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_classdef }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_classdef }
 }
-antlr_rust::type_id!{ClassdefContextExt<'a>}
+antlr_rust::tid!{ClassdefContextExt<'a>}
 
 impl<'input> ClassdefContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ClassdefContextAll<'input>> {
@@ -17220,8 +17339,8 @@ where
 		let mut _localctx = ClassdefContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 218, RULE_classdef);
         let mut _localctx: Rc<ClassdefContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17244,7 +17363,7 @@ where
 				recog.base.set_state(1366);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << STAR) | (1usize << OPEN_PAREN) | (1usize << POWER))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (STAR - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (POWER - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 					{
 					/*InvokeRule arglist*/
 					recog.base.set_state(1365);
@@ -17267,7 +17386,8 @@ where
 			recog.block()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17296,14 +17416,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ArglistContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ArglistContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_arglist(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_arglist(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_arglist(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_arglist(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ArglistContext<'input>{
@@ -17318,7 +17438,7 @@ impl<'input> CustomRuleContext<'input> for ArglistContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_arglist }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_arglist }
 }
-antlr_rust::type_id!{ArglistContextExt<'a>}
+antlr_rust::tid!{ArglistContextExt<'a>}
 
 impl<'input> ArglistContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArglistContextAll<'input>> {
@@ -17364,8 +17484,8 @@ where
 		let mut _localctx = ArglistContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 220, RULE_arglist);
         let mut _localctx: Rc<ArglistContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -17408,7 +17528,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17437,14 +17558,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for ArgumentContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for ArgumentContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_argument(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_argument(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_argument(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_argument(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for ArgumentContext<'input>{
@@ -17459,7 +17580,7 @@ impl<'input> CustomRuleContext<'input> for ArgumentContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_argument }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_argument }
 }
-antlr_rust::type_id!{ArgumentContextExt<'a>}
+antlr_rust::tid!{ArgumentContextExt<'a>}
 
 impl<'input> ArgumentContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArgumentContextAll<'input>> {
@@ -17514,8 +17635,8 @@ where
 		let mut _localctx = ArgumentContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 222, RULE_argument);
         let mut _localctx: Rc<ArgumentContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17587,7 +17708,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17616,14 +17738,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Comp_iterContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Comp_iterContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_comp_iter(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_comp_iter(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_comp_iter(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_comp_iter(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Comp_iterContext<'input>{
@@ -17638,7 +17760,7 @@ impl<'input> CustomRuleContext<'input> for Comp_iterContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_comp_iter }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_comp_iter }
 }
-antlr_rust::type_id!{Comp_iterContextExt<'a>}
+antlr_rust::tid!{Comp_iterContextExt<'a>}
 
 impl<'input> Comp_iterContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Comp_iterContextAll<'input>> {
@@ -17675,7 +17797,7 @@ where
 		let mut _localctx = Comp_iterContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 224, RULE_comp_iter);
         let mut _localctx: Rc<Comp_iterContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1401);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -17706,7 +17828,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17735,14 +17858,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Comp_forContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Comp_forContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_comp_for(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_comp_for(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_comp_for(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_comp_for(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Comp_forContext<'input>{
@@ -17757,7 +17880,7 @@ impl<'input> CustomRuleContext<'input> for Comp_forContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_comp_for }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_comp_for }
 }
-antlr_rust::type_id!{Comp_forContextExt<'a>}
+antlr_rust::tid!{Comp_forContextExt<'a>}
 
 impl<'input> Comp_forContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Comp_forContextAll<'input>> {
@@ -17812,8 +17935,8 @@ where
 		let mut _localctx = Comp_forContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 226, RULE_comp_for);
         let mut _localctx: Rc<Comp_forContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17856,7 +17979,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -17885,14 +18009,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Comp_ifContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Comp_ifContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_comp_if(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_comp_if(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_comp_if(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_comp_if(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Comp_ifContext<'input>{
@@ -17907,7 +18031,7 @@ impl<'input> CustomRuleContext<'input> for Comp_ifContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_comp_if }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_comp_if }
 }
-antlr_rust::type_id!{Comp_ifContextExt<'a>}
+antlr_rust::tid!{Comp_ifContextExt<'a>}
 
 impl<'input> Comp_ifContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Comp_ifContextAll<'input>> {
@@ -17949,8 +18073,8 @@ where
 		let mut _localctx = Comp_ifContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 228, RULE_comp_if);
         let mut _localctx: Rc<Comp_ifContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -17975,7 +18099,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18004,14 +18129,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Encoding_declContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Encoding_declContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_encoding_decl(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_encoding_decl(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_encoding_decl(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_encoding_decl(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Encoding_declContext<'input>{
@@ -18026,7 +18151,7 @@ impl<'input> CustomRuleContext<'input> for Encoding_declContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_encoding_decl }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_encoding_decl }
 }
-antlr_rust::type_id!{Encoding_declContextExt<'a>}
+antlr_rust::tid!{Encoding_declContextExt<'a>}
 
 impl<'input> Encoding_declContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Encoding_declContextAll<'input>> {
@@ -18060,7 +18185,7 @@ where
 		let mut _localctx = Encoding_declContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 230, RULE_encoding_decl);
         let mut _localctx: Rc<Encoding_declContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18070,7 +18195,8 @@ where
 			recog.name()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18099,14 +18225,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Yield_exprContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Yield_exprContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_yield_expr(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_yield_expr(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_yield_expr(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_yield_expr(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Yield_exprContext<'input>{
@@ -18121,7 +18247,7 @@ impl<'input> CustomRuleContext<'input> for Yield_exprContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_yield_expr }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_yield_expr }
 }
-antlr_rust::type_id!{Yield_exprContextExt<'a>}
+antlr_rust::tid!{Yield_exprContextExt<'a>}
 
 impl<'input> Yield_exprContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Yield_exprContextAll<'input>> {
@@ -18160,8 +18286,8 @@ where
 		let mut _localctx = Yield_exprContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 232, RULE_yield_expr);
         let mut _localctx: Rc<Yield_exprContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18172,7 +18298,7 @@ where
 			recog.base.set_state(1422);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << FROM) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE) | (1usize << NOT) | (1usize << TRUE) | (1usize << UNDERSCORE) | (1usize << NAME) | (1usize << ELLIPSIS) | (1usize << OPEN_PAREN))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (OPEN_BRACK - 64)) | (1usize << (ADD - 64)) | (1usize << (MINUS - 64)) | (1usize << (NOT_OP - 64)) | (1usize << (OPEN_BRACE - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << STRING) | (1usize << NUMBER) | (1usize << AWAIT) | (1usize << FALSE) | (1usize << FROM) | (1usize << LAMBDA) | (1usize << MATCH) | (1usize << NONE))) != 0) || ((((_la - 33)) & !0x3f) == 0 && ((1usize << (_la - 33)) & ((1usize << (NOT - 33)) | (1usize << (TRUE - 33)) | (1usize << (UNDERSCORE - 33)) | (1usize << (NAME - 33)) | (1usize << (ELLIPSIS - 33)) | (1usize << (OPEN_PAREN - 33)) | (1usize << (OPEN_BRACK - 33)))) != 0) || ((((_la - 71)) & !0x3f) == 0 && ((1usize << (_la - 71)) & ((1usize << (ADD - 71)) | (1usize << (MINUS - 71)) | (1usize << (NOT_OP - 71)) | (1usize << (OPEN_BRACE - 71)))) != 0) {
 				{
 				/*InvokeRule yield_arg*/
 				recog.base.set_state(1421);
@@ -18182,7 +18308,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18211,14 +18338,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for Yield_argContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for Yield_argContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_yield_arg(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_yield_arg(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_yield_arg(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_yield_arg(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for Yield_argContext<'input>{
@@ -18233,7 +18360,7 @@ impl<'input> CustomRuleContext<'input> for Yield_argContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_yield_arg }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_yield_arg }
 }
-antlr_rust::type_id!{Yield_argContextExt<'a>}
+antlr_rust::tid!{Yield_argContextExt<'a>}
 
 impl<'input> Yield_argContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<Yield_argContextAll<'input>> {
@@ -18275,7 +18402,7 @@ where
 		let mut _localctx = Yield_argContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 234, RULE_yield_arg);
         let mut _localctx: Rc<Yield_argContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1427);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -18311,7 +18438,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -18340,14 +18468,14 @@ ph:PhantomData<&'input str>
 impl<'input> Python3ParserContext<'input> for StringsContext<'input>{}
 
 impl<'input,'a> Listenable<dyn Python3ParserListener<'input> + 'a> for StringsContext<'input>{
-	fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_strings(self);
-	}
-	fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
-		listener.exit_strings(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_strings(self);
+		}
+		fn exit(&self,listener: &mut (dyn Python3ParserListener<'input> + 'a)) {
+			listener.exit_strings(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn Python3ParserVisitor<'input> + 'a> for StringsContext<'input>{
@@ -18362,7 +18490,7 @@ impl<'input> CustomRuleContext<'input> for StringsContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_strings }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_strings }
 }
-antlr_rust::type_id!{StringsContextExt<'a>}
+antlr_rust::tid!{StringsContextExt<'a>}
 
 impl<'input> StringsContextExt<'input>{
 	fn new(parent: Option<Rc<dyn Python3ParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StringsContextAll<'input>> {
@@ -18402,8 +18530,8 @@ where
 		let mut _localctx = StringsContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 236, RULE_strings);
         let mut _localctx: Rc<StringsContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -18425,7 +18553,8 @@ where
 				if !(_la==STRING) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),

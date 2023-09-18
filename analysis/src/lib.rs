@@ -4,6 +4,8 @@ use thiserror::Error;
 use anyhow::Result;
 
 mod gen;
+mod c;
+mod cpp;
 
 /// Big-O runtime complexity
 pub enum RuntimeComplexity {
@@ -42,6 +44,8 @@ pub enum TreeParseError {
     FileError(std::io::Error),
     #[error("Unknown language")]
     UnknownLanguage,
+    #[error("Invalid node")]
+    InvalidNode,
 }
 
 /// The language to be parsed
@@ -75,5 +79,13 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
         "c" | "h" => Ok(Language::C),
         "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
         _ => Err(TreeParseError::UnknownLanguage),
+    }
+}
+
+pub struct VisitorReturn<T>(Result<T, TreeParseError>);
+
+impl<T> Default for VisitorReturn<T> {
+    fn default() -> Self {
+        Self(Err(TreeParseError::InvalidNode))
     }
 }

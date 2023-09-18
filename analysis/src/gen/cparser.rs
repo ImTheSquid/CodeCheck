@@ -5,6 +5,7 @@
 #![allow(nonstandard_style)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+#![allow(unused_braces)]
 use antlr_rust::PredictionContextCache;
 use antlr_rust::parser::{Parser, BaseParser, ParserRecog, ParserNodeType};
 use antlr_rust::token_stream::TokenStream;
@@ -332,7 +333,7 @@ use std::any::{Any,TypeId};
 
 
 type BaseParserType<'input, I> =
-	BaseParser<'input,CParserExt, I, CParserContextType , dyn CListener<'input> + 'input >;
+	BaseParser<'input,CParserExt<'input>, I, CParserContextType , dyn CListener<'input> + 'input >;
 
 type TokenType<'input> = <LocalTokenFactory<'input> as TokenFactory<'input>>::Tok;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
@@ -364,7 +365,7 @@ where
     }
 
     pub fn with_strategy(input: I, strategy: H) -> Self {
-		antlr_rust::recognizer::check_version("0","2");
+		antlr_rust::recognizer::check_version("0","3");
 		let interpreter = Arc::new(ParserATNSimulator::new(
 			_ATN.clone(),
 			_decision_to_DFA.clone(),
@@ -375,6 +376,7 @@ where
 				input,
 				Arc::clone(&interpreter),
 				CParserExt{
+					_pd: Default::default(),
 				}
 			),
 			interpreter,
@@ -412,6 +414,8 @@ pub trait CParserContext<'input>:
 	ParserRuleContext<'input, TF=LocalTokenFactory<'input>, Ctx=CParserContextType>
 {}
 
+antlr_rust::coerce_from!{ 'input : CParserContext<'input> }
+
 impl<'input, 'x, T> VisitableDyn<T> for dyn CParserContext<'input> + 'input
 where
     T: CVisitor<'input> + 'x,
@@ -424,14 +428,12 @@ where
 impl<'input> CParserContext<'input> for TerminalNode<'input,CParserContextType> {}
 impl<'input> CParserContext<'input> for ErrorNode<'input,CParserContextType> {}
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CParserContext<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CParserContext<'input> + 'input }
 
-#[antlr_rust::impl_tid]
-impl<'input> antlr_rust::TidAble<'input> for dyn CListener<'input> + 'input{}
+antlr_rust::tid! { impl<'input> TidAble<'input> for dyn CListener<'input> + 'input }
 
 pub struct CParserContextType;
-antlr_rust::type_id!{CParserContextType}
+antlr_rust::tid!{CParserContextType}
 
 impl<'input> ParserNodeType<'input> for CParserContextType{
 	type TF = LocalTokenFactory<'input>;
@@ -460,20 +462,21 @@ where
     }
 }
 
-pub struct CParserExt{
+pub struct CParserExt<'input>{
+	_pd: PhantomData<&'input str>,
 }
 
-impl CParserExt{
+impl<'input> CParserExt<'input>{
 }
+antlr_rust::tid! { CParserExt<'a> }
 
-
-impl<'input> TokenAware<'input> for CParserExt{
+impl<'input> TokenAware<'input> for CParserExt<'input>{
 	type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CParserExt{}
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> ParserRecog<'input, BaseParserType<'input,I>> for CParserExt<'input>{}
 
-impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CParserExt{
+impl<'input,I: TokenStream<'input, TF = LocalTokenFactory<'input> > + TidAble<'input>> Actions<'input, BaseParserType<'input,I>> for CParserExt<'input>{
 	fn get_grammar_file_name(&self) -> & str{ "C.g4"}
 
    	fn get_rule_names(&self) -> &[& str] {&ruleNames}
@@ -556,14 +559,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for PrimaryExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for PrimaryExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_primaryExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_primaryExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_primaryExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_primaryExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for PrimaryExpressionContext<'input>{
@@ -578,7 +581,7 @@ impl<'input> CustomRuleContext<'input> for PrimaryExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_primaryExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_primaryExpression }
 }
-antlr_rust::type_id!{PrimaryExpressionContextExt<'a>}
+antlr_rust::tid!{PrimaryExpressionContextExt<'a>}
 
 impl<'input> PrimaryExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PrimaryExpressionContextAll<'input>> {
@@ -658,8 +661,8 @@ where
 		let mut _localctx = PrimaryExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 0, RULE_primaryExpression);
         let mut _localctx: Rc<PrimaryExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(209);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -819,7 +822,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -848,14 +852,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GenericSelectionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GenericSelectionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_genericSelection(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_genericSelection(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_genericSelection(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_genericSelection(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GenericSelectionContext<'input>{
@@ -870,7 +874,7 @@ impl<'input> CustomRuleContext<'input> for GenericSelectionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_genericSelection }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_genericSelection }
 }
-antlr_rust::type_id!{GenericSelectionContextExt<'a>}
+antlr_rust::tid!{GenericSelectionContextExt<'a>}
 
 impl<'input> GenericSelectionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GenericSelectionContextAll<'input>> {
@@ -927,7 +931,7 @@ where
 		let mut _localctx = GenericSelectionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 2, RULE_genericSelection);
         let mut _localctx: Rc<GenericSelectionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -953,7 +957,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -982,14 +987,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GenericAssocListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GenericAssocListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_genericAssocList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_genericAssocList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_genericAssocList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_genericAssocList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GenericAssocListContext<'input>{
@@ -1004,7 +1009,7 @@ impl<'input> CustomRuleContext<'input> for GenericAssocListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_genericAssocList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_genericAssocList }
 }
-antlr_rust::type_id!{GenericAssocListContextExt<'a>}
+antlr_rust::tid!{GenericAssocListContextExt<'a>}
 
 impl<'input> GenericAssocListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GenericAssocListContextAll<'input>> {
@@ -1050,8 +1055,8 @@ where
 		let mut _localctx = GenericAssocListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 4, RULE_genericAssocList);
         let mut _localctx: Rc<GenericAssocListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1080,7 +1085,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1109,14 +1115,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GenericAssociationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GenericAssociationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_genericAssociation(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_genericAssociation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_genericAssociation(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_genericAssociation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GenericAssociationContext<'input>{
@@ -1131,7 +1137,7 @@ impl<'input> CustomRuleContext<'input> for GenericAssociationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_genericAssociation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_genericAssociation }
 }
-antlr_rust::type_id!{GenericAssociationContextExt<'a>}
+antlr_rust::tid!{GenericAssociationContextExt<'a>}
 
 impl<'input> GenericAssociationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GenericAssociationContextAll<'input>> {
@@ -1178,7 +1184,7 @@ where
 		let mut _localctx = GenericAssociationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 6, RULE_genericAssociation);
         let mut _localctx: Rc<GenericAssociationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1217,7 +1223,8 @@ where
 			recog.assignmentExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1246,14 +1253,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for PostfixExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for PostfixExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_postfixExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_postfixExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_postfixExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_postfixExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for PostfixExpressionContext<'input>{
@@ -1268,7 +1275,7 @@ impl<'input> CustomRuleContext<'input> for PostfixExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_postfixExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_postfixExpression }
 }
-antlr_rust::type_id!{PostfixExpressionContextExt<'a>}
+antlr_rust::tid!{PostfixExpressionContextExt<'a>}
 
 impl<'input> PostfixExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PostfixExpressionContextAll<'input>> {
@@ -1416,8 +1423,8 @@ where
 		let mut _localctx = PostfixExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 8, RULE_postfixExpression);
         let mut _localctx: Rc<PostfixExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1486,7 +1493,7 @@ where
 			recog.base.set_state(264);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Arrow - 64)) | (1usize << (Dot - 64)))) != 0) {
+			while ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (MinusMinus - 64)))) != 0) || _la==Arrow || _la==Dot {
 				{
 				recog.base.set_state(262);
 				recog.err_handler.sync(&mut recog.base)?;
@@ -1516,7 +1523,7 @@ where
 						recog.base.set_state(255);
 						recog.err_handler.sync(&mut recog.base)?;
 						_la = recog.base.input.la(1);
-						if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+						if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 							{
 							/*InvokeRule argumentExpressionList*/
 							recog.base.set_state(254);
@@ -1577,7 +1584,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1606,14 +1614,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ArgumentExpressionListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ArgumentExpressionListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_argumentExpressionList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_argumentExpressionList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_argumentExpressionList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_argumentExpressionList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ArgumentExpressionListContext<'input>{
@@ -1628,7 +1636,7 @@ impl<'input> CustomRuleContext<'input> for ArgumentExpressionListContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_argumentExpressionList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_argumentExpressionList }
 }
-antlr_rust::type_id!{ArgumentExpressionListContextExt<'a>}
+antlr_rust::tid!{ArgumentExpressionListContextExt<'a>}
 
 impl<'input> ArgumentExpressionListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ArgumentExpressionListContextAll<'input>> {
@@ -1674,8 +1682,8 @@ where
 		let mut _localctx = ArgumentExpressionListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 10, RULE_argumentExpressionList);
         let mut _localctx: Rc<ArgumentExpressionListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -1704,7 +1712,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1733,14 +1742,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for UnaryExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for UnaryExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_unaryExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_unaryExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for UnaryExpressionContext<'input>{
@@ -1755,7 +1764,7 @@ impl<'input> CustomRuleContext<'input> for UnaryExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unaryExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryExpression }
 }
-antlr_rust::type_id!{UnaryExpressionContextExt<'a>}
+antlr_rust::tid!{UnaryExpressionContextExt<'a>}
 
 impl<'input> UnaryExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryExpressionContextAll<'input>> {
@@ -1850,8 +1859,8 @@ where
 		let mut _localctx = UnaryExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 12, RULE_unaryExpression);
         let mut _localctx: Rc<UnaryExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -1866,7 +1875,7 @@ where
 					{
 					recog.base.set_state(275);
 					_la = recog.base.input.la(1);
-					if { !(((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (PlusPlus - 44)) | (1usize << (MinusMinus - 44)))) != 0)) } {
+					if { !(_la==Sizeof || _la==PlusPlus || _la==MinusMinus) } {
 						recog.err_handler.recover_inline(&mut recog.base)?;
 
 					}
@@ -1951,7 +1960,8 @@ where
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -1980,14 +1990,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for UnaryOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for UnaryOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_unaryOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_unaryOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_unaryOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_unaryOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for UnaryOperatorContext<'input>{
@@ -2002,7 +2012,7 @@ impl<'input> CustomRuleContext<'input> for UnaryOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_unaryOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_unaryOperator }
 }
-antlr_rust::type_id!{UnaryOperatorContextExt<'a>}
+antlr_rust::tid!{UnaryOperatorContextExt<'a>}
 
 impl<'input> UnaryOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<UnaryOperatorContextAll<'input>> {
@@ -2063,8 +2073,8 @@ where
 		let mut _localctx = UnaryOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 14, RULE_unaryOperator);
         let mut _localctx: Rc<UnaryOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2081,7 +2091,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2110,14 +2121,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for CastExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for CastExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_castExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_castExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_castExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_castExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for CastExpressionContext<'input>{
@@ -2132,7 +2143,7 @@ impl<'input> CustomRuleContext<'input> for CastExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_castExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_castExpression }
 }
-antlr_rust::type_id!{CastExpressionContextExt<'a>}
+antlr_rust::tid!{CastExpressionContextExt<'a>}
 
 impl<'input> CastExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CastExpressionContextAll<'input>> {
@@ -2187,8 +2198,8 @@ where
 		let mut _localctx = CastExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 16, RULE_castExpression);
         let mut _localctx: Rc<CastExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(306);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -2248,7 +2259,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2277,14 +2289,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for MultiplicativeExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for MultiplicativeExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_multiplicativeExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_multiplicativeExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_multiplicativeExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_multiplicativeExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for MultiplicativeExpressionContext<'input>{
@@ -2299,7 +2311,7 @@ impl<'input> CustomRuleContext<'input> for MultiplicativeExpressionContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_multiplicativeExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_multiplicativeExpression }
 }
-antlr_rust::type_id!{MultiplicativeExpressionContextExt<'a>}
+antlr_rust::tid!{MultiplicativeExpressionContextExt<'a>}
 
 impl<'input> MultiplicativeExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<MultiplicativeExpressionContextAll<'input>> {
@@ -2363,8 +2375,8 @@ where
 		let mut _localctx = MultiplicativeExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 18, RULE_multiplicativeExpression);
         let mut _localctx: Rc<MultiplicativeExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2401,7 +2413,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2430,14 +2443,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AdditiveExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AdditiveExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_additiveExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_additiveExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_additiveExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_additiveExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AdditiveExpressionContext<'input>{
@@ -2452,7 +2465,7 @@ impl<'input> CustomRuleContext<'input> for AdditiveExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_additiveExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_additiveExpression }
 }
-antlr_rust::type_id!{AdditiveExpressionContextExt<'a>}
+antlr_rust::tid!{AdditiveExpressionContextExt<'a>}
 
 impl<'input> AdditiveExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AdditiveExpressionContextAll<'input>> {
@@ -2507,8 +2520,8 @@ where
 		let mut _localctx = AdditiveExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 20, RULE_additiveExpression);
         let mut _localctx: Rc<AdditiveExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2545,7 +2558,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2574,14 +2588,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ShiftExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ShiftExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_shiftExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_shiftExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_shiftExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_shiftExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ShiftExpressionContext<'input>{
@@ -2596,7 +2610,7 @@ impl<'input> CustomRuleContext<'input> for ShiftExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_shiftExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_shiftExpression }
 }
-antlr_rust::type_id!{ShiftExpressionContextExt<'a>}
+antlr_rust::tid!{ShiftExpressionContextExt<'a>}
 
 impl<'input> ShiftExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ShiftExpressionContextAll<'input>> {
@@ -2651,8 +2665,8 @@ where
 		let mut _localctx = ShiftExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 22, RULE_shiftExpression);
         let mut _localctx: Rc<ShiftExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2689,7 +2703,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2718,14 +2733,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for RelationalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for RelationalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_relationalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_relationalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_relationalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_relationalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for RelationalExpressionContext<'input>{
@@ -2740,7 +2755,7 @@ impl<'input> CustomRuleContext<'input> for RelationalExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_relationalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_relationalExpression }
 }
-antlr_rust::type_id!{RelationalExpressionContextExt<'a>}
+antlr_rust::tid!{RelationalExpressionContextExt<'a>}
 
 impl<'input> RelationalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<RelationalExpressionContextAll<'input>> {
@@ -2813,8 +2828,8 @@ where
 		let mut _localctx = RelationalExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 24, RULE_relationalExpression);
         let mut _localctx: Rc<RelationalExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2851,7 +2866,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -2880,14 +2896,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for EqualityExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for EqualityExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_equalityExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_equalityExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_equalityExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_equalityExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for EqualityExpressionContext<'input>{
@@ -2902,7 +2918,7 @@ impl<'input> CustomRuleContext<'input> for EqualityExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_equalityExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_equalityExpression }
 }
-antlr_rust::type_id!{EqualityExpressionContextExt<'a>}
+antlr_rust::tid!{EqualityExpressionContextExt<'a>}
 
 impl<'input> EqualityExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EqualityExpressionContextAll<'input>> {
@@ -2957,8 +2973,8 @@ where
 		let mut _localctx = EqualityExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 26, RULE_equalityExpression);
         let mut _localctx: Rc<EqualityExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -2995,7 +3011,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3024,14 +3041,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_andExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_andExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_andExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_andExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AndExpressionContext<'input>{
@@ -3046,7 +3063,7 @@ impl<'input> CustomRuleContext<'input> for AndExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_andExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_andExpression }
 }
-antlr_rust::type_id!{AndExpressionContextExt<'a>}
+antlr_rust::tid!{AndExpressionContextExt<'a>}
 
 impl<'input> AndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AndExpressionContextAll<'input>> {
@@ -3092,8 +3109,8 @@ where
 		let mut _localctx = AndExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 28, RULE_andExpression);
         let mut _localctx: Rc<AndExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3122,7 +3139,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3151,14 +3169,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ExclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_exclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_exclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_exclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_exclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ExclusiveOrExpressionContext<'input>{
@@ -3173,7 +3191,7 @@ impl<'input> CustomRuleContext<'input> for ExclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_exclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_exclusiveOrExpression }
 }
-antlr_rust::type_id!{ExclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{ExclusiveOrExpressionContextExt<'a>}
 
 impl<'input> ExclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExclusiveOrExpressionContextAll<'input>> {
@@ -3219,8 +3237,8 @@ where
 		let mut _localctx = ExclusiveOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 30, RULE_exclusiveOrExpression);
         let mut _localctx: Rc<ExclusiveOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3249,7 +3267,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3278,14 +3297,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for InclusiveOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for InclusiveOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_inclusiveOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_inclusiveOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_inclusiveOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_inclusiveOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for InclusiveOrExpressionContext<'input>{
@@ -3300,7 +3319,7 @@ impl<'input> CustomRuleContext<'input> for InclusiveOrExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_inclusiveOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_inclusiveOrExpression }
 }
-antlr_rust::type_id!{InclusiveOrExpressionContextExt<'a>}
+antlr_rust::tid!{InclusiveOrExpressionContextExt<'a>}
 
 impl<'input> InclusiveOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InclusiveOrExpressionContextAll<'input>> {
@@ -3346,8 +3365,8 @@ where
 		let mut _localctx = InclusiveOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 32, RULE_inclusiveOrExpression);
         let mut _localctx: Rc<InclusiveOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3376,7 +3395,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3405,14 +3425,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for LogicalAndExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for LogicalAndExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_logicalAndExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_logicalAndExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_logicalAndExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_logicalAndExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for LogicalAndExpressionContext<'input>{
@@ -3427,7 +3447,7 @@ impl<'input> CustomRuleContext<'input> for LogicalAndExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_logicalAndExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_logicalAndExpression }
 }
-antlr_rust::type_id!{LogicalAndExpressionContextExt<'a>}
+antlr_rust::tid!{LogicalAndExpressionContextExt<'a>}
 
 impl<'input> LogicalAndExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LogicalAndExpressionContextAll<'input>> {
@@ -3473,8 +3493,8 @@ where
 		let mut _localctx = LogicalAndExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 34, RULE_logicalAndExpression);
         let mut _localctx: Rc<LogicalAndExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3503,7 +3523,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3532,14 +3553,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for LogicalOrExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for LogicalOrExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_logicalOrExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_logicalOrExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_logicalOrExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_logicalOrExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for LogicalOrExpressionContext<'input>{
@@ -3554,7 +3575,7 @@ impl<'input> CustomRuleContext<'input> for LogicalOrExpressionContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_logicalOrExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_logicalOrExpression }
 }
-antlr_rust::type_id!{LogicalOrExpressionContextExt<'a>}
+antlr_rust::tid!{LogicalOrExpressionContextExt<'a>}
 
 impl<'input> LogicalOrExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LogicalOrExpressionContextAll<'input>> {
@@ -3600,8 +3621,8 @@ where
 		let mut _localctx = LogicalOrExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 36, RULE_logicalOrExpression);
         let mut _localctx: Rc<LogicalOrExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3630,7 +3651,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3659,14 +3681,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ConditionalExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ConditionalExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_conditionalExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_conditionalExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_conditionalExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_conditionalExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ConditionalExpressionContext<'input>{
@@ -3681,7 +3703,7 @@ impl<'input> CustomRuleContext<'input> for ConditionalExpressionContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_conditionalExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_conditionalExpression }
 }
-antlr_rust::type_id!{ConditionalExpressionContextExt<'a>}
+antlr_rust::tid!{ConditionalExpressionContextExt<'a>}
 
 impl<'input> ConditionalExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConditionalExpressionContextAll<'input>> {
@@ -3731,8 +3753,8 @@ where
 		let mut _localctx = ConditionalExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 38, RULE_conditionalExpression);
         let mut _localctx: Rc<ConditionalExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -3764,7 +3786,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3793,14 +3816,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AssignmentExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AssignmentExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_assignmentExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_assignmentExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AssignmentExpressionContext<'input>{
@@ -3815,7 +3838,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentExpressionContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_assignmentExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentExpression }
 }
-antlr_rust::type_id!{AssignmentExpressionContextExt<'a>}
+antlr_rust::tid!{AssignmentExpressionContextExt<'a>}
 
 impl<'input> AssignmentExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentExpressionContextAll<'input>> {
@@ -3863,7 +3886,7 @@ where
 		let mut _localctx = AssignmentExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 40, RULE_assignmentExpression);
         let mut _localctx: Rc<AssignmentExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(402);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -3910,7 +3933,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -3939,14 +3963,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AssignmentOperatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AssignmentOperatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_assignmentOperator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_assignmentOperator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_assignmentOperator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_assignmentOperator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AssignmentOperatorContext<'input>{
@@ -3961,7 +3985,7 @@ impl<'input> CustomRuleContext<'input> for AssignmentOperatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_assignmentOperator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_assignmentOperator }
 }
-antlr_rust::type_id!{AssignmentOperatorContextExt<'a>}
+antlr_rust::tid!{AssignmentOperatorContextExt<'a>}
 
 impl<'input> AssignmentOperatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AssignmentOperatorContextAll<'input>> {
@@ -4047,8 +4071,8 @@ where
 		let mut _localctx = AssignmentOperatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 42, RULE_assignmentOperator);
         let mut _localctx: Rc<AssignmentOperatorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4065,7 +4089,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4094,14 +4119,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_expression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_expression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ExpressionContext<'input>{
@@ -4116,7 +4141,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_expression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expression }
 }
-antlr_rust::type_id!{ExpressionContextExt<'a>}
+antlr_rust::tid!{ExpressionContextExt<'a>}
 
 impl<'input> ExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionContextAll<'input>> {
@@ -4162,8 +4187,8 @@ where
 		let mut _localctx = ExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 44, RULE_expression);
         let mut _localctx: Rc<ExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4192,7 +4217,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4221,14 +4247,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ConstantExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ConstantExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_constantExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_constantExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_constantExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_constantExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ConstantExpressionContext<'input>{
@@ -4243,7 +4269,7 @@ impl<'input> CustomRuleContext<'input> for ConstantExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_constantExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_constantExpression }
 }
-antlr_rust::type_id!{ConstantExpressionContextExt<'a>}
+antlr_rust::tid!{ConstantExpressionContextExt<'a>}
 
 impl<'input> ConstantExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ConstantExpressionContextAll<'input>> {
@@ -4277,7 +4303,7 @@ where
 		let mut _localctx = ConstantExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 46, RULE_constantExpression);
         let mut _localctx: Rc<ConstantExpressionContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4287,7 +4313,8 @@ where
 			recog.conditionalExpression()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4316,14 +4343,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclarationContext<'input>{
@@ -4338,7 +4365,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declaration }
 }
-antlr_rust::type_id!{DeclarationContextExt<'a>}
+antlr_rust::tid!{DeclarationContextExt<'a>}
 
 impl<'input> DeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationContextAll<'input>> {
@@ -4383,8 +4410,8 @@ where
 		let mut _localctx = DeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 48, RULE_declaration);
         let mut _localctx: Rc<DeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(423);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4405,7 +4432,7 @@ where
 					recog.base.set_state(418);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)) | (1usize << (Identifier - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)))) != 0) || _la==Identifier {
 						{
 						/*InvokeRule initDeclaratorList*/
 						recog.base.set_state(417);
@@ -4434,7 +4461,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4463,14 +4491,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclarationSpecifiersContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclarationSpecifiersContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationSpecifiers(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declarationSpecifiers(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationSpecifiers(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declarationSpecifiers(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclarationSpecifiersContext<'input>{
@@ -4485,7 +4513,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationSpecifiersContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_declarationSpecifiers }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationSpecifiers }
 }
-antlr_rust::type_id!{DeclarationSpecifiersContextExt<'a>}
+antlr_rust::tid!{DeclarationSpecifiersContextExt<'a>}
 
 impl<'input> DeclarationSpecifiersContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationSpecifiersContextAll<'input>> {
@@ -4522,7 +4550,7 @@ where
 		let mut _localctx = DeclarationSpecifiersContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 50, RULE_declarationSpecifiers);
         let mut _localctx: Rc<DeclarationSpecifiersContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -4551,7 +4579,8 @@ where
 				if _alt==2 || _alt==INVALID_ALT { break }
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4580,14 +4609,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclarationSpecifiers2Context<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclarationSpecifiers2Context<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationSpecifiers2(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declarationSpecifiers2(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationSpecifiers2(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declarationSpecifiers2(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclarationSpecifiers2Context<'input>{
@@ -4602,7 +4631,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationSpecifiers2ContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_declarationSpecifiers2 }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationSpecifiers2 }
 }
-antlr_rust::type_id!{DeclarationSpecifiers2ContextExt<'a>}
+antlr_rust::tid!{DeclarationSpecifiers2ContextExt<'a>}
 
 impl<'input> DeclarationSpecifiers2ContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationSpecifiers2ContextAll<'input>> {
@@ -4639,8 +4668,8 @@ where
 		let mut _localctx = DeclarationSpecifiers2ContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 52, RULE_declarationSpecifiers2);
         let mut _localctx: Rc<DeclarationSpecifiers2ContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4660,10 +4689,11 @@ where
 				recog.base.set_state(433); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << ThreadLocal))) != 0) || _la==Identifier) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Alignas - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Noreturn - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || _la==Identifier) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4692,14 +4722,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclarationSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclarationSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declarationSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declarationSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclarationSpecifierContext<'input>{
@@ -4714,7 +4744,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationSpecifierContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_declarationSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationSpecifier }
 }
-antlr_rust::type_id!{DeclarationSpecifierContextExt<'a>}
+antlr_rust::tid!{DeclarationSpecifierContextExt<'a>}
 
 impl<'input> DeclarationSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationSpecifierContextAll<'input>> {
@@ -4760,7 +4790,7 @@ where
 		let mut _localctx = DeclarationSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 54, RULE_declarationSpecifier);
         let mut _localctx: Rc<DeclarationSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(440);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -4822,7 +4852,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4851,14 +4882,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for InitDeclaratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for InitDeclaratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initDeclaratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_initDeclaratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initDeclaratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_initDeclaratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for InitDeclaratorListContext<'input>{
@@ -4873,7 +4904,7 @@ impl<'input> CustomRuleContext<'input> for InitDeclaratorListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initDeclaratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initDeclaratorList }
 }
-antlr_rust::type_id!{InitDeclaratorListContextExt<'a>}
+antlr_rust::tid!{InitDeclaratorListContextExt<'a>}
 
 impl<'input> InitDeclaratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitDeclaratorListContextAll<'input>> {
@@ -4919,8 +4950,8 @@ where
 		let mut _localctx = InitDeclaratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 56, RULE_initDeclaratorList);
         let mut _localctx: Rc<InitDeclaratorListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -4949,7 +4980,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -4978,14 +5010,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for InitDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for InitDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_initDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_initDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for InitDeclaratorContext<'input>{
@@ -5000,7 +5032,7 @@ impl<'input> CustomRuleContext<'input> for InitDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initDeclarator }
 }
-antlr_rust::type_id!{InitDeclaratorContextExt<'a>}
+antlr_rust::tid!{InitDeclaratorContextExt<'a>}
 
 impl<'input> InitDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitDeclaratorContextAll<'input>> {
@@ -5042,8 +5074,8 @@ where
 		let mut _localctx = InitDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 58, RULE_initDeclarator);
         let mut _localctx: Rc<InitDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5068,7 +5100,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5097,14 +5130,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StorageClassSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StorageClassSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_storageClassSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_storageClassSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_storageClassSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_storageClassSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StorageClassSpecifierContext<'input>{
@@ -5119,7 +5152,7 @@ impl<'input> CustomRuleContext<'input> for StorageClassSpecifierContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_storageClassSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_storageClassSpecifier }
 }
-antlr_rust::type_id!{StorageClassSpecifierContextExt<'a>}
+antlr_rust::tid!{StorageClassSpecifierContextExt<'a>}
 
 impl<'input> StorageClassSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StorageClassSpecifierContextAll<'input>> {
@@ -5180,15 +5213,15 @@ where
 		let mut _localctx = StorageClassSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 60, RULE_storageClassSpecifier);
         let mut _localctx: Rc<StorageClassSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(455);
 			_la = recog.base.input.la(1);
-			if { !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Auto) | (1usize << Extern) | (1usize << Register) | (1usize << Static) | (1usize << Typedef) | (1usize << ThreadLocal))) != 0)) } {
+			if { !(_la==Auto || _la==Extern || ((((_la - 39)) & !0x3f) == 0 && ((1usize << (_la - 39)) & ((1usize << (Register - 39)) | (1usize << (Static - 39)) | (1usize << (Typedef - 39)) | (1usize << (ThreadLocal - 39)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -5198,7 +5231,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5227,14 +5261,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_typeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_typeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TypeSpecifierContext<'input>{
@@ -5249,7 +5283,7 @@ impl<'input> CustomRuleContext<'input> for TypeSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeSpecifier }
 }
-antlr_rust::type_id!{TypeSpecifierContextExt<'a>}
+antlr_rust::tid!{TypeSpecifierContextExt<'a>}
 
 impl<'input> TypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeSpecifierContextAll<'input>> {
@@ -5360,8 +5394,8 @@ where
 		let mut _localctx = TypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 62, RULE_typeSpecifier);
         let mut _localctx: Rc<TypeSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(484);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5619,7 +5653,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5648,14 +5683,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructOrUnionSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructOrUnionSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structOrUnionSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structOrUnionSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structOrUnionSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structOrUnionSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructOrUnionSpecifierContext<'input>{
@@ -5670,7 +5705,7 @@ impl<'input> CustomRuleContext<'input> for StructOrUnionSpecifierContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_structOrUnionSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structOrUnionSpecifier }
 }
-antlr_rust::type_id!{StructOrUnionSpecifierContextExt<'a>}
+antlr_rust::tid!{StructOrUnionSpecifierContextExt<'a>}
 
 impl<'input> StructOrUnionSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructOrUnionSpecifierContextAll<'input>> {
@@ -5722,8 +5757,8 @@ where
 		let mut _localctx = StructOrUnionSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 64, RULE_structOrUnionSpecifier);
         let mut _localctx: Rc<StructOrUnionSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(497);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -5776,7 +5811,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5805,14 +5841,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructOrUnionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructOrUnionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structOrUnion(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structOrUnion(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structOrUnion(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structOrUnion(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructOrUnionContext<'input>{
@@ -5827,7 +5863,7 @@ impl<'input> CustomRuleContext<'input> for StructOrUnionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_structOrUnion }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structOrUnion }
 }
-antlr_rust::type_id!{StructOrUnionContextExt<'a>}
+antlr_rust::tid!{StructOrUnionContextExt<'a>}
 
 impl<'input> StructOrUnionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructOrUnionContextAll<'input>> {
@@ -5868,8 +5904,8 @@ where
 		let mut _localctx = StructOrUnionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 66, RULE_structOrUnion);
         let mut _localctx: Rc<StructOrUnionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5886,7 +5922,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -5915,14 +5952,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructDeclarationListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructDeclarationListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structDeclarationList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structDeclarationList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structDeclarationList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structDeclarationList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructDeclarationListContext<'input>{
@@ -5937,7 +5974,7 @@ impl<'input> CustomRuleContext<'input> for StructDeclarationListContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_structDeclarationList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structDeclarationList }
 }
-antlr_rust::type_id!{StructDeclarationListContextExt<'a>}
+antlr_rust::tid!{StructDeclarationListContextExt<'a>}
 
 impl<'input> StructDeclarationListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructDeclarationListContextAll<'input>> {
@@ -5974,8 +6011,8 @@ where
 		let mut _localctx = StructDeclarationListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 68, RULE_structDeclarationList);
         let mut _localctx: Rc<StructDeclarationListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -5995,10 +6032,11 @@ where
 				recog.base.set_state(504); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Float) | (1usize << Int) | (1usize << Long) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Struct) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << StaticAssert))) != 0) || _la==Identifier) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Struct - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (StaticAssert - 32)))) != 0) || _la==Identifier) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6027,14 +6065,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructDeclarationContext<'input>{
@@ -6049,7 +6087,7 @@ impl<'input> CustomRuleContext<'input> for StructDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_structDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structDeclaration }
 }
-antlr_rust::type_id!{StructDeclarationContextExt<'a>}
+antlr_rust::tid!{StructDeclarationContextExt<'a>}
 
 impl<'input> StructDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructDeclarationContextAll<'input>> {
@@ -6094,7 +6132,7 @@ where
 		let mut _localctx = StructDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 70, RULE_structDeclaration);
         let mut _localctx: Rc<StructDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(514);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6144,7 +6182,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6173,14 +6212,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for SpecifierQualifierListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for SpecifierQualifierListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_specifierQualifierList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_specifierQualifierList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_specifierQualifierList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_specifierQualifierList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for SpecifierQualifierListContext<'input>{
@@ -6195,7 +6234,7 @@ impl<'input> CustomRuleContext<'input> for SpecifierQualifierListContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_specifierQualifierList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_specifierQualifierList }
 }
-antlr_rust::type_id!{SpecifierQualifierListContextExt<'a>}
+antlr_rust::tid!{SpecifierQualifierListContextExt<'a>}
 
 impl<'input> SpecifierQualifierListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SpecifierQualifierListContextAll<'input>> {
@@ -6235,7 +6274,7 @@ where
 		let mut _localctx = SpecifierQualifierListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 72, RULE_specifierQualifierList);
         let mut _localctx: Rc<SpecifierQualifierListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6278,7 +6317,8 @@ where
 				_ => {}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6307,14 +6347,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructDeclaratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructDeclaratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structDeclaratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structDeclaratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structDeclaratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structDeclaratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructDeclaratorListContext<'input>{
@@ -6329,7 +6369,7 @@ impl<'input> CustomRuleContext<'input> for StructDeclaratorListContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_structDeclaratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structDeclaratorList }
 }
-antlr_rust::type_id!{StructDeclaratorListContextExt<'a>}
+antlr_rust::tid!{StructDeclaratorListContextExt<'a>}
 
 impl<'input> StructDeclaratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructDeclaratorListContextAll<'input>> {
@@ -6375,8 +6415,8 @@ where
 		let mut _localctx = StructDeclaratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 74, RULE_structDeclaratorList);
         let mut _localctx: Rc<StructDeclaratorListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6405,7 +6445,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6434,14 +6475,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StructDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StructDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_structDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_structDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_structDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_structDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StructDeclaratorContext<'input>{
@@ -6456,7 +6497,7 @@ impl<'input> CustomRuleContext<'input> for StructDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_structDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_structDeclarator }
 }
-antlr_rust::type_id!{StructDeclaratorContextExt<'a>}
+antlr_rust::tid!{StructDeclaratorContextExt<'a>}
 
 impl<'input> StructDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StructDeclaratorContextAll<'input>> {
@@ -6498,8 +6539,8 @@ where
 		let mut _localctx = StructDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 76, RULE_structDeclarator);
         let mut _localctx: Rc<StructDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(537);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6522,7 +6563,7 @@ where
 					recog.base.set_state(533);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)) | (1usize << (Identifier - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)))) != 0) || _la==Identifier {
 						{
 						/*InvokeRule declarator*/
 						recog.base.set_state(532);
@@ -6543,7 +6584,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6572,14 +6614,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for EnumSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for EnumSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_enumSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_enumSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for EnumSpecifierContext<'input>{
@@ -6594,7 +6636,7 @@ impl<'input> CustomRuleContext<'input> for EnumSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumSpecifier }
 }
-antlr_rust::type_id!{EnumSpecifierContextExt<'a>}
+antlr_rust::tid!{EnumSpecifierContextExt<'a>}
 
 impl<'input> EnumSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumSpecifierContextAll<'input>> {
@@ -6653,8 +6695,8 @@ where
 		let mut _localctx = EnumSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 78, RULE_enumSpecifier);
         let mut _localctx: Rc<EnumSpecifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(552);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -6716,7 +6758,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6745,14 +6788,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for EnumeratorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for EnumeratorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumeratorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_enumeratorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumeratorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_enumeratorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for EnumeratorListContext<'input>{
@@ -6767,7 +6810,7 @@ impl<'input> CustomRuleContext<'input> for EnumeratorListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumeratorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumeratorList }
 }
-antlr_rust::type_id!{EnumeratorListContextExt<'a>}
+antlr_rust::tid!{EnumeratorListContextExt<'a>}
 
 impl<'input> EnumeratorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumeratorListContextAll<'input>> {
@@ -6813,7 +6856,7 @@ where
 		let mut _localctx = EnumeratorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 80, RULE_enumeratorList);
         let mut _localctx: Rc<EnumeratorListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -6845,7 +6888,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(49,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6874,14 +6918,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for EnumeratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for EnumeratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumerator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_enumerator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumerator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_enumerator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for EnumeratorContext<'input>{
@@ -6896,7 +6940,7 @@ impl<'input> CustomRuleContext<'input> for EnumeratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_enumerator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumerator }
 }
-antlr_rust::type_id!{EnumeratorContextExt<'a>}
+antlr_rust::tid!{EnumeratorContextExt<'a>}
 
 impl<'input> EnumeratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumeratorContextAll<'input>> {
@@ -6938,8 +6982,8 @@ where
 		let mut _localctx = EnumeratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 82, RULE_enumerator);
         let mut _localctx: Rc<EnumeratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -6964,7 +7008,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -6993,14 +7038,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for EnumerationConstantContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for EnumerationConstantContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_enumerationConstant(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_enumerationConstant(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_enumerationConstant(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_enumerationConstant(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for EnumerationConstantContext<'input>{
@@ -7015,7 +7060,7 @@ impl<'input> CustomRuleContext<'input> for EnumerationConstantContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_enumerationConstant }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_enumerationConstant }
 }
-antlr_rust::type_id!{EnumerationConstantContextExt<'a>}
+antlr_rust::tid!{EnumerationConstantContextExt<'a>}
 
 impl<'input> EnumerationConstantContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<EnumerationConstantContextAll<'input>> {
@@ -7051,7 +7096,7 @@ where
 		let mut _localctx = EnumerationConstantContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 84, RULE_enumerationConstant);
         let mut _localctx: Rc<EnumerationConstantContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7060,7 +7105,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7089,14 +7135,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AtomicTypeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AtomicTypeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_atomicTypeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_atomicTypeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_atomicTypeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_atomicTypeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AtomicTypeSpecifierContext<'input>{
@@ -7111,7 +7157,7 @@ impl<'input> CustomRuleContext<'input> for AtomicTypeSpecifierContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_atomicTypeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_atomicTypeSpecifier }
 }
-antlr_rust::type_id!{AtomicTypeSpecifierContextExt<'a>}
+antlr_rust::tid!{AtomicTypeSpecifierContextExt<'a>}
 
 impl<'input> AtomicTypeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AtomicTypeSpecifierContextAll<'input>> {
@@ -7160,7 +7206,7 @@ where
 		let mut _localctx = AtomicTypeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 86, RULE_atomicTypeSpecifier);
         let mut _localctx: Rc<AtomicTypeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7179,7 +7225,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7208,14 +7255,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TypeQualifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TypeQualifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeQualifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_typeQualifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeQualifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_typeQualifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TypeQualifierContext<'input>{
@@ -7230,7 +7277,7 @@ impl<'input> CustomRuleContext<'input> for TypeQualifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeQualifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeQualifier }
 }
-antlr_rust::type_id!{TypeQualifierContextExt<'a>}
+antlr_rust::tid!{TypeQualifierContextExt<'a>}
 
 impl<'input> TypeQualifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeQualifierContextAll<'input>> {
@@ -7281,15 +7328,15 @@ where
 		let mut _localctx = TypeQualifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 88, RULE_typeQualifier);
         let mut _localctx: Rc<TypeQualifierContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
 			{
 			recog.base.set_state(574);
 			_la = recog.base.input.la(1);
-			if { !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0)) } {
+			if { !(_la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0)) } {
 				recog.err_handler.recover_inline(&mut recog.base)?;
 
 			}
@@ -7299,7 +7346,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7328,14 +7376,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for FunctionSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for FunctionSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_functionSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_functionSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for FunctionSpecifierContext<'input>{
@@ -7350,7 +7398,7 @@ impl<'input> CustomRuleContext<'input> for FunctionSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionSpecifier }
 }
-antlr_rust::type_id!{FunctionSpecifierContextExt<'a>}
+antlr_rust::tid!{FunctionSpecifierContextExt<'a>}
 
 impl<'input> FunctionSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionSpecifierContextAll<'input>> {
@@ -7409,7 +7457,7 @@ where
 		let mut _localctx = FunctionSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 90, RULE_functionSpecifier);
         let mut _localctx: Rc<FunctionSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(585);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -7492,7 +7540,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7521,14 +7570,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AlignmentSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AlignmentSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_alignmentSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_alignmentSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_alignmentSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_alignmentSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AlignmentSpecifierContext<'input>{
@@ -7543,7 +7592,7 @@ impl<'input> CustomRuleContext<'input> for AlignmentSpecifierContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_alignmentSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_alignmentSpecifier }
 }
-antlr_rust::type_id!{AlignmentSpecifierContextExt<'a>}
+antlr_rust::tid!{AlignmentSpecifierContextExt<'a>}
 
 impl<'input> AlignmentSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AlignmentSpecifierContextAll<'input>> {
@@ -7595,7 +7644,7 @@ where
 		let mut _localctx = AlignmentSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 92, RULE_alignmentSpecifier);
         let mut _localctx: Rc<AlignmentSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -7633,7 +7682,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7662,14 +7712,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclaratorContext<'input>{
@@ -7684,7 +7734,7 @@ impl<'input> CustomRuleContext<'input> for DeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarator }
 }
-antlr_rust::type_id!{DeclaratorContextExt<'a>}
+antlr_rust::tid!{DeclaratorContextExt<'a>}
 
 impl<'input> DeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclaratorContextAll<'input>> {
@@ -7727,8 +7777,8 @@ where
 		let mut _localctx = DeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 94, RULE_declarator);
         let mut _localctx: Rc<DeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -7769,7 +7819,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(54,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -7798,14 +7849,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DirectDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DirectDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_directDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_directDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_directDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_directDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DirectDeclaratorContext<'input>{
@@ -7820,7 +7871,7 @@ impl<'input> CustomRuleContext<'input> for DirectDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_directDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_directDeclarator }
 }
-antlr_rust::type_id!{DirectDeclaratorContextExt<'a>}
+antlr_rust::tid!{DirectDeclaratorContextExt<'a>}
 
 impl<'input> DirectDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DirectDeclaratorContextAll<'input>> {
@@ -7925,8 +7976,8 @@ where
 	    let mut _localctx: Rc<DirectDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 96;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8034,7 +8085,7 @@ where
 							recog.base.set_state(627);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+							if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 								{
 								/*InvokeRule typeQualifierList*/
 								recog.base.set_state(626);
@@ -8046,7 +8097,7 @@ where
 							recog.base.set_state(630);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 								{
 								/*InvokeRule assignmentExpression*/
 								recog.base.set_state(629);
@@ -8080,7 +8131,7 @@ where
 							recog.base.set_state(637);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+							if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 								{
 								/*InvokeRule typeQualifierList*/
 								recog.base.set_state(636);
@@ -8145,7 +8196,7 @@ where
 							recog.base.set_state(652);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+							if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 								{
 								/*InvokeRule typeQualifierList*/
 								recog.base.set_state(651);
@@ -8226,7 +8277,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(62,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8254,14 +8306,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for VcSpecificModiferContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for VcSpecificModiferContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_vcSpecificModifer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_vcSpecificModifer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_vcSpecificModifer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_vcSpecificModifer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for VcSpecificModiferContext<'input>{
@@ -8276,7 +8328,7 @@ impl<'input> CustomRuleContext<'input> for VcSpecificModiferContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_vcSpecificModifer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_vcSpecificModifer }
 }
-antlr_rust::type_id!{VcSpecificModiferContextExt<'a>}
+antlr_rust::tid!{VcSpecificModiferContextExt<'a>}
 
 impl<'input> VcSpecificModiferContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<VcSpecificModiferContextAll<'input>> {
@@ -8307,8 +8359,8 @@ where
 		let mut _localctx = VcSpecificModiferContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 98, RULE_vcSpecificModifer);
         let mut _localctx: Rc<VcSpecificModiferContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8325,7 +8377,8 @@ where
 				recog.base.consume(&mut recog.err_handler);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8354,14 +8407,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GccDeclaratorExtensionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GccDeclaratorExtensionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_gccDeclaratorExtension(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_gccDeclaratorExtension(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_gccDeclaratorExtension(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_gccDeclaratorExtension(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GccDeclaratorExtensionContext<'input>{
@@ -8376,7 +8429,7 @@ impl<'input> CustomRuleContext<'input> for GccDeclaratorExtensionContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_gccDeclaratorExtension }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_gccDeclaratorExtension }
 }
-antlr_rust::type_id!{GccDeclaratorExtensionContextExt<'a>}
+antlr_rust::tid!{GccDeclaratorExtensionContextExt<'a>}
 
 impl<'input> GccDeclaratorExtensionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GccDeclaratorExtensionContextAll<'input>> {
@@ -8429,8 +8482,8 @@ where
 		let mut _localctx = GccDeclaratorExtensionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 100, RULE_gccDeclaratorExtension);
         let mut _localctx: Rc<GccDeclaratorExtensionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(683);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -8482,7 +8535,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8511,14 +8565,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GccAttributeSpecifierContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GccAttributeSpecifierContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_gccAttributeSpecifier(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_gccAttributeSpecifier(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_gccAttributeSpecifier(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_gccAttributeSpecifier(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GccAttributeSpecifierContext<'input>{
@@ -8533,7 +8587,7 @@ impl<'input> CustomRuleContext<'input> for GccAttributeSpecifierContextExt<'inpu
 	fn get_rule_index(&self) -> usize { RULE_gccAttributeSpecifier }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_gccAttributeSpecifier }
 }
-antlr_rust::type_id!{GccAttributeSpecifierContextExt<'a>}
+antlr_rust::tid!{GccAttributeSpecifierContextExt<'a>}
 
 impl<'input> GccAttributeSpecifierContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GccAttributeSpecifierContextAll<'input>> {
@@ -8585,7 +8639,7 @@ where
 		let mut _localctx = GccAttributeSpecifierContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 102, RULE_gccAttributeSpecifier);
         let mut _localctx: Rc<GccAttributeSpecifierContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8610,7 +8664,8 @@ where
 			recog.base.match_token(RightParen,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8639,14 +8694,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GccAttributeListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GccAttributeListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_gccAttributeList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_gccAttributeList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_gccAttributeList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_gccAttributeList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GccAttributeListContext<'input>{
@@ -8661,7 +8716,7 @@ impl<'input> CustomRuleContext<'input> for GccAttributeListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_gccAttributeList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_gccAttributeList }
 }
-antlr_rust::type_id!{GccAttributeListContextExt<'a>}
+antlr_rust::tid!{GccAttributeListContextExt<'a>}
 
 impl<'input> GccAttributeListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GccAttributeListContextAll<'input>> {
@@ -8707,8 +8762,8 @@ where
 		let mut _localctx = GccAttributeListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 104, RULE_gccAttributeList);
         let mut _localctx: Rc<GccAttributeListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8716,7 +8771,7 @@ where
 			recog.base.set_state(693);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static) | (1usize << Struct) | (1usize << Switch) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << While) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Generic) | (1usize << Imaginary) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (LeftBracket - 66)) | (1usize << (RightBracket - 66)) | (1usize << (LeftBrace - 66)) | (1usize << (RightBrace - 66)) | (1usize << (Less - 66)) | (1usize << (LessEqual - 66)) | (1usize << (Greater - 66)) | (1usize << (GreaterEqual - 66)) | (1usize << (LeftShift - 66)) | (1usize << (RightShift - 66)) | (1usize << (Plus - 66)) | (1usize << (PlusPlus - 66)) | (1usize << (Minus - 66)) | (1usize << (MinusMinus - 66)) | (1usize << (Star - 66)) | (1usize << (Div - 66)) | (1usize << (Mod - 66)) | (1usize << (And - 66)) | (1usize << (Or - 66)) | (1usize << (AndAnd - 66)) | (1usize << (OrOr - 66)) | (1usize << (Caret - 66)) | (1usize << (Not - 66)) | (1usize << (Tilde - 66)) | (1usize << (Question - 66)) | (1usize << (Colon - 66)) | (1usize << (Semi - 66)) | (1usize << (Assign - 66)) | (1usize << (StarAssign - 66)) | (1usize << (DivAssign - 66)) | (1usize << (ModAssign - 66)) | (1usize << (PlusAssign - 66)) | (1usize << (MinusAssign - 66)) | (1usize << (LeftShiftAssign - 66)) | (1usize << (RightShiftAssign - 66)) | (1usize << (AndAssign - 66)) | (1usize << (XorAssign - 66)) | (1usize << (OrAssign - 66)) | (1usize << (Equal - 66)) | (1usize << (NotEqual - 66)) | (1usize << (Arrow - 66)) | (1usize << (Dot - 66)) | (1usize << (Ellipsis - 66)) | (1usize << (Identifier - 66)) | (1usize << (Constant - 66)) | (1usize << (DigitSequence - 66)) | (1usize << (StringLiteral - 66)) | (1usize << (MultiLineMacro - 66)) | (1usize << (Directive - 66)) | (1usize << (AsmBlock - 66)) | (1usize << (Whitespace - 66)) | (1usize << (Newline - 66)) | (1usize << (BlockComment - 66)) | (1usize << (LineComment - 66)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Switch - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (While - 32)) | (1usize << (Alignas - 32)) | (1usize << (Alignof - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Generic - 32)) | (1usize << (Imaginary - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (LeftBracket - 66)) | (1usize << (RightBracket - 66)) | (1usize << (LeftBrace - 66)) | (1usize << (RightBrace - 66)) | (1usize << (Less - 66)) | (1usize << (LessEqual - 66)) | (1usize << (Greater - 66)) | (1usize << (GreaterEqual - 66)) | (1usize << (LeftShift - 66)) | (1usize << (RightShift - 66)) | (1usize << (Plus - 66)) | (1usize << (PlusPlus - 66)) | (1usize << (Minus - 66)) | (1usize << (MinusMinus - 66)) | (1usize << (Star - 66)) | (1usize << (Div - 66)) | (1usize << (Mod - 66)) | (1usize << (And - 66)) | (1usize << (Or - 66)) | (1usize << (AndAnd - 66)) | (1usize << (OrOr - 66)) | (1usize << (Caret - 66)) | (1usize << (Not - 66)) | (1usize << (Tilde - 66)) | (1usize << (Question - 66)) | (1usize << (Colon - 66)) | (1usize << (Semi - 66)) | (1usize << (Assign - 66)) | (1usize << (StarAssign - 66)) | (1usize << (DivAssign - 66)) | (1usize << (ModAssign - 66)))) != 0) || ((((_la - 98)) & !0x3f) == 0 && ((1usize << (_la - 98)) & ((1usize << (PlusAssign - 98)) | (1usize << (MinusAssign - 98)) | (1usize << (LeftShiftAssign - 98)) | (1usize << (RightShiftAssign - 98)) | (1usize << (AndAssign - 98)) | (1usize << (XorAssign - 98)) | (1usize << (OrAssign - 98)) | (1usize << (Equal - 98)) | (1usize << (NotEqual - 98)) | (1usize << (Arrow - 98)) | (1usize << (Dot - 98)) | (1usize << (Ellipsis - 98)) | (1usize << (Identifier - 98)) | (1usize << (Constant - 98)) | (1usize << (DigitSequence - 98)) | (1usize << (StringLiteral - 98)) | (1usize << (MultiLineMacro - 98)) | (1usize << (Directive - 98)) | (1usize << (AsmBlock - 98)) | (1usize << (Whitespace - 98)) | (1usize << (Newline - 98)) | (1usize << (BlockComment - 98)) | (1usize << (LineComment - 98)))) != 0) {
 				{
 				/*InvokeRule gccAttribute*/
 				recog.base.set_state(692);
@@ -8737,7 +8792,7 @@ where
 				recog.base.set_state(697);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static) | (1usize << Struct) | (1usize << Switch) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << While) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Generic) | (1usize << Imaginary) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (LeftBracket - 66)) | (1usize << (RightBracket - 66)) | (1usize << (LeftBrace - 66)) | (1usize << (RightBrace - 66)) | (1usize << (Less - 66)) | (1usize << (LessEqual - 66)) | (1usize << (Greater - 66)) | (1usize << (GreaterEqual - 66)) | (1usize << (LeftShift - 66)) | (1usize << (RightShift - 66)) | (1usize << (Plus - 66)) | (1usize << (PlusPlus - 66)) | (1usize << (Minus - 66)) | (1usize << (MinusMinus - 66)) | (1usize << (Star - 66)) | (1usize << (Div - 66)) | (1usize << (Mod - 66)) | (1usize << (And - 66)) | (1usize << (Or - 66)) | (1usize << (AndAnd - 66)) | (1usize << (OrOr - 66)) | (1usize << (Caret - 66)) | (1usize << (Not - 66)) | (1usize << (Tilde - 66)) | (1usize << (Question - 66)) | (1usize << (Colon - 66)) | (1usize << (Semi - 66)) | (1usize << (Assign - 66)) | (1usize << (StarAssign - 66)) | (1usize << (DivAssign - 66)) | (1usize << (ModAssign - 66)) | (1usize << (PlusAssign - 66)) | (1usize << (MinusAssign - 66)) | (1usize << (LeftShiftAssign - 66)) | (1usize << (RightShiftAssign - 66)) | (1usize << (AndAssign - 66)) | (1usize << (XorAssign - 66)) | (1usize << (OrAssign - 66)) | (1usize << (Equal - 66)) | (1usize << (NotEqual - 66)) | (1usize << (Arrow - 66)) | (1usize << (Dot - 66)) | (1usize << (Ellipsis - 66)) | (1usize << (Identifier - 66)) | (1usize << (Constant - 66)) | (1usize << (DigitSequence - 66)) | (1usize << (StringLiteral - 66)) | (1usize << (MultiLineMacro - 66)) | (1usize << (Directive - 66)) | (1usize << (AsmBlock - 66)) | (1usize << (Whitespace - 66)) | (1usize << (Newline - 66)) | (1usize << (BlockComment - 66)) | (1usize << (LineComment - 66)))) != 0) {
+				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Switch - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (While - 32)) | (1usize << (Alignas - 32)) | (1usize << (Alignof - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Generic - 32)) | (1usize << (Imaginary - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || ((((_la - 66)) & !0x3f) == 0 && ((1usize << (_la - 66)) & ((1usize << (LeftBracket - 66)) | (1usize << (RightBracket - 66)) | (1usize << (LeftBrace - 66)) | (1usize << (RightBrace - 66)) | (1usize << (Less - 66)) | (1usize << (LessEqual - 66)) | (1usize << (Greater - 66)) | (1usize << (GreaterEqual - 66)) | (1usize << (LeftShift - 66)) | (1usize << (RightShift - 66)) | (1usize << (Plus - 66)) | (1usize << (PlusPlus - 66)) | (1usize << (Minus - 66)) | (1usize << (MinusMinus - 66)) | (1usize << (Star - 66)) | (1usize << (Div - 66)) | (1usize << (Mod - 66)) | (1usize << (And - 66)) | (1usize << (Or - 66)) | (1usize << (AndAnd - 66)) | (1usize << (OrOr - 66)) | (1usize << (Caret - 66)) | (1usize << (Not - 66)) | (1usize << (Tilde - 66)) | (1usize << (Question - 66)) | (1usize << (Colon - 66)) | (1usize << (Semi - 66)) | (1usize << (Assign - 66)) | (1usize << (StarAssign - 66)) | (1usize << (DivAssign - 66)) | (1usize << (ModAssign - 66)))) != 0) || ((((_la - 98)) & !0x3f) == 0 && ((1usize << (_la - 98)) & ((1usize << (PlusAssign - 98)) | (1usize << (MinusAssign - 98)) | (1usize << (LeftShiftAssign - 98)) | (1usize << (RightShiftAssign - 98)) | (1usize << (AndAssign - 98)) | (1usize << (XorAssign - 98)) | (1usize << (OrAssign - 98)) | (1usize << (Equal - 98)) | (1usize << (NotEqual - 98)) | (1usize << (Arrow - 98)) | (1usize << (Dot - 98)) | (1usize << (Ellipsis - 98)) | (1usize << (Identifier - 98)) | (1usize << (Constant - 98)) | (1usize << (DigitSequence - 98)) | (1usize << (StringLiteral - 98)) | (1usize << (MultiLineMacro - 98)) | (1usize << (Directive - 98)) | (1usize << (AsmBlock - 98)) | (1usize << (Whitespace - 98)) | (1usize << (Newline - 98)) | (1usize << (BlockComment - 98)) | (1usize << (LineComment - 98)))) != 0) {
 					{
 					/*InvokeRule gccAttribute*/
 					recog.base.set_state(696);
@@ -8753,7 +8808,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8782,14 +8838,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for GccAttributeContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for GccAttributeContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_gccAttribute(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_gccAttribute(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_gccAttribute(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_gccAttribute(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for GccAttributeContext<'input>{
@@ -8804,7 +8860,7 @@ impl<'input> CustomRuleContext<'input> for GccAttributeContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_gccAttribute }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_gccAttribute }
 }
-antlr_rust::type_id!{GccAttributeContextExt<'a>}
+antlr_rust::tid!{GccAttributeContextExt<'a>}
 
 impl<'input> GccAttributeContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<GccAttributeContextAll<'input>> {
@@ -8861,8 +8917,8 @@ where
 		let mut _localctx = GccAttributeContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 106, RULE_gccAttribute);
         let mut _localctx: Rc<GccAttributeContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -8889,7 +8945,7 @@ where
 				recog.base.set_state(707);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 					{
 					/*InvokeRule argumentExpressionList*/
 					recog.base.set_state(706);
@@ -8905,7 +8961,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -8934,14 +8991,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for NestedParenthesesBlockContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for NestedParenthesesBlockContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_nestedParenthesesBlock(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_nestedParenthesesBlock(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_nestedParenthesesBlock(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_nestedParenthesesBlock(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for NestedParenthesesBlockContext<'input>{
@@ -8956,7 +9013,7 @@ impl<'input> CustomRuleContext<'input> for NestedParenthesesBlockContextExt<'inp
 	fn get_rule_index(&self) -> usize { RULE_nestedParenthesesBlock }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_nestedParenthesesBlock }
 }
-antlr_rust::type_id!{NestedParenthesesBlockContextExt<'a>}
+antlr_rust::tid!{NestedParenthesesBlockContextExt<'a>}
 
 impl<'input> NestedParenthesesBlockContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<NestedParenthesesBlockContextAll<'input>> {
@@ -9011,8 +9068,8 @@ where
 		let mut _localctx = NestedParenthesesBlockContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 108, RULE_nestedParenthesesBlock);
         let mut _localctx: Rc<NestedParenthesesBlockContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9020,7 +9077,7 @@ where
 			recog.base.set_state(719);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static) | (1usize << Struct) | (1usize << Switch) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << While) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Generic) | (1usize << Imaginary) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (RightBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (RightBrace - 64)) | (1usize << (Less - 64)) | (1usize << (LessEqual - 64)) | (1usize << (Greater - 64)) | (1usize << (GreaterEqual - 64)) | (1usize << (LeftShift - 64)) | (1usize << (RightShift - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (AndAnd - 64)) | (1usize << (OrOr - 64)) | (1usize << (Caret - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Question - 64)) | (1usize << (Colon - 64)) | (1usize << (Semi - 64)) | (1usize << (Comma - 64)) | (1usize << (Assign - 64)) | (1usize << (StarAssign - 64)) | (1usize << (DivAssign - 64)) | (1usize << (ModAssign - 64)) | (1usize << (PlusAssign - 64)) | (1usize << (MinusAssign - 64)) | (1usize << (LeftShiftAssign - 64)) | (1usize << (RightShiftAssign - 64)) | (1usize << (AndAssign - 64)) | (1usize << (XorAssign - 64)) | (1usize << (OrAssign - 64)) | (1usize << (Equal - 64)) | (1usize << (NotEqual - 64)) | (1usize << (Arrow - 64)) | (1usize << (Dot - 64)) | (1usize << (Ellipsis - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)) | (1usize << (MultiLineMacro - 64)) | (1usize << (Directive - 64)) | (1usize << (AsmBlock - 64)) | (1usize << (Whitespace - 64)) | (1usize << (Newline - 64)) | (1usize << (BlockComment - 64)) | (1usize << (LineComment - 64)))) != 0) {
+			while (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << T__18) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Else) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Switch - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (While - 32)) | (1usize << (Alignas - 32)) | (1usize << (Alignof - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Generic - 32)) | (1usize << (Imaginary - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBracket - 64)) | (1usize << (RightBracket - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (RightBrace - 64)) | (1usize << (Less - 64)) | (1usize << (LessEqual - 64)) | (1usize << (Greater - 64)) | (1usize << (GreaterEqual - 64)) | (1usize << (LeftShift - 64)) | (1usize << (RightShift - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (Div - 64)) | (1usize << (Mod - 64)) | (1usize << (And - 64)) | (1usize << (Or - 64)) | (1usize << (AndAnd - 64)) | (1usize << (OrOr - 64)) | (1usize << (Caret - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Question - 64)) | (1usize << (Colon - 64)) | (1usize << (Semi - 64)) | (1usize << (Comma - 64)) | (1usize << (Assign - 64)) | (1usize << (StarAssign - 64)))) != 0) || ((((_la - 96)) & !0x3f) == 0 && ((1usize << (_la - 96)) & ((1usize << (DivAssign - 96)) | (1usize << (ModAssign - 96)) | (1usize << (PlusAssign - 96)) | (1usize << (MinusAssign - 96)) | (1usize << (LeftShiftAssign - 96)) | (1usize << (RightShiftAssign - 96)) | (1usize << (AndAssign - 96)) | (1usize << (XorAssign - 96)) | (1usize << (OrAssign - 96)) | (1usize << (Equal - 96)) | (1usize << (NotEqual - 96)) | (1usize << (Arrow - 96)) | (1usize << (Dot - 96)) | (1usize << (Ellipsis - 96)) | (1usize << (Identifier - 96)) | (1usize << (Constant - 96)) | (1usize << (DigitSequence - 96)) | (1usize << (StringLiteral - 96)) | (1usize << (MultiLineMacro - 96)) | (1usize << (Directive - 96)) | (1usize << (AsmBlock - 96)) | (1usize << (Whitespace - 96)) | (1usize << (Newline - 96)) | (1usize << (BlockComment - 96)) | (1usize << (LineComment - 96)))) != 0) {
 				{
 				recog.base.set_state(717);
 				recog.err_handler.sync(&mut recog.base)?;
@@ -9081,7 +9138,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9110,14 +9168,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for PointerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for PointerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_pointer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_pointer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_pointer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_pointer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for PointerContext<'input>{
@@ -9132,7 +9190,7 @@ impl<'input> CustomRuleContext<'input> for PointerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_pointer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_pointer }
 }
-antlr_rust::type_id!{PointerContextExt<'a>}
+antlr_rust::tid!{PointerContextExt<'a>}
 
 impl<'input> PointerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<PointerContextAll<'input>> {
@@ -9187,8 +9245,8 @@ where
 		let mut _localctx = PointerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 110, RULE_pointer);
         let mut _localctx: Rc<PointerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9213,7 +9271,7 @@ where
 				recog.base.set_state(724);
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+				if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 					{
 					/*InvokeRule typeQualifierList*/
 					recog.base.set_state(723);
@@ -9230,7 +9288,8 @@ where
 				if !(_la==Star || _la==Caret) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9259,14 +9318,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TypeQualifierListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TypeQualifierListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeQualifierList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_typeQualifierList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeQualifierList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_typeQualifierList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TypeQualifierListContext<'input>{
@@ -9281,7 +9340,7 @@ impl<'input> CustomRuleContext<'input> for TypeQualifierListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeQualifierList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeQualifierList }
 }
-antlr_rust::type_id!{TypeQualifierListContextExt<'a>}
+antlr_rust::tid!{TypeQualifierListContextExt<'a>}
 
 impl<'input> TypeQualifierListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeQualifierListContextAll<'input>> {
@@ -9318,8 +9377,8 @@ where
 		let mut _localctx = TypeQualifierListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 112, RULE_typeQualifierList);
         let mut _localctx: Rc<TypeQualifierListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9339,10 +9398,11 @@ where
 				recog.base.set_state(733); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0)) {break}
+				if !(_la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9371,14 +9431,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ParameterTypeListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ParameterTypeListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterTypeList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_parameterTypeList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterTypeList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_parameterTypeList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ParameterTypeListContext<'input>{
@@ -9393,7 +9453,7 @@ impl<'input> CustomRuleContext<'input> for ParameterTypeListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_parameterTypeList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterTypeList }
 }
-antlr_rust::type_id!{ParameterTypeListContextExt<'a>}
+antlr_rust::tid!{ParameterTypeListContextExt<'a>}
 
 impl<'input> ParameterTypeListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterTypeListContextAll<'input>> {
@@ -9437,8 +9497,8 @@ where
 		let mut _localctx = ParameterTypeListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 114, RULE_parameterTypeList);
         let mut _localctx: Rc<ParameterTypeListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9462,7 +9522,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9491,14 +9552,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ParameterListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ParameterListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_parameterList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_parameterList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ParameterListContext<'input>{
@@ -9513,7 +9574,7 @@ impl<'input> CustomRuleContext<'input> for ParameterListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_parameterList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterList }
 }
-antlr_rust::type_id!{ParameterListContextExt<'a>}
+antlr_rust::tid!{ParameterListContextExt<'a>}
 
 impl<'input> ParameterListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterListContextAll<'input>> {
@@ -9559,7 +9620,7 @@ where
 		let mut _localctx = ParameterListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 116, RULE_parameterList);
         let mut _localctx: Rc<ParameterListContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -9591,7 +9652,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(76,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9620,14 +9682,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ParameterDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ParameterDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_parameterDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_parameterDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_parameterDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_parameterDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ParameterDeclarationContext<'input>{
@@ -9642,7 +9704,7 @@ impl<'input> CustomRuleContext<'input> for ParameterDeclarationContextExt<'input
 	fn get_rule_index(&self) -> usize { RULE_parameterDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_parameterDeclaration }
 }
-antlr_rust::type_id!{ParameterDeclarationContextExt<'a>}
+antlr_rust::tid!{ParameterDeclarationContextExt<'a>}
 
 impl<'input> ParameterDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ParameterDeclarationContextAll<'input>> {
@@ -9685,8 +9747,8 @@ where
 		let mut _localctx = ParameterDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 118, RULE_parameterDeclaration);
         let mut _localctx: Rc<ParameterDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(755);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -9731,7 +9793,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9760,14 +9823,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for IdentifierListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for IdentifierListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_identifierList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_identifierList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_identifierList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_identifierList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for IdentifierListContext<'input>{
@@ -9782,7 +9845,7 @@ impl<'input> CustomRuleContext<'input> for IdentifierListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_identifierList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_identifierList }
 }
-antlr_rust::type_id!{IdentifierListContextExt<'a>}
+antlr_rust::tid!{IdentifierListContextExt<'a>}
 
 impl<'input> IdentifierListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IdentifierListContextAll<'input>> {
@@ -9831,8 +9894,8 @@ where
 		let mut _localctx = IdentifierListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 120, RULE_identifierList);
         let mut _localctx: Rc<IdentifierListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9859,7 +9922,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9888,14 +9952,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TypeNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TypeNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typeName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_typeName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typeName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_typeName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TypeNameContext<'input>{
@@ -9910,7 +9974,7 @@ impl<'input> CustomRuleContext<'input> for TypeNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typeName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typeName }
 }
-antlr_rust::type_id!{TypeNameContextExt<'a>}
+antlr_rust::tid!{TypeNameContextExt<'a>}
 
 impl<'input> TypeNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypeNameContextAll<'input>> {
@@ -9947,8 +10011,8 @@ where
 		let mut _localctx = TypeNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 122, RULE_typeName);
         let mut _localctx: Rc<TypeNameContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -9970,7 +10034,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -9999,14 +10064,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for AbstractDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for AbstractDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_abstractDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_abstractDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_abstractDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_abstractDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for AbstractDeclaratorContext<'input>{
@@ -10021,7 +10086,7 @@ impl<'input> CustomRuleContext<'input> for AbstractDeclaratorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_abstractDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_abstractDeclarator }
 }
-antlr_rust::type_id!{AbstractDeclaratorContextExt<'a>}
+antlr_rust::tid!{AbstractDeclaratorContextExt<'a>}
 
 impl<'input> AbstractDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<AbstractDeclaratorContextAll<'input>> {
@@ -10064,8 +10129,8 @@ where
 		let mut _localctx = AbstractDeclaratorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 124, RULE_abstractDeclarator);
         let mut _localctx: Rc<AbstractDeclaratorContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(780);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10122,7 +10187,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10151,14 +10217,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DirectAbstractDeclaratorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DirectAbstractDeclaratorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_directAbstractDeclarator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_directAbstractDeclarator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_directAbstractDeclarator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_directAbstractDeclarator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DirectAbstractDeclaratorContext<'input>{
@@ -10173,7 +10239,7 @@ impl<'input> CustomRuleContext<'input> for DirectAbstractDeclaratorContextExt<'i
 	fn get_rule_index(&self) -> usize { RULE_directAbstractDeclarator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_directAbstractDeclarator }
 }
-antlr_rust::type_id!{DirectAbstractDeclaratorContextExt<'a>}
+antlr_rust::tid!{DirectAbstractDeclaratorContextExt<'a>}
 
 impl<'input> DirectAbstractDeclaratorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DirectAbstractDeclaratorContextAll<'input>> {
@@ -10263,8 +10329,8 @@ where
 	    let mut _localctx: Rc<DirectAbstractDeclaratorContextAll> = _localctx;
         let mut _prevctx = _localctx.clone();
 		let _startState = 126;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10313,7 +10379,7 @@ where
 					recog.base.set_state(794);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+					if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 						{
 						/*InvokeRule typeQualifierList*/
 						recog.base.set_state(793);
@@ -10325,7 +10391,7 @@ where
 					recog.base.set_state(797);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 						{
 						/*InvokeRule assignmentExpression*/
 						recog.base.set_state(796);
@@ -10351,7 +10417,7 @@ where
 					recog.base.set_state(803);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+					if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 						{
 						/*InvokeRule typeQualifierList*/
 						recog.base.set_state(802);
@@ -10414,7 +10480,7 @@ where
 					recog.base.set_state(819);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << ThreadLocal))) != 0) || _la==Identifier {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Alignas - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Noreturn - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || _la==Identifier {
 						{
 						/*InvokeRule parameterTypeList*/
 						recog.base.set_state(818);
@@ -10479,7 +10545,7 @@ where
 							recog.base.set_state(833);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+							if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 								{
 								/*InvokeRule typeQualifierList*/
 								recog.base.set_state(832);
@@ -10491,7 +10557,7 @@ where
 							recog.base.set_state(836);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 								{
 								/*InvokeRule assignmentExpression*/
 								recog.base.set_state(835);
@@ -10525,7 +10591,7 @@ where
 							recog.base.set_state(843);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << Const) | (1usize << Restrict) | (1usize << Volatile) | (1usize << Atomic))) != 0) {
+							if _la==Const || ((((_la - 40)) & !0x3f) == 0 && ((1usize << (_la - 40)) & ((1usize << (Restrict - 40)) | (1usize << (Volatile - 40)) | (1usize << (Atomic - 40)))) != 0) {
 								{
 								/*InvokeRule typeQualifierList*/
 								recog.base.set_state(842);
@@ -10612,7 +10678,7 @@ where
 							recog.base.set_state(862);
 							recog.err_handler.sync(&mut recog.base)?;
 							_la = recog.base.input.la(1);
-							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << ThreadLocal))) != 0) || _la==Identifier {
+							if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Alignas - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Noreturn - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || _la==Identifier {
 								{
 								/*InvokeRule parameterTypeList*/
 								recog.base.set_state(861);
@@ -10654,7 +10720,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(97,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_) => {},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10682,14 +10749,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TypedefNameContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TypedefNameContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_typedefName(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_typedefName(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_typedefName(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_typedefName(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TypedefNameContext<'input>{
@@ -10704,7 +10771,7 @@ impl<'input> CustomRuleContext<'input> for TypedefNameContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_typedefName }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_typedefName }
 }
-antlr_rust::type_id!{TypedefNameContextExt<'a>}
+antlr_rust::tid!{TypedefNameContextExt<'a>}
 
 impl<'input> TypedefNameContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TypedefNameContextAll<'input>> {
@@ -10740,7 +10807,7 @@ where
 		let mut _localctx = TypedefNameContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 128, RULE_typedefName);
         let mut _localctx: Rc<TypedefNameContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -10749,7 +10816,8 @@ where
 			recog.base.match_token(Identifier,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10778,14 +10846,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for InitializerContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for InitializerContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initializer(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_initializer(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initializer(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_initializer(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for InitializerContext<'input>{
@@ -10800,7 +10868,7 @@ impl<'input> CustomRuleContext<'input> for InitializerContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initializer }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initializer }
 }
-antlr_rust::type_id!{InitializerContextExt<'a>}
+antlr_rust::tid!{InitializerContextExt<'a>}
 
 impl<'input> InitializerContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitializerContextAll<'input>> {
@@ -10852,8 +10920,8 @@ where
 		let mut _localctx = InitializerContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 130, RULE_initializer);
         let mut _localctx: Rc<InitializerContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(886);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -10903,7 +10971,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -10932,14 +11001,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for InitializerListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for InitializerListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_initializerList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_initializerList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_initializerList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_initializerList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for InitializerListContext<'input>{
@@ -10954,7 +11023,7 @@ impl<'input> CustomRuleContext<'input> for InitializerListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_initializerList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_initializerList }
 }
-antlr_rust::type_id!{InitializerListContextExt<'a>}
+antlr_rust::tid!{InitializerListContextExt<'a>}
 
 impl<'input> InitializerListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<InitializerListContextAll<'input>> {
@@ -11006,8 +11075,8 @@ where
 		let mut _localctx = InitializerListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 132, RULE_initializerList);
         let mut _localctx: Rc<InitializerListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			let mut _alt: isize;
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
@@ -11063,7 +11132,8 @@ where
 				_alt = recog.interpreter.adaptive_predict(102,&mut recog.base)?;
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11092,14 +11162,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DesignationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DesignationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_designation(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_designation(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_designation(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_designation(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DesignationContext<'input>{
@@ -11114,7 +11184,7 @@ impl<'input> CustomRuleContext<'input> for DesignationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_designation }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_designation }
 }
-antlr_rust::type_id!{DesignationContextExt<'a>}
+antlr_rust::tid!{DesignationContextExt<'a>}
 
 impl<'input> DesignationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DesignationContextAll<'input>> {
@@ -11153,7 +11223,7 @@ where
 		let mut _localctx = DesignationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 134, RULE_designation);
         let mut _localctx: Rc<DesignationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11166,7 +11236,8 @@ where
 			recog.base.match_token(Assign,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11195,14 +11266,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DesignatorListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DesignatorListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_designatorList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_designatorList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_designatorList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_designatorList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DesignatorListContext<'input>{
@@ -11217,7 +11288,7 @@ impl<'input> CustomRuleContext<'input> for DesignatorListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_designatorList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_designatorList }
 }
-antlr_rust::type_id!{DesignatorListContextExt<'a>}
+antlr_rust::tid!{DesignatorListContextExt<'a>}
 
 impl<'input> DesignatorListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DesignatorListContextAll<'input>> {
@@ -11254,8 +11325,8 @@ where
 		let mut _localctx = DesignatorListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 136, RULE_designatorList);
         let mut _localctx: Rc<DesignatorListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11278,7 +11349,8 @@ where
 				if !(_la==LeftBracket || _la==Dot) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11307,14 +11379,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DesignatorContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DesignatorContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_designator(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_designator(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_designator(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_designator(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DesignatorContext<'input>{
@@ -11329,7 +11401,7 @@ impl<'input> CustomRuleContext<'input> for DesignatorContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_designator }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_designator }
 }
-antlr_rust::type_id!{DesignatorContextExt<'a>}
+antlr_rust::tid!{DesignatorContextExt<'a>}
 
 impl<'input> DesignatorContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DesignatorContextAll<'input>> {
@@ -11383,7 +11455,7 @@ where
 		let mut _localctx = DesignatorContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 138, RULE_designator);
         let mut _localctx: Rc<DesignatorContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(916);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11422,7 +11494,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11451,14 +11524,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StaticAssertDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StaticAssertDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_staticAssertDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_staticAssertDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_staticAssertDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_staticAssertDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StaticAssertDeclarationContext<'input>{
@@ -11473,7 +11546,7 @@ impl<'input> CustomRuleContext<'input> for StaticAssertDeclarationContextExt<'in
 	fn get_rule_index(&self) -> usize { RULE_staticAssertDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_staticAssertDeclaration }
 }
-antlr_rust::type_id!{StaticAssertDeclarationContextExt<'a>}
+antlr_rust::tid!{StaticAssertDeclarationContextExt<'a>}
 
 impl<'input> StaticAssertDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StaticAssertDeclarationContextAll<'input>> {
@@ -11541,8 +11614,8 @@ where
 		let mut _localctx = StaticAssertDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 140, RULE_staticAssertDeclaration);
         let mut _localctx: Rc<StaticAssertDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -11583,7 +11656,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11612,14 +11686,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for StatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for StatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_statement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_statement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_statement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_statement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for StatementContext<'input>{
@@ -11634,7 +11708,7 @@ impl<'input> CustomRuleContext<'input> for StatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_statement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_statement }
 }
-antlr_rust::type_id!{StatementContextExt<'a>}
+antlr_rust::tid!{StatementContextExt<'a>}
 
 impl<'input> StatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<StatementContextAll<'input>> {
@@ -11727,8 +11801,8 @@ where
 		let mut _localctx = StatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 142, RULE_statement);
         let mut _localctx: Rc<StatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(967);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -11831,7 +11905,7 @@ where
 					recog.base.set_state(947);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 						{
 						/*InvokeRule logicalOrExpression*/
 						recog.base.set_state(939);
@@ -11871,7 +11945,7 @@ where
 						recog.base.set_state(958);
 						recog.err_handler.sync(&mut recog.base)?;
 						_la = recog.base.input.la(1);
-						if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+						if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 							{
 							/*InvokeRule logicalOrExpression*/
 							recog.base.set_state(950);
@@ -11916,7 +11990,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -11945,14 +12020,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for LabeledStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for LabeledStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_labeledStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_labeledStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_labeledStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_labeledStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for LabeledStatementContext<'input>{
@@ -11967,7 +12042,7 @@ impl<'input> CustomRuleContext<'input> for LabeledStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_labeledStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_labeledStatement }
 }
-antlr_rust::type_id!{LabeledStatementContextExt<'a>}
+antlr_rust::tid!{LabeledStatementContextExt<'a>}
 
 impl<'input> LabeledStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<LabeledStatementContextAll<'input>> {
@@ -12024,7 +12099,7 @@ where
 		let mut _localctx = LabeledStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 144, RULE_labeledStatement);
         let mut _localctx: Rc<LabeledStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(980);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12089,7 +12164,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12118,14 +12194,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for CompoundStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for CompoundStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compoundStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_compoundStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compoundStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_compoundStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for CompoundStatementContext<'input>{
@@ -12140,7 +12216,7 @@ impl<'input> CustomRuleContext<'input> for CompoundStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_compoundStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compoundStatement }
 }
-antlr_rust::type_id!{CompoundStatementContextExt<'a>}
+antlr_rust::tid!{CompoundStatementContextExt<'a>}
 
 impl<'input> CompoundStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CompoundStatementContextAll<'input>> {
@@ -12184,8 +12260,8 @@ where
 		let mut _localctx = CompoundStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 146, RULE_compoundStatement);
         let mut _localctx: Rc<CompoundStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12196,7 +12272,7 @@ where
 			recog.base.set_state(984);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static) | (1usize << Struct) | (1usize << Switch) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << While) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Generic) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Semi - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Switch - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (While - 32)) | (1usize << (Alignas - 32)) | (1usize << (Alignof - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Generic - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Semi - 64)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 				{
 				/*InvokeRule blockItemList*/
 				recog.base.set_state(983);
@@ -12209,7 +12285,8 @@ where
 			recog.base.match_token(RightBrace,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12238,14 +12315,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for BlockItemListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for BlockItemListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_blockItemList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_blockItemList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_blockItemList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_blockItemList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for BlockItemListContext<'input>{
@@ -12260,7 +12337,7 @@ impl<'input> CustomRuleContext<'input> for BlockItemListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_blockItemList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_blockItemList }
 }
-antlr_rust::type_id!{BlockItemListContextExt<'a>}
+antlr_rust::tid!{BlockItemListContextExt<'a>}
 
 impl<'input> BlockItemListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockItemListContextAll<'input>> {
@@ -12297,8 +12374,8 @@ where
 		let mut _localctx = BlockItemListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 148, RULE_blockItemList);
         let mut _localctx: Rc<BlockItemListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12318,10 +12395,11 @@ where
 				recog.base.set_state(991); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << For) | (1usize << Goto) | (1usize << If) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Return) | (1usize << Short) | (1usize << Signed) | (1usize << Sizeof) | (1usize << Static) | (1usize << Struct) | (1usize << Switch) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << While) | (1usize << Alignas) | (1usize << Alignof) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Generic) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Semi - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0)) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__15) | (1usize << T__16) | (1usize << T__17) | (1usize << Auto) | (1usize << Break) | (1usize << Case) | (1usize << Char) | (1usize << Const) | (1usize << Continue) | (1usize << Default) | (1usize << Do) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (For - 32)) | (1usize << (Goto - 32)) | (1usize << (If - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Return - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Sizeof - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Switch - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (While - 32)) | (1usize << (Alignas - 32)) | (1usize << (Alignof - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Generic - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (LeftBrace - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Semi - 64)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12350,14 +12428,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for BlockItemContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for BlockItemContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_blockItem(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_blockItem(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_blockItem(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_blockItem(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for BlockItemContext<'input>{
@@ -12372,7 +12450,7 @@ impl<'input> CustomRuleContext<'input> for BlockItemContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_blockItem }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_blockItem }
 }
-antlr_rust::type_id!{BlockItemContextExt<'a>}
+antlr_rust::tid!{BlockItemContextExt<'a>}
 
 impl<'input> BlockItemContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<BlockItemContextAll<'input>> {
@@ -12409,7 +12487,7 @@ where
 		let mut _localctx = BlockItemContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 150, RULE_blockItem);
         let mut _localctx: Rc<BlockItemContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(995);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12438,7 +12516,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12467,14 +12546,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ExpressionStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ExpressionStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_expressionStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_expressionStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_expressionStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_expressionStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ExpressionStatementContext<'input>{
@@ -12489,7 +12568,7 @@ impl<'input> CustomRuleContext<'input> for ExpressionStatementContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_expressionStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_expressionStatement }
 }
-antlr_rust::type_id!{ExpressionStatementContextExt<'a>}
+antlr_rust::tid!{ExpressionStatementContextExt<'a>}
 
 impl<'input> ExpressionStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExpressionStatementContextAll<'input>> {
@@ -12528,8 +12607,8 @@ where
 		let mut _localctx = ExpressionStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 152, RULE_expressionStatement);
         let mut _localctx: Rc<ExpressionStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -12537,7 +12616,7 @@ where
 			recog.base.set_state(998);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 				{
 				/*InvokeRule expression*/
 				recog.base.set_state(997);
@@ -12550,7 +12629,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12579,14 +12659,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for SelectionStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for SelectionStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_selectionStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_selectionStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_selectionStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_selectionStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for SelectionStatementContext<'input>{
@@ -12601,7 +12681,7 @@ impl<'input> CustomRuleContext<'input> for SelectionStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_selectionStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_selectionStatement }
 }
-antlr_rust::type_id!{SelectionStatementContextExt<'a>}
+antlr_rust::tid!{SelectionStatementContextExt<'a>}
 
 impl<'input> SelectionStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<SelectionStatementContextAll<'input>> {
@@ -12666,7 +12746,7 @@ where
 		let mut _localctx = SelectionStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 154, RULE_selectionStatement);
         let mut _localctx: Rc<SelectionStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1017);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12740,7 +12820,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12769,14 +12850,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for IterationStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for IterationStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_iterationStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_iterationStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_iterationStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_iterationStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for IterationStatementContext<'input>{
@@ -12791,7 +12872,7 @@ impl<'input> CustomRuleContext<'input> for IterationStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_iterationStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_iterationStatement }
 }
-antlr_rust::type_id!{IterationStatementContextExt<'a>}
+antlr_rust::tid!{IterationStatementContextExt<'a>}
 
 impl<'input> IterationStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<IterationStatementContextAll<'input>> {
@@ -12861,7 +12942,7 @@ where
 		let mut _localctx = IterationStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 156, RULE_iterationStatement);
         let mut _localctx: Rc<IterationStatementContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1039);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -12949,7 +13030,8 @@ where
 
 				_ => Err(ANTLRError::NoAltError(NoViableAltError::new(&mut recog.base)))?
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -12978,14 +13060,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ForConditionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ForConditionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forCondition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_forCondition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forCondition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_forCondition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ForConditionContext<'input>{
@@ -13000,7 +13082,7 @@ impl<'input> CustomRuleContext<'input> for ForConditionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forCondition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forCondition }
 }
-antlr_rust::type_id!{ForConditionContextExt<'a>}
+antlr_rust::tid!{ForConditionContextExt<'a>}
 
 impl<'input> ForConditionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForConditionContextAll<'input>> {
@@ -13052,8 +13134,8 @@ where
 		let mut _localctx = ForConditionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 158, RULE_forCondition);
         let mut _localctx: Rc<ForConditionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13075,7 +13157,7 @@ where
 					recog.base.set_state(1043);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 						{
 						/*InvokeRule expression*/
 						recog.base.set_state(1042);
@@ -13095,7 +13177,7 @@ where
 			recog.base.set_state(1049);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 				{
 				/*InvokeRule forExpression*/
 				recog.base.set_state(1048);
@@ -13110,7 +13192,7 @@ where
 			recog.base.set_state(1053);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 				{
 				/*InvokeRule forExpression*/
 				recog.base.set_state(1052);
@@ -13120,7 +13202,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13149,14 +13232,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ForDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ForDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_forDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_forDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ForDeclarationContext<'input>{
@@ -13171,7 +13254,7 @@ impl<'input> CustomRuleContext<'input> for ForDeclarationContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forDeclaration }
 }
-antlr_rust::type_id!{ForDeclarationContextExt<'a>}
+antlr_rust::tid!{ForDeclarationContextExt<'a>}
 
 impl<'input> ForDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForDeclarationContextAll<'input>> {
@@ -13208,8 +13291,8 @@ where
 		let mut _localctx = ForDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 160, RULE_forDeclaration);
         let mut _localctx: Rc<ForDeclarationContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13221,7 +13304,7 @@ where
 			recog.base.set_state(1057);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)) | (1usize << (Identifier - 64)))) != 0) {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__8) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)))) != 0) || _la==Identifier {
 				{
 				/*InvokeRule initDeclaratorList*/
 				recog.base.set_state(1056);
@@ -13231,7 +13314,8 @@ where
 			}
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13260,14 +13344,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ForExpressionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ForExpressionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_forExpression(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_forExpression(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_forExpression(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_forExpression(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ForExpressionContext<'input>{
@@ -13282,7 +13366,7 @@ impl<'input> CustomRuleContext<'input> for ForExpressionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_forExpression }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_forExpression }
 }
-antlr_rust::type_id!{ForExpressionContextExt<'a>}
+antlr_rust::tid!{ForExpressionContextExt<'a>}
 
 impl<'input> ForExpressionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ForExpressionContextAll<'input>> {
@@ -13328,8 +13412,8 @@ where
 		let mut _localctx = ForExpressionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 162, RULE_forExpression);
         let mut _localctx: Rc<ForExpressionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13358,7 +13442,8 @@ where
 				_la = recog.base.input.la(1);
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13387,14 +13472,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for JumpStatementContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for JumpStatementContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_jumpStatement(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_jumpStatement(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_jumpStatement(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_jumpStatement(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for JumpStatementContext<'input>{
@@ -13409,7 +13494,7 @@ impl<'input> CustomRuleContext<'input> for JumpStatementContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_jumpStatement }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_jumpStatement }
 }
-antlr_rust::type_id!{JumpStatementContextExt<'a>}
+antlr_rust::tid!{JumpStatementContextExt<'a>}
 
 impl<'input> JumpStatementContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<JumpStatementContextAll<'input>> {
@@ -13476,8 +13561,8 @@ where
 		let mut _localctx = JumpStatementContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 164, RULE_jumpStatement);
         let mut _localctx: Rc<JumpStatementContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13520,7 +13605,7 @@ where
 					recog.base.set_state(1073);
 					recog.err_handler.sync(&mut recog.base)?;
 					_la = recog.base.input.la(1);
-					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2) | (1usize << Sizeof) | (1usize << Alignof) | (1usize << Generic))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Plus - 64)) | (1usize << (PlusPlus - 64)) | (1usize << (Minus - 64)) | (1usize << (MinusMinus - 64)) | (1usize << (Star - 64)) | (1usize << (And - 64)) | (1usize << (AndAnd - 64)) | (1usize << (Not - 64)) | (1usize << (Tilde - 64)) | (1usize << (Identifier - 64)) | (1usize << (Constant - 64)) | (1usize << (DigitSequence - 64)) | (1usize << (StringLiteral - 64)))) != 0) {
+					if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__1) | (1usize << T__2))) != 0) || ((((_la - 44)) & !0x3f) == 0 && ((1usize << (_la - 44)) & ((1usize << (Sizeof - 44)) | (1usize << (Alignof - 44)) | (1usize << (Generic - 44)) | (1usize << (LeftParen - 44)))) != 0) || ((((_la - 76)) & !0x3f) == 0 && ((1usize << (_la - 76)) & ((1usize << (Plus - 76)) | (1usize << (PlusPlus - 76)) | (1usize << (Minus - 76)) | (1usize << (MinusMinus - 76)) | (1usize << (Star - 76)) | (1usize << (And - 76)) | (1usize << (AndAnd - 76)) | (1usize << (Not - 76)) | (1usize << (Tilde - 76)))) != 0) || ((((_la - 110)) & !0x3f) == 0 && ((1usize << (_la - 110)) & ((1usize << (Identifier - 110)) | (1usize << (Constant - 110)) | (1usize << (DigitSequence - 110)) | (1usize << (StringLiteral - 110)))) != 0) {
 						{
 						/*InvokeRule expression*/
 						recog.base.set_state(1072);
@@ -13550,7 +13635,8 @@ where
 			recog.base.match_token(Semi,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13579,14 +13665,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for CompilationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for CompilationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_compilationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_compilationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_compilationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_compilationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for CompilationUnitContext<'input>{
@@ -13601,7 +13687,7 @@ impl<'input> CustomRuleContext<'input> for CompilationUnitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_compilationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_compilationUnit }
 }
-antlr_rust::type_id!{CompilationUnitContextExt<'a>}
+antlr_rust::tid!{CompilationUnitContextExt<'a>}
 
 impl<'input> CompilationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<CompilationUnitContextAll<'input>> {
@@ -13640,8 +13726,8 @@ where
 		let mut _localctx = CompilationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 166, RULE_compilationUnit);
         let mut _localctx: Rc<CompilationUnitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13649,7 +13735,7 @@ where
 			recog.base.set_state(1082);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)) | (1usize << (Semi - 64)) | (1usize << (Identifier - 64)))) != 0) {
+			if ((((_la - 1)) & !0x3f) == 0 && ((1usize << (_la - 1)) & ((1usize << (T__0 - 1)) | (1usize << (T__3 - 1)) | (1usize << (T__4 - 1)) | (1usize << (T__5 - 1)) | (1usize << (T__6 - 1)) | (1usize << (T__7 - 1)) | (1usize << (T__8 - 1)) | (1usize << (T__9 - 1)) | (1usize << (T__10 - 1)) | (1usize << (T__11 - 1)) | (1usize << (T__12 - 1)) | (1usize << (T__13 - 1)) | (1usize << (T__14 - 1)) | (1usize << (T__16 - 1)) | (1usize << (Auto - 1)) | (1usize << (Char - 1)) | (1usize << (Const - 1)) | (1usize << (Double - 1)) | (1usize << (Enum - 1)) | (1usize << (Extern - 1)) | (1usize << (Float - 1)))) != 0) || ((((_la - 36)) & !0x3f) == 0 && ((1usize << (_la - 36)) & ((1usize << (Inline - 36)) | (1usize << (Int - 36)) | (1usize << (Long - 36)) | (1usize << (Register - 36)) | (1usize << (Restrict - 36)) | (1usize << (Short - 36)) | (1usize << (Signed - 36)) | (1usize << (Static - 36)) | (1usize << (Struct - 36)) | (1usize << (Typedef - 36)) | (1usize << (Union - 36)) | (1usize << (Unsigned - 36)) | (1usize << (Void - 36)) | (1usize << (Volatile - 36)) | (1usize << (Alignas - 36)) | (1usize << (Atomic - 36)) | (1usize << (Bool - 36)) | (1usize << (Complex - 36)) | (1usize << (Noreturn - 36)) | (1usize << (StaticAssert - 36)) | (1usize << (ThreadLocal - 36)) | (1usize << (LeftParen - 36)))) != 0) || ((((_la - 80)) & !0x3f) == 0 && ((1usize << (_la - 80)) & ((1usize << (Star - 80)) | (1usize << (Caret - 80)) | (1usize << (Semi - 80)) | (1usize << (Identifier - 80)))) != 0) {
 				{
 				/*InvokeRule translationUnit*/
 				recog.base.set_state(1081);
@@ -13662,7 +13748,8 @@ where
 			recog.base.match_token(EOF,&mut recog.err_handler)?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13691,14 +13778,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for TranslationUnitContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for TranslationUnitContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_translationUnit(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_translationUnit(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_translationUnit(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_translationUnit(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for TranslationUnitContext<'input>{
@@ -13713,7 +13800,7 @@ impl<'input> CustomRuleContext<'input> for TranslationUnitContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_translationUnit }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_translationUnit }
 }
-antlr_rust::type_id!{TranslationUnitContextExt<'a>}
+antlr_rust::tid!{TranslationUnitContextExt<'a>}
 
 impl<'input> TranslationUnitContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<TranslationUnitContextAll<'input>> {
@@ -13750,8 +13837,8 @@ where
 		let mut _localctx = TranslationUnitContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 168, RULE_translationUnit);
         let mut _localctx: Rc<TranslationUnitContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -13771,10 +13858,11 @@ where
 				recog.base.set_state(1089); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__10) | (1usize << T__11) | (1usize << T__12) | (1usize << T__13) | (1usize << T__14) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || ((((_la - 64)) & !0x3f) == 0 && ((1usize << (_la - 64)) & ((1usize << (LeftParen - 64)) | (1usize << (Star - 64)) | (1usize << (Caret - 64)) | (1usize << (Semi - 64)) | (1usize << (Identifier - 64)))) != 0)) {break}
+				if !(((((_la - 1)) & !0x3f) == 0 && ((1usize << (_la - 1)) & ((1usize << (T__0 - 1)) | (1usize << (T__3 - 1)) | (1usize << (T__4 - 1)) | (1usize << (T__5 - 1)) | (1usize << (T__6 - 1)) | (1usize << (T__7 - 1)) | (1usize << (T__8 - 1)) | (1usize << (T__9 - 1)) | (1usize << (T__10 - 1)) | (1usize << (T__11 - 1)) | (1usize << (T__12 - 1)) | (1usize << (T__13 - 1)) | (1usize << (T__14 - 1)) | (1usize << (T__16 - 1)) | (1usize << (Auto - 1)) | (1usize << (Char - 1)) | (1usize << (Const - 1)) | (1usize << (Double - 1)) | (1usize << (Enum - 1)) | (1usize << (Extern - 1)) | (1usize << (Float - 1)))) != 0) || ((((_la - 36)) & !0x3f) == 0 && ((1usize << (_la - 36)) & ((1usize << (Inline - 36)) | (1usize << (Int - 36)) | (1usize << (Long - 36)) | (1usize << (Register - 36)) | (1usize << (Restrict - 36)) | (1usize << (Short - 36)) | (1usize << (Signed - 36)) | (1usize << (Static - 36)) | (1usize << (Struct - 36)) | (1usize << (Typedef - 36)) | (1usize << (Union - 36)) | (1usize << (Unsigned - 36)) | (1usize << (Void - 36)) | (1usize << (Volatile - 36)) | (1usize << (Alignas - 36)) | (1usize << (Atomic - 36)) | (1usize << (Bool - 36)) | (1usize << (Complex - 36)) | (1usize << (Noreturn - 36)) | (1usize << (StaticAssert - 36)) | (1usize << (ThreadLocal - 36)) | (1usize << (LeftParen - 36)))) != 0) || ((((_la - 80)) & !0x3f) == 0 && ((1usize << (_la - 80)) & ((1usize << (Star - 80)) | (1usize << (Caret - 80)) | (1usize << (Semi - 80)) | (1usize << (Identifier - 80)))) != 0)) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13803,14 +13891,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for ExternalDeclarationContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for ExternalDeclarationContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_externalDeclaration(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_externalDeclaration(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_externalDeclaration(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_externalDeclaration(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for ExternalDeclarationContext<'input>{
@@ -13825,7 +13913,7 @@ impl<'input> CustomRuleContext<'input> for ExternalDeclarationContextExt<'input>
 	fn get_rule_index(&self) -> usize { RULE_externalDeclaration }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_externalDeclaration }
 }
-antlr_rust::type_id!{ExternalDeclarationContextExt<'a>}
+antlr_rust::tid!{ExternalDeclarationContextExt<'a>}
 
 impl<'input> ExternalDeclarationContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<ExternalDeclarationContextAll<'input>> {
@@ -13867,7 +13955,7 @@ where
 		let mut _localctx = ExternalDeclarationContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 170, RULE_externalDeclaration);
         let mut _localctx: Rc<ExternalDeclarationContextAll> = _localctx;
-		let result: Result<(), ANTLRError> = try {
+		let result: Result<(), ANTLRError> = (|| {
 
 			recog.base.set_state(1094);
 			recog.err_handler.sync(&mut recog.base)?;
@@ -13906,7 +13994,8 @@ where
 
 				_ => {}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -13935,14 +14024,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for FunctionDefinitionContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for FunctionDefinitionContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_functionDefinition(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_functionDefinition(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_functionDefinition(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_functionDefinition(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for FunctionDefinitionContext<'input>{
@@ -13957,7 +14046,7 @@ impl<'input> CustomRuleContext<'input> for FunctionDefinitionContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_functionDefinition }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_functionDefinition }
 }
-antlr_rust::type_id!{FunctionDefinitionContextExt<'a>}
+antlr_rust::tid!{FunctionDefinitionContextExt<'a>}
 
 impl<'input> FunctionDefinitionContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<FunctionDefinitionContextAll<'input>> {
@@ -14000,8 +14089,8 @@ where
 		let mut _localctx = FunctionDefinitionContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 172, RULE_functionDefinition);
         let mut _localctx: Rc<FunctionDefinitionContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14027,7 +14116,7 @@ where
 			recog.base.set_state(1101);
 			recog.err_handler.sync(&mut recog.base)?;
 			_la = recog.base.input.la(1);
-			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || _la==Identifier {
+			if (((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Alignas - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || _la==Identifier {
 				{
 				/*InvokeRule declarationList*/
 				recog.base.set_state(1100);
@@ -14041,7 +14130,8 @@ where
 			recog.compoundStatement()?;
 
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
@@ -14070,14 +14160,14 @@ ph:PhantomData<&'input str>
 impl<'input> CParserContext<'input> for DeclarationListContext<'input>{}
 
 impl<'input,'a> Listenable<dyn CListener<'input> + 'a> for DeclarationListContext<'input>{
-	fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.enter_every_rule(self);
-		listener.enter_declarationList(self);
-	}
-	fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
-		listener.exit_declarationList(self);
-		listener.exit_every_rule(self);
-	}
+		fn enter(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.enter_every_rule(self);
+			listener.enter_declarationList(self);
+		}
+		fn exit(&self,listener: &mut (dyn CListener<'input> + 'a)) {
+			listener.exit_declarationList(self);
+			listener.exit_every_rule(self);
+		}
 }
 
 impl<'input,'a> Visitable<dyn CVisitor<'input> + 'a> for DeclarationListContext<'input>{
@@ -14092,7 +14182,7 @@ impl<'input> CustomRuleContext<'input> for DeclarationListContextExt<'input>{
 	fn get_rule_index(&self) -> usize { RULE_declarationList }
 	//fn type_rule_index() -> usize where Self: Sized { RULE_declarationList }
 }
-antlr_rust::type_id!{DeclarationListContextExt<'a>}
+antlr_rust::tid!{DeclarationListContextExt<'a>}
 
 impl<'input> DeclarationListContextExt<'input>{
 	fn new(parent: Option<Rc<dyn CParserContext<'input> + 'input > >, invoking_state: isize) -> Rc<DeclarationListContextAll<'input>> {
@@ -14129,8 +14219,8 @@ where
 		let mut _localctx = DeclarationListContextExt::new(_parentctx.clone(), recog.base.get_state());
         recog.base.enter_rule(_localctx.clone(), 174, RULE_declarationList);
         let mut _localctx: Rc<DeclarationListContextAll> = _localctx;
-		let mut _la: isize;
-		let result: Result<(), ANTLRError> = try {
+		let mut _la: isize = -1;
+		let result: Result<(), ANTLRError> = (|| {
 
 			//recog.base.enter_outer_alt(_localctx.clone(), 1);
 			recog.base.enter_outer_alt(None, 1);
@@ -14150,10 +14240,11 @@ where
 				recog.base.set_state(1108); 
 				recog.err_handler.sync(&mut recog.base)?;
 				_la = recog.base.input.la(1);
-				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern) | (1usize << Float) | (1usize << Inline) | (1usize << Int) | (1usize << Long) | (1usize << Register) | (1usize << Restrict) | (1usize << Short) | (1usize << Signed) | (1usize << Static) | (1usize << Struct) | (1usize << Typedef) | (1usize << Union) | (1usize << Unsigned) | (1usize << Void) | (1usize << Volatile) | (1usize << Alignas) | (1usize << Atomic) | (1usize << Bool) | (1usize << Complex) | (1usize << Noreturn) | (1usize << StaticAssert) | (1usize << ThreadLocal))) != 0) || _la==Identifier) {break}
+				if !((((_la) & !0x3f) == 0 && ((1usize << _la) & ((1usize << T__0) | (1usize << T__3) | (1usize << T__4) | (1usize << T__5) | (1usize << T__6) | (1usize << T__7) | (1usize << T__8) | (1usize << T__9) | (1usize << T__16) | (1usize << Auto) | (1usize << Char) | (1usize << Const) | (1usize << Double) | (1usize << Enum) | (1usize << Extern))) != 0) || ((((_la - 32)) & !0x3f) == 0 && ((1usize << (_la - 32)) & ((1usize << (Float - 32)) | (1usize << (Inline - 32)) | (1usize << (Int - 32)) | (1usize << (Long - 32)) | (1usize << (Register - 32)) | (1usize << (Restrict - 32)) | (1usize << (Short - 32)) | (1usize << (Signed - 32)) | (1usize << (Static - 32)) | (1usize << (Struct - 32)) | (1usize << (Typedef - 32)) | (1usize << (Union - 32)) | (1usize << (Unsigned - 32)) | (1usize << (Void - 32)) | (1usize << (Volatile - 32)) | (1usize << (Alignas - 32)) | (1usize << (Atomic - 32)) | (1usize << (Bool - 32)) | (1usize << (Complex - 32)) | (1usize << (Noreturn - 32)) | (1usize << (StaticAssert - 32)) | (1usize << (ThreadLocal - 32)))) != 0) || _la==Identifier) {break}
 			}
 			}
-		};
+			Ok(())
+		})();
 		match result {
 		Ok(_)=>{},
         Err(e @ ANTLRError::FallThrough(_)) => return Err(e),
