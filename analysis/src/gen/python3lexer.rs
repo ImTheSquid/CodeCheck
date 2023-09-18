@@ -21,6 +21,7 @@ use antlr_rust::PredictionContextCache;
 use antlr_rust::TokenSource;
 
 use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
+use regex::Regex;
 
 use std::cell::RefCell;
 use std::marker::PhantomData;
@@ -536,7 +537,7 @@ impl<'input, Input: CharStream<From<'input>>> Python3Lexer<'input, Input> {
                     _decision_to_DFA.clone(),
                     _shared_context_cache.clone(),
                 ),
-                Python3LexerActions { opened: 0 },
+                Python3LexerActions { opened: 0, indents: Vec::new() },
                 tf,
             ),
         }
@@ -555,12 +556,25 @@ where
     }
 }
 
+lazy_static! {
+	static ref NEW_LINE: Regex = {
+		Regex::new(r"[^\r\n\f]+").unwrap()
+	};
+
+	static ref SPACES: Regex = {
+		Regex::new(r"[\r\n\f]+").unwrap()
+	};
+}
+
 pub struct Python3LexerActions {
     opened: usize,
+	indents: Vec<usize>,
+	// tokens: Vec<Token>,
 }
 
 impl Python3LexerActions {
     pub fn onNewLine(&mut self) {
+		
         todo!()
     }
 
@@ -571,6 +585,21 @@ impl Python3LexerActions {
     pub fn closeBrace(&mut self) {
         self.opened -= 1;
     }
+
+	pub fn get_indentation_count(spaces: &str) -> usize {
+		let mut count = 0;
+		for char in spaces.chars() {
+			if char == '\t' {
+				count += 8 - (count % 8);
+			} else {
+				count += 1;
+			}
+		}
+
+		count
+	}
+
+	
 }
 
 impl<'input, Input: CharStream<From<'input>>>
@@ -613,13 +642,57 @@ impl<'input, Input: CharStream<From<'input>>> Python3Lexer<'input, Input> {
         action_index: isize,
         recog: &mut <Self as Deref>::Target,
     ) {
-        match action_index {
-            0 => {
-                recog.onNewLine();
-            }
+        // match action_index {
+        //     0 => {
+			// recog.onNewLine();
+        //     }
 
-            _ => {}
-        }
+        //     _ => {}
+        // }
+
+		if action_index == 0 {
+			type NewLineToken<'input> = std::boxed::Box<antlr_rust::token::GenericToken<std::borrow::Cow<'input, str>>>;
+			fn common_token<'input, Input: CharStream<From<'input>>>(recog: &mut <Python3Lexer<'input, Input> as Deref>::Target, ty: isize, text: &str) -> NewLineToken<'input> {
+				let stop = recog.get_char_index() - 1;
+				let start = if text.is_empty() {
+					stop
+				} else {
+					stop - text.len() as isize + 1
+				};
+				recog.get_token_factory().create(recog.input.as_mut(), ty, Some(text.to_string()), TOKEN_DEFAULT_CHANNEL, start, stop, 0, 0)
+			}
+
+			fn emit<'input, Input: CharStream<From<'input>>>(recog: &mut <Python3Lexer<'input, Input> as Deref>::Target, tok: NewLineToken<'input>) {
+				recog.input.as_mut().unwrap().seek(-1);
+				recog.token = Some(tok);
+			}
+
+			let spaces = SPACES.replace_all(recog.get_text().as_ref(), "").to_string();
+			let new_line = NEW_LINE.replace_all(recog.get_text().as_ref(), "").to_string();
+			let next = recog.input.as_mut().unwrap().la(1);
+			let nextnext = { recog.input.as_mut().unwrap().la(2) };
+			if recog.opened > 0 || (nextnext != -1 && (next == '\r' as isize || next == '\n' as isize || next == '#' as isize)) {
+				recog.skip();
+			} else {
+				let tok = common_token(recog, NEWLINE, new_line.as_ref());
+				emit(recog, tok);
+				let indent = Python3LexerActions::get_indentation_count(&spaces);
+				let previous = *recog.indents.first().unwrap_or(&0);
+				if indent == previous {
+					recog.skip();
+				} else if indent > previous {
+					recog.indents.push(indent);
+					let tok = common_token(recog, INDENT, &spaces);
+					emit(recog, tok);
+				} else {
+					while recog.indents.first().is_some_and(|top| *top > indent) {
+						let tok = common_token(recog, DEDENT, "");
+						emit(recog, tok);
+						recog.indents.pop();
+					}
+				}
+			}
+		}
     }
 
     fn OPEN_PAREN_action(

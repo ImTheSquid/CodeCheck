@@ -5,7 +5,7 @@ use crate::gen::cvisitor::CVisitorCompat;
 use crate::{SyntaxTree, VisitorReturn};
 
 #[derive(Debug, Clone)]
-pub enum CTree {}
+pub struct CTree {}
 
 impl ParseTreeVisitorCompat<'_> for CTree {
     type Node = CParserContextType;

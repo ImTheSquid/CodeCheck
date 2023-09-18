@@ -5,7 +5,7 @@ use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
 use crate::{VisitorReturn};
 
 #[derive(Debug, Clone)]
-pub enum CppTree {}
+pub struct CppTree {}
 
 impl ParseTreeVisitorCompat<'_> for CppTree {
     type Node = CPP14ParserContextType;
