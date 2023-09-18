@@ -4,315 +4,672 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use antlr_rust::atn::ATN;
+use antlr_rust::atn_deserializer::ATNDeserializer;
 use antlr_rust::char_stream::CharStream;
+use antlr_rust::dfa::DFA;
+use antlr_rust::error_listener::ErrorListener;
 use antlr_rust::int_stream::IntStream;
 use antlr_rust::lexer::{BaseLexer, Lexer, LexerRecog};
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::dfa::DFA;
-use antlr_rust::lexer_atn_simulator::{LexerATNSimulator, ILexerATNSimulator};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::recognizer::{Recognizer,Actions};
-use antlr_rust::error_listener::ErrorListener;
-use antlr_rust::TokenSource;
-use antlr_rust::token_factory::{TokenFactory,CommonTokenFactory,TokenAware};
+use antlr_rust::lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator};
+use antlr_rust::parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext};
+use antlr_rust::recognizer::{Actions, Recognizer};
+use antlr_rust::rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext};
 use antlr_rust::token::*;
-use antlr_rust::rule_context::{BaseRuleContext,EmptyCustomRuleContext,EmptyContext};
-use antlr_rust::parser_rule_context::{ParserRuleContext,BaseParserRuleContext,cast};
-use antlr_rust::vocabulary::{Vocabulary,VocabularyImpl};
+use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
+use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
+use antlr_rust::PredictionContextCache;
+use antlr_rust::TokenSource;
 
-use antlr_rust::{lazy_static,Tid,TidAble,TidExt};
+use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
 
-use std::sync::Arc;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
+pub const IntegerLiteral: isize = 1;
+pub const CharacterLiteral: isize = 2;
+pub const FloatingLiteral: isize = 3;
+pub const StringLiteral: isize = 4;
+pub const BooleanLiteral: isize = 5;
+pub const PointerLiteral: isize = 6;
+pub const UserDefinedLiteral: isize = 7;
+pub const MultiLineMacro: isize = 8;
+pub const Directive: isize = 9;
+pub const Alignas: isize = 10;
+pub const Alignof: isize = 11;
+pub const Asm: isize = 12;
+pub const Auto: isize = 13;
+pub const Bool: isize = 14;
+pub const Break: isize = 15;
+pub const Case: isize = 16;
+pub const Catch: isize = 17;
+pub const Char: isize = 18;
+pub const Char16: isize = 19;
+pub const Char32: isize = 20;
+pub const Class: isize = 21;
+pub const Const: isize = 22;
+pub const Constexpr: isize = 23;
+pub const Const_cast: isize = 24;
+pub const Continue: isize = 25;
+pub const Decltype: isize = 26;
+pub const Default: isize = 27;
+pub const Delete: isize = 28;
+pub const Do: isize = 29;
+pub const Double: isize = 30;
+pub const Dynamic_cast: isize = 31;
+pub const Else: isize = 32;
+pub const Enum: isize = 33;
+pub const Explicit: isize = 34;
+pub const Export: isize = 35;
+pub const Extern: isize = 36;
+pub const False_: isize = 37;
+pub const Final: isize = 38;
+pub const Float: isize = 39;
+pub const For: isize = 40;
+pub const Friend: isize = 41;
+pub const Goto: isize = 42;
+pub const If: isize = 43;
+pub const Inline: isize = 44;
+pub const Int: isize = 45;
+pub const Long: isize = 46;
+pub const Mutable: isize = 47;
+pub const Namespace: isize = 48;
+pub const New: isize = 49;
+pub const Noexcept: isize = 50;
+pub const Nullptr: isize = 51;
+pub const Operator: isize = 52;
+pub const Override: isize = 53;
+pub const Private: isize = 54;
+pub const Protected: isize = 55;
+pub const Public: isize = 56;
+pub const Register: isize = 57;
+pub const Reinterpret_cast: isize = 58;
+pub const Return: isize = 59;
+pub const Short: isize = 60;
+pub const Signed: isize = 61;
+pub const Sizeof: isize = 62;
+pub const Static: isize = 63;
+pub const Static_assert: isize = 64;
+pub const Static_cast: isize = 65;
+pub const Struct: isize = 66;
+pub const Switch: isize = 67;
+pub const Template: isize = 68;
+pub const This: isize = 69;
+pub const Thread_local: isize = 70;
+pub const Throw: isize = 71;
+pub const True_: isize = 72;
+pub const Try: isize = 73;
+pub const Typedef: isize = 74;
+pub const Typeid_: isize = 75;
+pub const Typename_: isize = 76;
+pub const Union: isize = 77;
+pub const Unsigned: isize = 78;
+pub const Using: isize = 79;
+pub const Virtual: isize = 80;
+pub const Void: isize = 81;
+pub const Volatile: isize = 82;
+pub const Wchar: isize = 83;
+pub const While: isize = 84;
+pub const LeftParen: isize = 85;
+pub const RightParen: isize = 86;
+pub const LeftBracket: isize = 87;
+pub const RightBracket: isize = 88;
+pub const LeftBrace: isize = 89;
+pub const RightBrace: isize = 90;
+pub const Plus: isize = 91;
+pub const Minus: isize = 92;
+pub const Star: isize = 93;
+pub const Div: isize = 94;
+pub const Mod: isize = 95;
+pub const Caret: isize = 96;
+pub const And: isize = 97;
+pub const Or: isize = 98;
+pub const Tilde: isize = 99;
+pub const Not: isize = 100;
+pub const Assign: isize = 101;
+pub const Less: isize = 102;
+pub const Greater: isize = 103;
+pub const PlusAssign: isize = 104;
+pub const MinusAssign: isize = 105;
+pub const StarAssign: isize = 106;
+pub const DivAssign: isize = 107;
+pub const ModAssign: isize = 108;
+pub const XorAssign: isize = 109;
+pub const AndAssign: isize = 110;
+pub const OrAssign: isize = 111;
+pub const LeftShiftAssign: isize = 112;
+pub const RightShiftAssign: isize = 113;
+pub const Equal: isize = 114;
+pub const NotEqual: isize = 115;
+pub const LessEqual: isize = 116;
+pub const GreaterEqual: isize = 117;
+pub const AndAnd: isize = 118;
+pub const OrOr: isize = 119;
+pub const PlusPlus: isize = 120;
+pub const MinusMinus: isize = 121;
+pub const Comma: isize = 122;
+pub const ArrowStar: isize = 123;
+pub const Arrow: isize = 124;
+pub const Question: isize = 125;
+pub const Colon: isize = 126;
+pub const Doublecolon: isize = 127;
+pub const Semi: isize = 128;
+pub const Dot: isize = 129;
+pub const DotStar: isize = 130;
+pub const Ellipsis: isize = 131;
+pub const Identifier: isize = 132;
+pub const DecimalLiteral: isize = 133;
+pub const OctalLiteral: isize = 134;
+pub const HexadecimalLiteral: isize = 135;
+pub const BinaryLiteral: isize = 136;
+pub const Integersuffix: isize = 137;
+pub const UserDefinedIntegerLiteral: isize = 138;
+pub const UserDefinedFloatingLiteral: isize = 139;
+pub const UserDefinedStringLiteral: isize = 140;
+pub const UserDefinedCharacterLiteral: isize = 141;
+pub const Whitespace: isize = 142;
+pub const Newline: isize = 143;
+pub const BlockComment: isize = 144;
+pub const LineComment: isize = 145;
+pub const channelNames: [&'static str; 0 + 2] = ["DEFAULT_TOKEN_CHANNEL", "HIDDEN"];
 
-	pub const IntegerLiteral:isize=1; 
-	pub const CharacterLiteral:isize=2; 
-	pub const FloatingLiteral:isize=3; 
-	pub const StringLiteral:isize=4; 
-	pub const BooleanLiteral:isize=5; 
-	pub const PointerLiteral:isize=6; 
-	pub const UserDefinedLiteral:isize=7; 
-	pub const MultiLineMacro:isize=8; 
-	pub const Directive:isize=9; 
-	pub const Alignas:isize=10; 
-	pub const Alignof:isize=11; 
-	pub const Asm:isize=12; 
-	pub const Auto:isize=13; 
-	pub const Bool:isize=14; 
-	pub const Break:isize=15; 
-	pub const Case:isize=16; 
-	pub const Catch:isize=17; 
-	pub const Char:isize=18; 
-	pub const Char16:isize=19; 
-	pub const Char32:isize=20; 
-	pub const Class:isize=21; 
-	pub const Const:isize=22; 
-	pub const Constexpr:isize=23; 
-	pub const Const_cast:isize=24; 
-	pub const Continue:isize=25; 
-	pub const Decltype:isize=26; 
-	pub const Default:isize=27; 
-	pub const Delete:isize=28; 
-	pub const Do:isize=29; 
-	pub const Double:isize=30; 
-	pub const Dynamic_cast:isize=31; 
-	pub const Else:isize=32; 
-	pub const Enum:isize=33; 
-	pub const Explicit:isize=34; 
-	pub const Export:isize=35; 
-	pub const Extern:isize=36; 
-	pub const False_:isize=37; 
-	pub const Final:isize=38; 
-	pub const Float:isize=39; 
-	pub const For:isize=40; 
-	pub const Friend:isize=41; 
-	pub const Goto:isize=42; 
-	pub const If:isize=43; 
-	pub const Inline:isize=44; 
-	pub const Int:isize=45; 
-	pub const Long:isize=46; 
-	pub const Mutable:isize=47; 
-	pub const Namespace:isize=48; 
-	pub const New:isize=49; 
-	pub const Noexcept:isize=50; 
-	pub const Nullptr:isize=51; 
-	pub const Operator:isize=52; 
-	pub const Override:isize=53; 
-	pub const Private:isize=54; 
-	pub const Protected:isize=55; 
-	pub const Public:isize=56; 
-	pub const Register:isize=57; 
-	pub const Reinterpret_cast:isize=58; 
-	pub const Return:isize=59; 
-	pub const Short:isize=60; 
-	pub const Signed:isize=61; 
-	pub const Sizeof:isize=62; 
-	pub const Static:isize=63; 
-	pub const Static_assert:isize=64; 
-	pub const Static_cast:isize=65; 
-	pub const Struct:isize=66; 
-	pub const Switch:isize=67; 
-	pub const Template:isize=68; 
-	pub const This:isize=69; 
-	pub const Thread_local:isize=70; 
-	pub const Throw:isize=71; 
-	pub const True_:isize=72; 
-	pub const Try:isize=73; 
-	pub const Typedef:isize=74; 
-	pub const Typeid_:isize=75; 
-	pub const Typename_:isize=76; 
-	pub const Union:isize=77; 
-	pub const Unsigned:isize=78; 
-	pub const Using:isize=79; 
-	pub const Virtual:isize=80; 
-	pub const Void:isize=81; 
-	pub const Volatile:isize=82; 
-	pub const Wchar:isize=83; 
-	pub const While:isize=84; 
-	pub const LeftParen:isize=85; 
-	pub const RightParen:isize=86; 
-	pub const LeftBracket:isize=87; 
-	pub const RightBracket:isize=88; 
-	pub const LeftBrace:isize=89; 
-	pub const RightBrace:isize=90; 
-	pub const Plus:isize=91; 
-	pub const Minus:isize=92; 
-	pub const Star:isize=93; 
-	pub const Div:isize=94; 
-	pub const Mod:isize=95; 
-	pub const Caret:isize=96; 
-	pub const And:isize=97; 
-	pub const Or:isize=98; 
-	pub const Tilde:isize=99; 
-	pub const Not:isize=100; 
-	pub const Assign:isize=101; 
-	pub const Less:isize=102; 
-	pub const Greater:isize=103; 
-	pub const PlusAssign:isize=104; 
-	pub const MinusAssign:isize=105; 
-	pub const StarAssign:isize=106; 
-	pub const DivAssign:isize=107; 
-	pub const ModAssign:isize=108; 
-	pub const XorAssign:isize=109; 
-	pub const AndAssign:isize=110; 
-	pub const OrAssign:isize=111; 
-	pub const LeftShiftAssign:isize=112; 
-	pub const RightShiftAssign:isize=113; 
-	pub const Equal:isize=114; 
-	pub const NotEqual:isize=115; 
-	pub const LessEqual:isize=116; 
-	pub const GreaterEqual:isize=117; 
-	pub const AndAnd:isize=118; 
-	pub const OrOr:isize=119; 
-	pub const PlusPlus:isize=120; 
-	pub const MinusMinus:isize=121; 
-	pub const Comma:isize=122; 
-	pub const ArrowStar:isize=123; 
-	pub const Arrow:isize=124; 
-	pub const Question:isize=125; 
-	pub const Colon:isize=126; 
-	pub const Doublecolon:isize=127; 
-	pub const Semi:isize=128; 
-	pub const Dot:isize=129; 
-	pub const DotStar:isize=130; 
-	pub const Ellipsis:isize=131; 
-	pub const Identifier:isize=132; 
-	pub const DecimalLiteral:isize=133; 
-	pub const OctalLiteral:isize=134; 
-	pub const HexadecimalLiteral:isize=135; 
-	pub const BinaryLiteral:isize=136; 
-	pub const Integersuffix:isize=137; 
-	pub const UserDefinedIntegerLiteral:isize=138; 
-	pub const UserDefinedFloatingLiteral:isize=139; 
-	pub const UserDefinedStringLiteral:isize=140; 
-	pub const UserDefinedCharacterLiteral:isize=141; 
-	pub const Whitespace:isize=142; 
-	pub const Newline:isize=143; 
-	pub const BlockComment:isize=144; 
-	pub const LineComment:isize=145;
-	pub const channelNames: [&'static str;0+2] = [
-		"DEFAULT_TOKEN_CHANNEL", "HIDDEN"
-	];
+pub const modeNames: [&'static str; 1] = ["DEFAULT_MODE"];
 
-	pub const modeNames: [&'static str;1] = [
-		"DEFAULT_MODE"
-	];
+pub const ruleNames: [&'static str; 171] = [
+    "IntegerLiteral",
+    "CharacterLiteral",
+    "FloatingLiteral",
+    "StringLiteral",
+    "BooleanLiteral",
+    "PointerLiteral",
+    "UserDefinedLiteral",
+    "MultiLineMacro",
+    "Directive",
+    "Alignas",
+    "Alignof",
+    "Asm",
+    "Auto",
+    "Bool",
+    "Break",
+    "Case",
+    "Catch",
+    "Char",
+    "Char16",
+    "Char32",
+    "Class",
+    "Const",
+    "Constexpr",
+    "Const_cast",
+    "Continue",
+    "Decltype",
+    "Default",
+    "Delete",
+    "Do",
+    "Double",
+    "Dynamic_cast",
+    "Else",
+    "Enum",
+    "Explicit",
+    "Export",
+    "Extern",
+    "False_",
+    "Final",
+    "Float",
+    "For",
+    "Friend",
+    "Goto",
+    "If",
+    "Inline",
+    "Int",
+    "Long",
+    "Mutable",
+    "Namespace",
+    "New",
+    "Noexcept",
+    "Nullptr",
+    "Operator",
+    "Override",
+    "Private",
+    "Protected",
+    "Public",
+    "Register",
+    "Reinterpret_cast",
+    "Return",
+    "Short",
+    "Signed",
+    "Sizeof",
+    "Static",
+    "Static_assert",
+    "Static_cast",
+    "Struct",
+    "Switch",
+    "Template",
+    "This",
+    "Thread_local",
+    "Throw",
+    "True_",
+    "Try",
+    "Typedef",
+    "Typeid_",
+    "Typename_",
+    "Union",
+    "Unsigned",
+    "Using",
+    "Virtual",
+    "Void",
+    "Volatile",
+    "Wchar",
+    "While",
+    "LeftParen",
+    "RightParen",
+    "LeftBracket",
+    "RightBracket",
+    "LeftBrace",
+    "RightBrace",
+    "Plus",
+    "Minus",
+    "Star",
+    "Div",
+    "Mod",
+    "Caret",
+    "And",
+    "Or",
+    "Tilde",
+    "Not",
+    "Assign",
+    "Less",
+    "Greater",
+    "PlusAssign",
+    "MinusAssign",
+    "StarAssign",
+    "DivAssign",
+    "ModAssign",
+    "XorAssign",
+    "AndAssign",
+    "OrAssign",
+    "LeftShiftAssign",
+    "RightShiftAssign",
+    "Equal",
+    "NotEqual",
+    "LessEqual",
+    "GreaterEqual",
+    "AndAnd",
+    "OrOr",
+    "PlusPlus",
+    "MinusMinus",
+    "Comma",
+    "ArrowStar",
+    "Arrow",
+    "Question",
+    "Colon",
+    "Doublecolon",
+    "Semi",
+    "Dot",
+    "DotStar",
+    "Ellipsis",
+    "Hexquad",
+    "Universalcharactername",
+    "Identifier",
+    "Identifiernondigit",
+    "NONDIGIT",
+    "DIGIT",
+    "DecimalLiteral",
+    "OctalLiteral",
+    "HexadecimalLiteral",
+    "BinaryLiteral",
+    "NONZERODIGIT",
+    "OCTALDIGIT",
+    "HEXADECIMALDIGIT",
+    "BINARYDIGIT",
+    "Integersuffix",
+    "Unsignedsuffix",
+    "Longsuffix",
+    "Longlongsuffix",
+    "Cchar",
+    "Escapesequence",
+    "Simpleescapesequence",
+    "Octalescapesequence",
+    "Hexadecimalescapesequence",
+    "Fractionalconstant",
+    "Exponentpart",
+    "SIGN",
+    "Digitsequence",
+    "Floatingsuffix",
+    "Encodingprefix",
+    "Schar",
+    "Rawstring",
+    "UserDefinedIntegerLiteral",
+    "UserDefinedFloatingLiteral",
+    "UserDefinedStringLiteral",
+    "UserDefinedCharacterLiteral",
+    "Udsuffix",
+    "Whitespace",
+    "Newline",
+    "BlockComment",
+    "LineComment",
+];
 
-	pub const ruleNames: [&'static str;171] = [
-		"IntegerLiteral", "CharacterLiteral", "FloatingLiteral", "StringLiteral", 
-		"BooleanLiteral", "PointerLiteral", "UserDefinedLiteral", "MultiLineMacro", 
-		"Directive", "Alignas", "Alignof", "Asm", "Auto", "Bool", "Break", "Case", 
-		"Catch", "Char", "Char16", "Char32", "Class", "Const", "Constexpr", "Const_cast", 
-		"Continue", "Decltype", "Default", "Delete", "Do", "Double", "Dynamic_cast", 
-		"Else", "Enum", "Explicit", "Export", "Extern", "False_", "Final", "Float", 
-		"For", "Friend", "Goto", "If", "Inline", "Int", "Long", "Mutable", "Namespace", 
-		"New", "Noexcept", "Nullptr", "Operator", "Override", "Private", "Protected", 
-		"Public", "Register", "Reinterpret_cast", "Return", "Short", "Signed", 
-		"Sizeof", "Static", "Static_assert", "Static_cast", "Struct", "Switch", 
-		"Template", "This", "Thread_local", "Throw", "True_", "Try", "Typedef", 
-		"Typeid_", "Typename_", "Union", "Unsigned", "Using", "Virtual", "Void", 
-		"Volatile", "Wchar", "While", "LeftParen", "RightParen", "LeftBracket", 
-		"RightBracket", "LeftBrace", "RightBrace", "Plus", "Minus", "Star", "Div", 
-		"Mod", "Caret", "And", "Or", "Tilde", "Not", "Assign", "Less", "Greater", 
-		"PlusAssign", "MinusAssign", "StarAssign", "DivAssign", "ModAssign", "XorAssign", 
-		"AndAssign", "OrAssign", "LeftShiftAssign", "RightShiftAssign", "Equal", 
-		"NotEqual", "LessEqual", "GreaterEqual", "AndAnd", "OrOr", "PlusPlus", 
-		"MinusMinus", "Comma", "ArrowStar", "Arrow", "Question", "Colon", "Doublecolon", 
-		"Semi", "Dot", "DotStar", "Ellipsis", "Hexquad", "Universalcharactername", 
-		"Identifier", "Identifiernondigit", "NONDIGIT", "DIGIT", "DecimalLiteral", 
-		"OctalLiteral", "HexadecimalLiteral", "BinaryLiteral", "NONZERODIGIT", 
-		"OCTALDIGIT", "HEXADECIMALDIGIT", "BINARYDIGIT", "Integersuffix", "Unsignedsuffix", 
-		"Longsuffix", "Longlongsuffix", "Cchar", "Escapesequence", "Simpleescapesequence", 
-		"Octalescapesequence", "Hexadecimalescapesequence", "Fractionalconstant", 
-		"Exponentpart", "SIGN", "Digitsequence", "Floatingsuffix", "Encodingprefix", 
-		"Schar", "Rawstring", "UserDefinedIntegerLiteral", "UserDefinedFloatingLiteral", 
-		"UserDefinedStringLiteral", "UserDefinedCharacterLiteral", "Udsuffix", 
-		"Whitespace", "Newline", "BlockComment", "LineComment"
-	];
+pub const _LITERAL_NAMES: [Option<&'static str>; 132] = [
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    Some("'alignas'"),
+    Some("'alignof'"),
+    Some("'asm'"),
+    Some("'auto'"),
+    Some("'bool'"),
+    Some("'break'"),
+    Some("'case'"),
+    Some("'catch'"),
+    Some("'char'"),
+    Some("'char16_t'"),
+    Some("'char32_t'"),
+    Some("'class'"),
+    Some("'const'"),
+    Some("'constexpr'"),
+    Some("'const_cast'"),
+    Some("'continue'"),
+    Some("'decltype'"),
+    Some("'default'"),
+    Some("'delete'"),
+    Some("'do'"),
+    Some("'double'"),
+    Some("'dynamic_cast'"),
+    Some("'else'"),
+    Some("'enum'"),
+    Some("'explicit'"),
+    Some("'export'"),
+    Some("'extern'"),
+    Some("'false'"),
+    Some("'final'"),
+    Some("'float'"),
+    Some("'for'"),
+    Some("'friend'"),
+    Some("'goto'"),
+    Some("'if'"),
+    Some("'inline'"),
+    Some("'int'"),
+    Some("'long'"),
+    Some("'mutable'"),
+    Some("'namespace'"),
+    Some("'new'"),
+    Some("'noexcept'"),
+    Some("'nullptr'"),
+    Some("'operator'"),
+    Some("'override'"),
+    Some("'private'"),
+    Some("'protected'"),
+    Some("'public'"),
+    Some("'register'"),
+    Some("'reinterpret_cast'"),
+    Some("'return'"),
+    Some("'short'"),
+    Some("'signed'"),
+    Some("'sizeof'"),
+    Some("'static'"),
+    Some("'static_assert'"),
+    Some("'static_cast'"),
+    Some("'struct'"),
+    Some("'switch'"),
+    Some("'template'"),
+    Some("'this'"),
+    Some("'thread_local'"),
+    Some("'throw'"),
+    Some("'true'"),
+    Some("'try'"),
+    Some("'typedef'"),
+    Some("'typeid'"),
+    Some("'typename'"),
+    Some("'union'"),
+    Some("'unsigned'"),
+    Some("'using'"),
+    Some("'virtual'"),
+    Some("'void'"),
+    Some("'volatile'"),
+    Some("'wchar_t'"),
+    Some("'while'"),
+    Some("'('"),
+    Some("')'"),
+    Some("'['"),
+    Some("']'"),
+    Some("'{'"),
+    Some("'}'"),
+    Some("'+'"),
+    Some("'-'"),
+    Some("'*'"),
+    Some("'/'"),
+    Some("'%'"),
+    Some("'^'"),
+    Some("'&'"),
+    Some("'|'"),
+    Some("'~'"),
+    None,
+    Some("'='"),
+    Some("'<'"),
+    Some("'>'"),
+    Some("'+='"),
+    Some("'-='"),
+    Some("'*='"),
+    Some("'/='"),
+    Some("'%='"),
+    Some("'^='"),
+    Some("'&='"),
+    Some("'|='"),
+    Some("'<<='"),
+    Some("'>>='"),
+    Some("'=='"),
+    Some("'!='"),
+    Some("'<='"),
+    Some("'>='"),
+    None,
+    None,
+    Some("'++'"),
+    Some("'--'"),
+    Some("','"),
+    Some("'->*'"),
+    Some("'->'"),
+    Some("'?'"),
+    Some("':'"),
+    Some("'::'"),
+    Some("';'"),
+    Some("'.'"),
+    Some("'.*'"),
+    Some("'...'"),
+];
+pub const _SYMBOLIC_NAMES: [Option<&'static str>; 146] = [
+    None,
+    Some("IntegerLiteral"),
+    Some("CharacterLiteral"),
+    Some("FloatingLiteral"),
+    Some("StringLiteral"),
+    Some("BooleanLiteral"),
+    Some("PointerLiteral"),
+    Some("UserDefinedLiteral"),
+    Some("MultiLineMacro"),
+    Some("Directive"),
+    Some("Alignas"),
+    Some("Alignof"),
+    Some("Asm"),
+    Some("Auto"),
+    Some("Bool"),
+    Some("Break"),
+    Some("Case"),
+    Some("Catch"),
+    Some("Char"),
+    Some("Char16"),
+    Some("Char32"),
+    Some("Class"),
+    Some("Const"),
+    Some("Constexpr"),
+    Some("Const_cast"),
+    Some("Continue"),
+    Some("Decltype"),
+    Some("Default"),
+    Some("Delete"),
+    Some("Do"),
+    Some("Double"),
+    Some("Dynamic_cast"),
+    Some("Else"),
+    Some("Enum"),
+    Some("Explicit"),
+    Some("Export"),
+    Some("Extern"),
+    Some("False_"),
+    Some("Final"),
+    Some("Float"),
+    Some("For"),
+    Some("Friend"),
+    Some("Goto"),
+    Some("If"),
+    Some("Inline"),
+    Some("Int"),
+    Some("Long"),
+    Some("Mutable"),
+    Some("Namespace"),
+    Some("New"),
+    Some("Noexcept"),
+    Some("Nullptr"),
+    Some("Operator"),
+    Some("Override"),
+    Some("Private"),
+    Some("Protected"),
+    Some("Public"),
+    Some("Register"),
+    Some("Reinterpret_cast"),
+    Some("Return"),
+    Some("Short"),
+    Some("Signed"),
+    Some("Sizeof"),
+    Some("Static"),
+    Some("Static_assert"),
+    Some("Static_cast"),
+    Some("Struct"),
+    Some("Switch"),
+    Some("Template"),
+    Some("This"),
+    Some("Thread_local"),
+    Some("Throw"),
+    Some("True_"),
+    Some("Try"),
+    Some("Typedef"),
+    Some("Typeid_"),
+    Some("Typename_"),
+    Some("Union"),
+    Some("Unsigned"),
+    Some("Using"),
+    Some("Virtual"),
+    Some("Void"),
+    Some("Volatile"),
+    Some("Wchar"),
+    Some("While"),
+    Some("LeftParen"),
+    Some("RightParen"),
+    Some("LeftBracket"),
+    Some("RightBracket"),
+    Some("LeftBrace"),
+    Some("RightBrace"),
+    Some("Plus"),
+    Some("Minus"),
+    Some("Star"),
+    Some("Div"),
+    Some("Mod"),
+    Some("Caret"),
+    Some("And"),
+    Some("Or"),
+    Some("Tilde"),
+    Some("Not"),
+    Some("Assign"),
+    Some("Less"),
+    Some("Greater"),
+    Some("PlusAssign"),
+    Some("MinusAssign"),
+    Some("StarAssign"),
+    Some("DivAssign"),
+    Some("ModAssign"),
+    Some("XorAssign"),
+    Some("AndAssign"),
+    Some("OrAssign"),
+    Some("LeftShiftAssign"),
+    Some("RightShiftAssign"),
+    Some("Equal"),
+    Some("NotEqual"),
+    Some("LessEqual"),
+    Some("GreaterEqual"),
+    Some("AndAnd"),
+    Some("OrOr"),
+    Some("PlusPlus"),
+    Some("MinusMinus"),
+    Some("Comma"),
+    Some("ArrowStar"),
+    Some("Arrow"),
+    Some("Question"),
+    Some("Colon"),
+    Some("Doublecolon"),
+    Some("Semi"),
+    Some("Dot"),
+    Some("DotStar"),
+    Some("Ellipsis"),
+    Some("Identifier"),
+    Some("DecimalLiteral"),
+    Some("OctalLiteral"),
+    Some("HexadecimalLiteral"),
+    Some("BinaryLiteral"),
+    Some("Integersuffix"),
+    Some("UserDefinedIntegerLiteral"),
+    Some("UserDefinedFloatingLiteral"),
+    Some("UserDefinedStringLiteral"),
+    Some("UserDefinedCharacterLiteral"),
+    Some("Whitespace"),
+    Some("Newline"),
+    Some("BlockComment"),
+    Some("LineComment"),
+];
+lazy_static! {
+    static ref _shared_context_cache: Arc<PredictionContextCache> =
+        Arc::new(PredictionContextCache::new());
+    static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(
+        _LITERAL_NAMES.iter(),
+        _SYMBOLIC_NAMES.iter(),
+        None
+    ));
+}
 
-
-	pub const _LITERAL_NAMES: [Option<&'static str>;132] = [
-		None, None, None, None, None, None, None, None, None, None, Some("'alignas'"), 
-		Some("'alignof'"), Some("'asm'"), Some("'auto'"), Some("'bool'"), Some("'break'"), 
-		Some("'case'"), Some("'catch'"), Some("'char'"), Some("'char16_t'"), Some("'char32_t'"), 
-		Some("'class'"), Some("'const'"), Some("'constexpr'"), Some("'const_cast'"), 
-		Some("'continue'"), Some("'decltype'"), Some("'default'"), Some("'delete'"), 
-		Some("'do'"), Some("'double'"), Some("'dynamic_cast'"), Some("'else'"), 
-		Some("'enum'"), Some("'explicit'"), Some("'export'"), Some("'extern'"), 
-		Some("'false'"), Some("'final'"), Some("'float'"), Some("'for'"), Some("'friend'"), 
-		Some("'goto'"), Some("'if'"), Some("'inline'"), Some("'int'"), Some("'long'"), 
-		Some("'mutable'"), Some("'namespace'"), Some("'new'"), Some("'noexcept'"), 
-		Some("'nullptr'"), Some("'operator'"), Some("'override'"), Some("'private'"), 
-		Some("'protected'"), Some("'public'"), Some("'register'"), Some("'reinterpret_cast'"), 
-		Some("'return'"), Some("'short'"), Some("'signed'"), Some("'sizeof'"), 
-		Some("'static'"), Some("'static_assert'"), Some("'static_cast'"), Some("'struct'"), 
-		Some("'switch'"), Some("'template'"), Some("'this'"), Some("'thread_local'"), 
-		Some("'throw'"), Some("'true'"), Some("'try'"), Some("'typedef'"), Some("'typeid'"), 
-		Some("'typename'"), Some("'union'"), Some("'unsigned'"), Some("'using'"), 
-		Some("'virtual'"), Some("'void'"), Some("'volatile'"), Some("'wchar_t'"), 
-		Some("'while'"), Some("'('"), Some("')'"), Some("'['"), Some("']'"), Some("'{'"), 
-		Some("'}'"), Some("'+'"), Some("'-'"), Some("'*'"), Some("'/'"), Some("'%'"), 
-		Some("'^'"), Some("'&'"), Some("'|'"), Some("'~'"), None, Some("'='"), 
-		Some("'<'"), Some("'>'"), Some("'+='"), Some("'-='"), Some("'*='"), Some("'/='"), 
-		Some("'%='"), Some("'^='"), Some("'&='"), Some("'|='"), Some("'<<='"), 
-		Some("'>>='"), Some("'=='"), Some("'!='"), Some("'<='"), Some("'>='"), 
-		None, None, Some("'++'"), Some("'--'"), Some("','"), Some("'->*'"), Some("'->'"), 
-		Some("'?'"), Some("':'"), Some("'::'"), Some("';'"), Some("'.'"), Some("'.*'"), 
-		Some("'...'")
-	];
-	pub const _SYMBOLIC_NAMES: [Option<&'static str>;146]  = [
-		None, Some("IntegerLiteral"), Some("CharacterLiteral"), Some("FloatingLiteral"), 
-		Some("StringLiteral"), Some("BooleanLiteral"), Some("PointerLiteral"), 
-		Some("UserDefinedLiteral"), Some("MultiLineMacro"), Some("Directive"), 
-		Some("Alignas"), Some("Alignof"), Some("Asm"), Some("Auto"), Some("Bool"), 
-		Some("Break"), Some("Case"), Some("Catch"), Some("Char"), Some("Char16"), 
-		Some("Char32"), Some("Class"), Some("Const"), Some("Constexpr"), Some("Const_cast"), 
-		Some("Continue"), Some("Decltype"), Some("Default"), Some("Delete"), Some("Do"), 
-		Some("Double"), Some("Dynamic_cast"), Some("Else"), Some("Enum"), Some("Explicit"), 
-		Some("Export"), Some("Extern"), Some("False_"), Some("Final"), Some("Float"), 
-		Some("For"), Some("Friend"), Some("Goto"), Some("If"), Some("Inline"), 
-		Some("Int"), Some("Long"), Some("Mutable"), Some("Namespace"), Some("New"), 
-		Some("Noexcept"), Some("Nullptr"), Some("Operator"), Some("Override"), 
-		Some("Private"), Some("Protected"), Some("Public"), Some("Register"), 
-		Some("Reinterpret_cast"), Some("Return"), Some("Short"), Some("Signed"), 
-		Some("Sizeof"), Some("Static"), Some("Static_assert"), Some("Static_cast"), 
-		Some("Struct"), Some("Switch"), Some("Template"), Some("This"), Some("Thread_local"), 
-		Some("Throw"), Some("True_"), Some("Try"), Some("Typedef"), Some("Typeid_"), 
-		Some("Typename_"), Some("Union"), Some("Unsigned"), Some("Using"), Some("Virtual"), 
-		Some("Void"), Some("Volatile"), Some("Wchar"), Some("While"), Some("LeftParen"), 
-		Some("RightParen"), Some("LeftBracket"), Some("RightBracket"), Some("LeftBrace"), 
-		Some("RightBrace"), Some("Plus"), Some("Minus"), Some("Star"), Some("Div"), 
-		Some("Mod"), Some("Caret"), Some("And"), Some("Or"), Some("Tilde"), Some("Not"), 
-		Some("Assign"), Some("Less"), Some("Greater"), Some("PlusAssign"), Some("MinusAssign"), 
-		Some("StarAssign"), Some("DivAssign"), Some("ModAssign"), Some("XorAssign"), 
-		Some("AndAssign"), Some("OrAssign"), Some("LeftShiftAssign"), Some("RightShiftAssign"), 
-		Some("Equal"), Some("NotEqual"), Some("LessEqual"), Some("GreaterEqual"), 
-		Some("AndAnd"), Some("OrOr"), Some("PlusPlus"), Some("MinusMinus"), Some("Comma"), 
-		Some("ArrowStar"), Some("Arrow"), Some("Question"), Some("Colon"), Some("Doublecolon"), 
-		Some("Semi"), Some("Dot"), Some("DotStar"), Some("Ellipsis"), Some("Identifier"), 
-		Some("DecimalLiteral"), Some("OctalLiteral"), Some("HexadecimalLiteral"), 
-		Some("BinaryLiteral"), Some("Integersuffix"), Some("UserDefinedIntegerLiteral"), 
-		Some("UserDefinedFloatingLiteral"), Some("UserDefinedStringLiteral"), 
-		Some("UserDefinedCharacterLiteral"), Some("Whitespace"), Some("Newline"), 
-		Some("BlockComment"), Some("LineComment")
-	];
-	lazy_static!{
-	    static ref _shared_context_cache: Arc<PredictionContextCache> = Arc::new(PredictionContextCache::new());
-		static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(_LITERAL_NAMES.iter(), _SYMBOLIC_NAMES.iter(), None));
-	}
-
-
-pub type LexerContext<'input> = BaseRuleContext<'input,EmptyCustomRuleContext<'input,LocalTokenFactory<'input> >>;
+pub type LexerContext<'input> =
+    BaseRuleContext<'input, EmptyCustomRuleContext<'input, LocalTokenFactory<'input>>>;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
-type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
+type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
 
-pub struct CPP14Lexer<'input, Input:CharStream<From<'input> >> {
-	base: BaseLexer<'input,CPP14LexerActions,Input,LocalTokenFactory<'input>>,
+pub struct CPP14Lexer<'input, Input: CharStream<From<'input>>> {
+    base: BaseLexer<'input, CPP14LexerActions, Input, LocalTokenFactory<'input>>,
 }
 
 antlr_rust::tid! { impl<'input,Input> TidAble<'input> for CPP14Lexer<'input,Input> where Input:CharStream<From<'input> > }
 
-impl<'input, Input:CharStream<From<'input> >> Deref for CPP14Lexer<'input,Input>{
-	type Target = BaseLexer<'input,CPP14LexerActions,Input,LocalTokenFactory<'input>>;
+impl<'input, Input: CharStream<From<'input>>> Deref for CPP14Lexer<'input, Input> {
+    type Target = BaseLexer<'input, CPP14LexerActions, Input, LocalTokenFactory<'input>>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.base
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> DerefMut for CPP14Lexer<'input,Input>{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.base
-	}
+impl<'input, Input: CharStream<From<'input>>> DerefMut for CPP14Lexer<'input, Input> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
 }
 
-
-impl<'input, Input:CharStream<From<'input> >> CPP14Lexer<'input,Input>{
+impl<'input, Input: CharStream<From<'input>>> CPP14Lexer<'input, Input> {
     fn get_rule_names(&self) -> &'static [&'static str] {
         &ruleNames
     }
@@ -328,50 +685,58 @@ impl<'input, Input:CharStream<From<'input> >> CPP14Lexer<'input,Input>{
         "CPP14Lexer.g4"
     }
 
-	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","3");
-    	Self {
-			base: BaseLexer::new_base_lexer(
-				input,
-				LexerATNSimulator::new_lexer_atnsimulator(
-					_ATN.clone(),
-					_decision_to_DFA.clone(),
-					_shared_context_cache.clone(),
-				),
-				CPP14LexerActions{},
-				tf
-			)
-	    }
-	}
+    pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
+        antlr_rust::recognizer::check_version("0", "3");
+        Self {
+            base: BaseLexer::new_base_lexer(
+                input,
+                LexerATNSimulator::new_lexer_atnsimulator(
+                    _ATN.clone(),
+                    _decision_to_DFA.clone(),
+                    _shared_context_cache.clone(),
+                ),
+                CPP14LexerActions {},
+                tf,
+            ),
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> CPP14Lexer<'input,Input> where &'input LocalTokenFactory<'input>:Default{
-	pub fn new(input: Input) -> Self{
-		CPP14Lexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
-	}
+impl<'input, Input: CharStream<From<'input>>> CPP14Lexer<'input, Input>
+where
+    &'input LocalTokenFactory<'input>: Default,
+{
+    pub fn new(input: Input) -> Self {
+        CPP14Lexer::new_with_token_factory(
+            input,
+            <&LocalTokenFactory<'input> as Default>::default(),
+        )
+    }
 }
 
-pub struct CPP14LexerActions {
+pub struct CPP14LexerActions {}
+
+impl CPP14LexerActions {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    Actions<'input, BaseLexer<'input, CPP14LexerActions, Input, LocalTokenFactory<'input>>>
+    for CPP14LexerActions
+{
 }
 
-impl CPP14LexerActions{
+impl<'input, Input: CharStream<From<'input>>> CPP14Lexer<'input, Input> {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    LexerRecog<'input, BaseLexer<'input, CPP14LexerActions, Input, LocalTokenFactory<'input>>>
+    for CPP14LexerActions
+{
+}
+impl<'input> TokenAware<'input> for CPP14LexerActions {
+    type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,CPP14LexerActions,Input,LocalTokenFactory<'input>>> for CPP14LexerActions{
-	}
-
-	impl<'input, Input:CharStream<From<'input> >> CPP14Lexer<'input,Input>{
-
-}
-
-impl<'input, Input:CharStream<From<'input> >> LexerRecog<'input,BaseLexer<'input,CPP14LexerActions,Input,LocalTokenFactory<'input>>> for CPP14LexerActions{
-}
-impl<'input> TokenAware<'input> for CPP14LexerActions{
-	type TF = LocalTokenFactory<'input>;
-}
-
-impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for CPP14Lexer<'input,Input>{
-	type TF = LocalTokenFactory<'input>;
+impl<'input, Input: CharStream<From<'input>>> TokenSource<'input> for CPP14Lexer<'input, Input> {
+    type TF = LocalTokenFactory<'input>;
 
     fn next_token(&mut self) -> <Self::TF as TokenFactory<'input>>::Tok {
         self.base.next_token()
@@ -389,38 +754,30 @@ impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for CPP14Lexer
         self.base.get_input_stream()
     }
 
-	fn get_source_name(&self) -> String {
-		self.base.get_source_name()
-	}
+    fn get_source_name(&self) -> String {
+        self.base.get_source_name()
+    }
 
     fn get_token_factory(&self) -> &'input Self::TF {
         self.base.get_token_factory()
     }
 }
 
+lazy_static! {
+    static ref _ATN: Arc<ATN> =
+        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
+    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
+        let mut dfa = Vec::new();
+        let size = _ATN.decision_to_state.len();
+        for i in 0..size {
+            dfa.push(DFA::new(_ATN.clone(), _ATN.get_decision_state(i), i as isize).into())
+        }
+        Arc::new(dfa)
+    };
+}
 
-
-	lazy_static! {
-	    static ref _ATN: Arc<ATN> =
-	        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
-	    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
-	        let mut dfa = Vec::new();
-	        let size = _ATN.decision_to_state.len();
-	        for i in 0..size {
-	            dfa.push(DFA::new(
-	                _ATN.clone(),
-	                _ATN.get_decision_state(i),
-	                i as isize,
-	            ).into())
-	        }
-	        Arc::new(dfa)
-	    };
-	}
-
-
-
-	const _serializedATN:&'static str =
-		"\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
+const _serializedATN: &'static str =
+    "\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
 		\u{93}\u{5b6}\x08\x01\x04\x02\x09\x02\x04\x03\x09\x03\x04\x04\x09\x04\x04\
 		\x05\x09\x05\x04\x06\x09\x06\x04\x07\x09\x07\x04\x08\x09\x08\x04\x09\x09\
 		\x09\x04\x0a\x09\x0a\x04\x0b\x09\x0b\x04\x0c\x09\x0c\x04\x0d\x09\x0d\x04\

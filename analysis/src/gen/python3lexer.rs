@@ -4,243 +4,513 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use antlr_rust::atn::ATN;
+use antlr_rust::atn_deserializer::ATNDeserializer;
 use antlr_rust::char_stream::CharStream;
+use antlr_rust::dfa::DFA;
+use antlr_rust::error_listener::ErrorListener;
 use antlr_rust::int_stream::IntStream;
 use antlr_rust::lexer::{BaseLexer, Lexer, LexerRecog};
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::dfa::DFA;
-use antlr_rust::lexer_atn_simulator::{LexerATNSimulator, ILexerATNSimulator};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::recognizer::{Recognizer,Actions};
-use antlr_rust::error_listener::ErrorListener;
-use antlr_rust::TokenSource;
-use antlr_rust::token_factory::{TokenFactory,CommonTokenFactory,TokenAware};
+use antlr_rust::lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator};
+use antlr_rust::parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext};
+use antlr_rust::recognizer::{Actions, Recognizer};
+use antlr_rust::rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext};
 use antlr_rust::token::*;
-use antlr_rust::rule_context::{BaseRuleContext,EmptyCustomRuleContext,EmptyContext};
-use antlr_rust::parser_rule_context::{ParserRuleContext,BaseParserRuleContext,cast};
-use antlr_rust::vocabulary::{Vocabulary,VocabularyImpl};
+use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
+use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
+use antlr_rust::PredictionContextCache;
+use antlr_rust::TokenSource;
 
-use antlr_rust::{lazy_static,Tid,TidAble,TidExt};
+use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
 
-use std::sync::Arc;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
+pub const INDENT: isize = 1;
+pub const DEDENT: isize = 2;
+pub const STRING: isize = 3;
+pub const NUMBER: isize = 4;
+pub const INTEGER: isize = 5;
+pub const AND: isize = 6;
+pub const AS: isize = 7;
+pub const ASSERT: isize = 8;
+pub const ASYNC: isize = 9;
+pub const AWAIT: isize = 10;
+pub const BREAK: isize = 11;
+pub const CASE: isize = 12;
+pub const CLASS: isize = 13;
+pub const CONTINUE: isize = 14;
+pub const DEF: isize = 15;
+pub const DEL: isize = 16;
+pub const ELIF: isize = 17;
+pub const ELSE: isize = 18;
+pub const EXCEPT: isize = 19;
+pub const FALSE: isize = 20;
+pub const FINALLY: isize = 21;
+pub const FOR: isize = 22;
+pub const FROM: isize = 23;
+pub const GLOBAL: isize = 24;
+pub const IF: isize = 25;
+pub const IMPORT: isize = 26;
+pub const IN: isize = 27;
+pub const IS: isize = 28;
+pub const LAMBDA: isize = 29;
+pub const MATCH: isize = 30;
+pub const NONE: isize = 31;
+pub const NONLOCAL: isize = 32;
+pub const NOT: isize = 33;
+pub const OR: isize = 34;
+pub const PASS: isize = 35;
+pub const RAISE: isize = 36;
+pub const RETURN: isize = 37;
+pub const TRUE: isize = 38;
+pub const TRY: isize = 39;
+pub const UNDERSCORE: isize = 40;
+pub const WHILE: isize = 41;
+pub const WITH: isize = 42;
+pub const YIELD: isize = 43;
+pub const NEWLINE: isize = 44;
+pub const NAME: isize = 45;
+pub const STRING_LITERAL: isize = 46;
+pub const BYTES_LITERAL: isize = 47;
+pub const DECIMAL_INTEGER: isize = 48;
+pub const OCT_INTEGER: isize = 49;
+pub const HEX_INTEGER: isize = 50;
+pub const BIN_INTEGER: isize = 51;
+pub const FLOAT_NUMBER: isize = 52;
+pub const IMAG_NUMBER: isize = 53;
+pub const DOT: isize = 54;
+pub const ELLIPSIS: isize = 55;
+pub const STAR: isize = 56;
+pub const OPEN_PAREN: isize = 57;
+pub const CLOSE_PAREN: isize = 58;
+pub const COMMA: isize = 59;
+pub const COLON: isize = 60;
+pub const SEMI_COLON: isize = 61;
+pub const POWER: isize = 62;
+pub const ASSIGN: isize = 63;
+pub const OPEN_BRACK: isize = 64;
+pub const CLOSE_BRACK: isize = 65;
+pub const OR_OP: isize = 66;
+pub const XOR: isize = 67;
+pub const AND_OP: isize = 68;
+pub const LEFT_SHIFT: isize = 69;
+pub const RIGHT_SHIFT: isize = 70;
+pub const ADD: isize = 71;
+pub const MINUS: isize = 72;
+pub const DIV: isize = 73;
+pub const MOD: isize = 74;
+pub const IDIV: isize = 75;
+pub const NOT_OP: isize = 76;
+pub const OPEN_BRACE: isize = 77;
+pub const CLOSE_BRACE: isize = 78;
+pub const LESS_THAN: isize = 79;
+pub const GREATER_THAN: isize = 80;
+pub const EQUALS: isize = 81;
+pub const GT_EQ: isize = 82;
+pub const LT_EQ: isize = 83;
+pub const NOT_EQ_1: isize = 84;
+pub const NOT_EQ_2: isize = 85;
+pub const AT: isize = 86;
+pub const ARROW: isize = 87;
+pub const ADD_ASSIGN: isize = 88;
+pub const SUB_ASSIGN: isize = 89;
+pub const MULT_ASSIGN: isize = 90;
+pub const AT_ASSIGN: isize = 91;
+pub const DIV_ASSIGN: isize = 92;
+pub const MOD_ASSIGN: isize = 93;
+pub const AND_ASSIGN: isize = 94;
+pub const OR_ASSIGN: isize = 95;
+pub const XOR_ASSIGN: isize = 96;
+pub const LEFT_SHIFT_ASSIGN: isize = 97;
+pub const RIGHT_SHIFT_ASSIGN: isize = 98;
+pub const POWER_ASSIGN: isize = 99;
+pub const IDIV_ASSIGN: isize = 100;
+pub const SKIP_: isize = 101;
+pub const UNKNOWN_CHAR: isize = 102;
+pub const channelNames: [&'static str; 0 + 2] = ["DEFAULT_TOKEN_CHANNEL", "HIDDEN"];
 
-	pub const INDENT:isize=1; 
-	pub const DEDENT:isize=2; 
-	pub const STRING:isize=3; 
-	pub const NUMBER:isize=4; 
-	pub const INTEGER:isize=5; 
-	pub const AND:isize=6; 
-	pub const AS:isize=7; 
-	pub const ASSERT:isize=8; 
-	pub const ASYNC:isize=9; 
-	pub const AWAIT:isize=10; 
-	pub const BREAK:isize=11; 
-	pub const CASE:isize=12; 
-	pub const CLASS:isize=13; 
-	pub const CONTINUE:isize=14; 
-	pub const DEF:isize=15; 
-	pub const DEL:isize=16; 
-	pub const ELIF:isize=17; 
-	pub const ELSE:isize=18; 
-	pub const EXCEPT:isize=19; 
-	pub const FALSE:isize=20; 
-	pub const FINALLY:isize=21; 
-	pub const FOR:isize=22; 
-	pub const FROM:isize=23; 
-	pub const GLOBAL:isize=24; 
-	pub const IF:isize=25; 
-	pub const IMPORT:isize=26; 
-	pub const IN:isize=27; 
-	pub const IS:isize=28; 
-	pub const LAMBDA:isize=29; 
-	pub const MATCH:isize=30; 
-	pub const NONE:isize=31; 
-	pub const NONLOCAL:isize=32; 
-	pub const NOT:isize=33; 
-	pub const OR:isize=34; 
-	pub const PASS:isize=35; 
-	pub const RAISE:isize=36; 
-	pub const RETURN:isize=37; 
-	pub const TRUE:isize=38; 
-	pub const TRY:isize=39; 
-	pub const UNDERSCORE:isize=40; 
-	pub const WHILE:isize=41; 
-	pub const WITH:isize=42; 
-	pub const YIELD:isize=43; 
-	pub const NEWLINE:isize=44; 
-	pub const NAME:isize=45; 
-	pub const STRING_LITERAL:isize=46; 
-	pub const BYTES_LITERAL:isize=47; 
-	pub const DECIMAL_INTEGER:isize=48; 
-	pub const OCT_INTEGER:isize=49; 
-	pub const HEX_INTEGER:isize=50; 
-	pub const BIN_INTEGER:isize=51; 
-	pub const FLOAT_NUMBER:isize=52; 
-	pub const IMAG_NUMBER:isize=53; 
-	pub const DOT:isize=54; 
-	pub const ELLIPSIS:isize=55; 
-	pub const STAR:isize=56; 
-	pub const OPEN_PAREN:isize=57; 
-	pub const CLOSE_PAREN:isize=58; 
-	pub const COMMA:isize=59; 
-	pub const COLON:isize=60; 
-	pub const SEMI_COLON:isize=61; 
-	pub const POWER:isize=62; 
-	pub const ASSIGN:isize=63; 
-	pub const OPEN_BRACK:isize=64; 
-	pub const CLOSE_BRACK:isize=65; 
-	pub const OR_OP:isize=66; 
-	pub const XOR:isize=67; 
-	pub const AND_OP:isize=68; 
-	pub const LEFT_SHIFT:isize=69; 
-	pub const RIGHT_SHIFT:isize=70; 
-	pub const ADD:isize=71; 
-	pub const MINUS:isize=72; 
-	pub const DIV:isize=73; 
-	pub const MOD:isize=74; 
-	pub const IDIV:isize=75; 
-	pub const NOT_OP:isize=76; 
-	pub const OPEN_BRACE:isize=77; 
-	pub const CLOSE_BRACE:isize=78; 
-	pub const LESS_THAN:isize=79; 
-	pub const GREATER_THAN:isize=80; 
-	pub const EQUALS:isize=81; 
-	pub const GT_EQ:isize=82; 
-	pub const LT_EQ:isize=83; 
-	pub const NOT_EQ_1:isize=84; 
-	pub const NOT_EQ_2:isize=85; 
-	pub const AT:isize=86; 
-	pub const ARROW:isize=87; 
-	pub const ADD_ASSIGN:isize=88; 
-	pub const SUB_ASSIGN:isize=89; 
-	pub const MULT_ASSIGN:isize=90; 
-	pub const AT_ASSIGN:isize=91; 
-	pub const DIV_ASSIGN:isize=92; 
-	pub const MOD_ASSIGN:isize=93; 
-	pub const AND_ASSIGN:isize=94; 
-	pub const OR_ASSIGN:isize=95; 
-	pub const XOR_ASSIGN:isize=96; 
-	pub const LEFT_SHIFT_ASSIGN:isize=97; 
-	pub const RIGHT_SHIFT_ASSIGN:isize=98; 
-	pub const POWER_ASSIGN:isize=99; 
-	pub const IDIV_ASSIGN:isize=100; 
-	pub const SKIP_:isize=101; 
-	pub const UNKNOWN_CHAR:isize=102;
-	pub const channelNames: [&'static str;0+2] = [
-		"DEFAULT_TOKEN_CHANNEL", "HIDDEN"
-	];
+pub const modeNames: [&'static str; 1] = ["DEFAULT_MODE"];
 
-	pub const modeNames: [&'static str;1] = [
-		"DEFAULT_MODE"
-	];
+pub const ruleNames: [&'static str; 129] = [
+    "STRING",
+    "NUMBER",
+    "INTEGER",
+    "AND",
+    "AS",
+    "ASSERT",
+    "ASYNC",
+    "AWAIT",
+    "BREAK",
+    "CASE",
+    "CLASS",
+    "CONTINUE",
+    "DEF",
+    "DEL",
+    "ELIF",
+    "ELSE",
+    "EXCEPT",
+    "FALSE",
+    "FINALLY",
+    "FOR",
+    "FROM",
+    "GLOBAL",
+    "IF",
+    "IMPORT",
+    "IN",
+    "IS",
+    "LAMBDA",
+    "MATCH",
+    "NONE",
+    "NONLOCAL",
+    "NOT",
+    "OR",
+    "PASS",
+    "RAISE",
+    "RETURN",
+    "TRUE",
+    "TRY",
+    "UNDERSCORE",
+    "WHILE",
+    "WITH",
+    "YIELD",
+    "NEWLINE",
+    "NAME",
+    "STRING_LITERAL",
+    "BYTES_LITERAL",
+    "DECIMAL_INTEGER",
+    "OCT_INTEGER",
+    "HEX_INTEGER",
+    "BIN_INTEGER",
+    "FLOAT_NUMBER",
+    "IMAG_NUMBER",
+    "DOT",
+    "ELLIPSIS",
+    "STAR",
+    "OPEN_PAREN",
+    "CLOSE_PAREN",
+    "COMMA",
+    "COLON",
+    "SEMI_COLON",
+    "POWER",
+    "ASSIGN",
+    "OPEN_BRACK",
+    "CLOSE_BRACK",
+    "OR_OP",
+    "XOR",
+    "AND_OP",
+    "LEFT_SHIFT",
+    "RIGHT_SHIFT",
+    "ADD",
+    "MINUS",
+    "DIV",
+    "MOD",
+    "IDIV",
+    "NOT_OP",
+    "OPEN_BRACE",
+    "CLOSE_BRACE",
+    "LESS_THAN",
+    "GREATER_THAN",
+    "EQUALS",
+    "GT_EQ",
+    "LT_EQ",
+    "NOT_EQ_1",
+    "NOT_EQ_2",
+    "AT",
+    "ARROW",
+    "ADD_ASSIGN",
+    "SUB_ASSIGN",
+    "MULT_ASSIGN",
+    "AT_ASSIGN",
+    "DIV_ASSIGN",
+    "MOD_ASSIGN",
+    "AND_ASSIGN",
+    "OR_ASSIGN",
+    "XOR_ASSIGN",
+    "LEFT_SHIFT_ASSIGN",
+    "RIGHT_SHIFT_ASSIGN",
+    "POWER_ASSIGN",
+    "IDIV_ASSIGN",
+    "SKIP_",
+    "UNKNOWN_CHAR",
+    "SHORT_STRING",
+    "LONG_STRING",
+    "LONG_STRING_ITEM",
+    "LONG_STRING_CHAR",
+    "STRING_ESCAPE_SEQ",
+    "NON_ZERO_DIGIT",
+    "DIGIT",
+    "OCT_DIGIT",
+    "HEX_DIGIT",
+    "BIN_DIGIT",
+    "POINT_FLOAT",
+    "EXPONENT_FLOAT",
+    "INT_PART",
+    "FRACTION",
+    "EXPONENT",
+    "SHORT_BYTES",
+    "LONG_BYTES",
+    "LONG_BYTES_ITEM",
+    "SHORT_BYTES_CHAR_NO_SINGLE_QUOTE",
+    "SHORT_BYTES_CHAR_NO_DOUBLE_QUOTE",
+    "LONG_BYTES_CHAR",
+    "BYTES_ESCAPE_SEQ",
+    "SPACES",
+    "COMMENT",
+    "LINE_JOINING",
+    "UNICODE_OIDS",
+    "UNICODE_OIDC",
+    "ID_START",
+    "ID_CONTINUE",
+];
 
-	pub const ruleNames: [&'static str;129] = [
-		"STRING", "NUMBER", "INTEGER", "AND", "AS", "ASSERT", "ASYNC", "AWAIT", 
-		"BREAK", "CASE", "CLASS", "CONTINUE", "DEF", "DEL", "ELIF", "ELSE", "EXCEPT", 
-		"FALSE", "FINALLY", "FOR", "FROM", "GLOBAL", "IF", "IMPORT", "IN", "IS", 
-		"LAMBDA", "MATCH", "NONE", "NONLOCAL", "NOT", "OR", "PASS", "RAISE", "RETURN", 
-		"TRUE", "TRY", "UNDERSCORE", "WHILE", "WITH", "YIELD", "NEWLINE", "NAME", 
-		"STRING_LITERAL", "BYTES_LITERAL", "DECIMAL_INTEGER", "OCT_INTEGER", "HEX_INTEGER", 
-		"BIN_INTEGER", "FLOAT_NUMBER", "IMAG_NUMBER", "DOT", "ELLIPSIS", "STAR", 
-		"OPEN_PAREN", "CLOSE_PAREN", "COMMA", "COLON", "SEMI_COLON", "POWER", 
-		"ASSIGN", "OPEN_BRACK", "CLOSE_BRACK", "OR_OP", "XOR", "AND_OP", "LEFT_SHIFT", 
-		"RIGHT_SHIFT", "ADD", "MINUS", "DIV", "MOD", "IDIV", "NOT_OP", "OPEN_BRACE", 
-		"CLOSE_BRACE", "LESS_THAN", "GREATER_THAN", "EQUALS", "GT_EQ", "LT_EQ", 
-		"NOT_EQ_1", "NOT_EQ_2", "AT", "ARROW", "ADD_ASSIGN", "SUB_ASSIGN", "MULT_ASSIGN", 
-		"AT_ASSIGN", "DIV_ASSIGN", "MOD_ASSIGN", "AND_ASSIGN", "OR_ASSIGN", "XOR_ASSIGN", 
-		"LEFT_SHIFT_ASSIGN", "RIGHT_SHIFT_ASSIGN", "POWER_ASSIGN", "IDIV_ASSIGN", 
-		"SKIP_", "UNKNOWN_CHAR", "SHORT_STRING", "LONG_STRING", "LONG_STRING_ITEM", 
-		"LONG_STRING_CHAR", "STRING_ESCAPE_SEQ", "NON_ZERO_DIGIT", "DIGIT", "OCT_DIGIT", 
-		"HEX_DIGIT", "BIN_DIGIT", "POINT_FLOAT", "EXPONENT_FLOAT", "INT_PART", 
-		"FRACTION", "EXPONENT", "SHORT_BYTES", "LONG_BYTES", "LONG_BYTES_ITEM", 
-		"SHORT_BYTES_CHAR_NO_SINGLE_QUOTE", "SHORT_BYTES_CHAR_NO_DOUBLE_QUOTE", 
-		"LONG_BYTES_CHAR", "BYTES_ESCAPE_SEQ", "SPACES", "COMMENT", "LINE_JOINING", 
-		"UNICODE_OIDS", "UNICODE_OIDC", "ID_START", "ID_CONTINUE"
-	];
+pub const _LITERAL_NAMES: [Option<&'static str>; 101] = [
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    Some("'and'"),
+    Some("'as'"),
+    Some("'assert'"),
+    Some("'async'"),
+    Some("'await'"),
+    Some("'break'"),
+    Some("'case'"),
+    Some("'class'"),
+    Some("'continue'"),
+    Some("'def'"),
+    Some("'del'"),
+    Some("'elif'"),
+    Some("'else'"),
+    Some("'except'"),
+    Some("'False'"),
+    Some("'finally'"),
+    Some("'for'"),
+    Some("'from'"),
+    Some("'global'"),
+    Some("'if'"),
+    Some("'import'"),
+    Some("'in'"),
+    Some("'is'"),
+    Some("'lambda'"),
+    Some("'match'"),
+    Some("'None'"),
+    Some("'nonlocal'"),
+    Some("'not'"),
+    Some("'or'"),
+    Some("'pass'"),
+    Some("'raise'"),
+    Some("'return'"),
+    Some("'True'"),
+    Some("'try'"),
+    Some("'_'"),
+    Some("'while'"),
+    Some("'with'"),
+    Some("'yield'"),
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    Some("'.'"),
+    Some("'...'"),
+    Some("'*'"),
+    Some("'('"),
+    Some("')'"),
+    Some("','"),
+    Some("':'"),
+    Some("';'"),
+    Some("'**'"),
+    Some("'='"),
+    Some("'['"),
+    Some("']'"),
+    Some("'|'"),
+    Some("'^'"),
+    Some("'&'"),
+    Some("'<<'"),
+    Some("'>>'"),
+    Some("'+'"),
+    Some("'-'"),
+    Some("'/'"),
+    Some("'%'"),
+    Some("'//'"),
+    Some("'~'"),
+    Some("'{'"),
+    Some("'}'"),
+    Some("'<'"),
+    Some("'>'"),
+    Some("'=='"),
+    Some("'>='"),
+    Some("'<='"),
+    Some("'<>'"),
+    Some("'!='"),
+    Some("'@'"),
+    Some("'->'"),
+    Some("'+='"),
+    Some("'-='"),
+    Some("'*='"),
+    Some("'@='"),
+    Some("'/='"),
+    Some("'%='"),
+    Some("'&='"),
+    Some("'|='"),
+    Some("'^='"),
+    Some("'<<='"),
+    Some("'>>='"),
+    Some("'**='"),
+    Some("'//='"),
+];
+pub const _SYMBOLIC_NAMES: [Option<&'static str>; 103] = [
+    None,
+    Some("INDENT"),
+    Some("DEDENT"),
+    Some("STRING"),
+    Some("NUMBER"),
+    Some("INTEGER"),
+    Some("AND"),
+    Some("AS"),
+    Some("ASSERT"),
+    Some("ASYNC"),
+    Some("AWAIT"),
+    Some("BREAK"),
+    Some("CASE"),
+    Some("CLASS"),
+    Some("CONTINUE"),
+    Some("DEF"),
+    Some("DEL"),
+    Some("ELIF"),
+    Some("ELSE"),
+    Some("EXCEPT"),
+    Some("FALSE"),
+    Some("FINALLY"),
+    Some("FOR"),
+    Some("FROM"),
+    Some("GLOBAL"),
+    Some("IF"),
+    Some("IMPORT"),
+    Some("IN"),
+    Some("IS"),
+    Some("LAMBDA"),
+    Some("MATCH"),
+    Some("NONE"),
+    Some("NONLOCAL"),
+    Some("NOT"),
+    Some("OR"),
+    Some("PASS"),
+    Some("RAISE"),
+    Some("RETURN"),
+    Some("TRUE"),
+    Some("TRY"),
+    Some("UNDERSCORE"),
+    Some("WHILE"),
+    Some("WITH"),
+    Some("YIELD"),
+    Some("NEWLINE"),
+    Some("NAME"),
+    Some("STRING_LITERAL"),
+    Some("BYTES_LITERAL"),
+    Some("DECIMAL_INTEGER"),
+    Some("OCT_INTEGER"),
+    Some("HEX_INTEGER"),
+    Some("BIN_INTEGER"),
+    Some("FLOAT_NUMBER"),
+    Some("IMAG_NUMBER"),
+    Some("DOT"),
+    Some("ELLIPSIS"),
+    Some("STAR"),
+    Some("OPEN_PAREN"),
+    Some("CLOSE_PAREN"),
+    Some("COMMA"),
+    Some("COLON"),
+    Some("SEMI_COLON"),
+    Some("POWER"),
+    Some("ASSIGN"),
+    Some("OPEN_BRACK"),
+    Some("CLOSE_BRACK"),
+    Some("OR_OP"),
+    Some("XOR"),
+    Some("AND_OP"),
+    Some("LEFT_SHIFT"),
+    Some("RIGHT_SHIFT"),
+    Some("ADD"),
+    Some("MINUS"),
+    Some("DIV"),
+    Some("MOD"),
+    Some("IDIV"),
+    Some("NOT_OP"),
+    Some("OPEN_BRACE"),
+    Some("CLOSE_BRACE"),
+    Some("LESS_THAN"),
+    Some("GREATER_THAN"),
+    Some("EQUALS"),
+    Some("GT_EQ"),
+    Some("LT_EQ"),
+    Some("NOT_EQ_1"),
+    Some("NOT_EQ_2"),
+    Some("AT"),
+    Some("ARROW"),
+    Some("ADD_ASSIGN"),
+    Some("SUB_ASSIGN"),
+    Some("MULT_ASSIGN"),
+    Some("AT_ASSIGN"),
+    Some("DIV_ASSIGN"),
+    Some("MOD_ASSIGN"),
+    Some("AND_ASSIGN"),
+    Some("OR_ASSIGN"),
+    Some("XOR_ASSIGN"),
+    Some("LEFT_SHIFT_ASSIGN"),
+    Some("RIGHT_SHIFT_ASSIGN"),
+    Some("POWER_ASSIGN"),
+    Some("IDIV_ASSIGN"),
+    Some("SKIP_"),
+    Some("UNKNOWN_CHAR"),
+];
+lazy_static! {
+    static ref _shared_context_cache: Arc<PredictionContextCache> =
+        Arc::new(PredictionContextCache::new());
+    static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(
+        _LITERAL_NAMES.iter(),
+        _SYMBOLIC_NAMES.iter(),
+        None
+    ));
+}
 
-
-	pub const _LITERAL_NAMES: [Option<&'static str>;101] = [
-		None, None, None, None, None, None, Some("'and'"), Some("'as'"), Some("'assert'"), 
-		Some("'async'"), Some("'await'"), Some("'break'"), Some("'case'"), Some("'class'"), 
-		Some("'continue'"), Some("'def'"), Some("'del'"), Some("'elif'"), Some("'else'"), 
-		Some("'except'"), Some("'False'"), Some("'finally'"), Some("'for'"), Some("'from'"), 
-		Some("'global'"), Some("'if'"), Some("'import'"), Some("'in'"), Some("'is'"), 
-		Some("'lambda'"), Some("'match'"), Some("'None'"), Some("'nonlocal'"), 
-		Some("'not'"), Some("'or'"), Some("'pass'"), Some("'raise'"), Some("'return'"), 
-		Some("'True'"), Some("'try'"), Some("'_'"), Some("'while'"), Some("'with'"), 
-		Some("'yield'"), None, None, None, None, None, None, None, None, None, 
-		None, Some("'.'"), Some("'...'"), Some("'*'"), Some("'('"), Some("')'"), 
-		Some("','"), Some("':'"), Some("';'"), Some("'**'"), Some("'='"), Some("'['"), 
-		Some("']'"), Some("'|'"), Some("'^'"), Some("'&'"), Some("'<<'"), Some("'>>'"), 
-		Some("'+'"), Some("'-'"), Some("'/'"), Some("'%'"), Some("'//'"), Some("'~'"), 
-		Some("'{'"), Some("'}'"), Some("'<'"), Some("'>'"), Some("'=='"), Some("'>='"), 
-		Some("'<='"), Some("'<>'"), Some("'!='"), Some("'@'"), Some("'->'"), Some("'+='"), 
-		Some("'-='"), Some("'*='"), Some("'@='"), Some("'/='"), Some("'%='"), 
-		Some("'&='"), Some("'|='"), Some("'^='"), Some("'<<='"), Some("'>>='"), 
-		Some("'**='"), Some("'//='")
-	];
-	pub const _SYMBOLIC_NAMES: [Option<&'static str>;103]  = [
-		None, Some("INDENT"), Some("DEDENT"), Some("STRING"), Some("NUMBER"), 
-		Some("INTEGER"), Some("AND"), Some("AS"), Some("ASSERT"), Some("ASYNC"), 
-		Some("AWAIT"), Some("BREAK"), Some("CASE"), Some("CLASS"), Some("CONTINUE"), 
-		Some("DEF"), Some("DEL"), Some("ELIF"), Some("ELSE"), Some("EXCEPT"), 
-		Some("FALSE"), Some("FINALLY"), Some("FOR"), Some("FROM"), Some("GLOBAL"), 
-		Some("IF"), Some("IMPORT"), Some("IN"), Some("IS"), Some("LAMBDA"), Some("MATCH"), 
-		Some("NONE"), Some("NONLOCAL"), Some("NOT"), Some("OR"), Some("PASS"), 
-		Some("RAISE"), Some("RETURN"), Some("TRUE"), Some("TRY"), Some("UNDERSCORE"), 
-		Some("WHILE"), Some("WITH"), Some("YIELD"), Some("NEWLINE"), Some("NAME"), 
-		Some("STRING_LITERAL"), Some("BYTES_LITERAL"), Some("DECIMAL_INTEGER"), 
-		Some("OCT_INTEGER"), Some("HEX_INTEGER"), Some("BIN_INTEGER"), Some("FLOAT_NUMBER"), 
-		Some("IMAG_NUMBER"), Some("DOT"), Some("ELLIPSIS"), Some("STAR"), Some("OPEN_PAREN"), 
-		Some("CLOSE_PAREN"), Some("COMMA"), Some("COLON"), Some("SEMI_COLON"), 
-		Some("POWER"), Some("ASSIGN"), Some("OPEN_BRACK"), Some("CLOSE_BRACK"), 
-		Some("OR_OP"), Some("XOR"), Some("AND_OP"), Some("LEFT_SHIFT"), Some("RIGHT_SHIFT"), 
-		Some("ADD"), Some("MINUS"), Some("DIV"), Some("MOD"), Some("IDIV"), Some("NOT_OP"), 
-		Some("OPEN_BRACE"), Some("CLOSE_BRACE"), Some("LESS_THAN"), Some("GREATER_THAN"), 
-		Some("EQUALS"), Some("GT_EQ"), Some("LT_EQ"), Some("NOT_EQ_1"), Some("NOT_EQ_2"), 
-		Some("AT"), Some("ARROW"), Some("ADD_ASSIGN"), Some("SUB_ASSIGN"), Some("MULT_ASSIGN"), 
-		Some("AT_ASSIGN"), Some("DIV_ASSIGN"), Some("MOD_ASSIGN"), Some("AND_ASSIGN"), 
-		Some("OR_ASSIGN"), Some("XOR_ASSIGN"), Some("LEFT_SHIFT_ASSIGN"), Some("RIGHT_SHIFT_ASSIGN"), 
-		Some("POWER_ASSIGN"), Some("IDIV_ASSIGN"), Some("SKIP_"), Some("UNKNOWN_CHAR")
-	];
-	lazy_static!{
-	    static ref _shared_context_cache: Arc<PredictionContextCache> = Arc::new(PredictionContextCache::new());
-		static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(_LITERAL_NAMES.iter(), _SYMBOLIC_NAMES.iter(), None));
-	}
-
-
-pub type LexerContext<'input> = BaseRuleContext<'input,EmptyCustomRuleContext<'input,LocalTokenFactory<'input> >>;
+pub type LexerContext<'input> =
+    BaseRuleContext<'input, EmptyCustomRuleContext<'input, LocalTokenFactory<'input>>>;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
-type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
+type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
 
-pub struct Python3Lexer<'input, Input:CharStream<From<'input> >> {
-	base: BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>,
+pub struct Python3Lexer<'input, Input: CharStream<From<'input>>> {
+    base: BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>,
 }
 
 antlr_rust::tid! { impl<'input,Input> TidAble<'input> for Python3Lexer<'input,Input> where Input:CharStream<From<'input> > }
 
-impl<'input, Input:CharStream<From<'input> >> Deref for Python3Lexer<'input,Input>{
-	type Target = BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>;
+impl<'input, Input: CharStream<From<'input>>> Deref for Python3Lexer<'input, Input> {
+    type Target = BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.base
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> DerefMut for Python3Lexer<'input,Input>{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.base
-	}
+impl<'input, Input: CharStream<From<'input>>> DerefMut for Python3Lexer<'input, Input> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
 }
 
-
-impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input>{
+impl<'input, Input: CharStream<From<'input>>> Python3Lexer<'input, Input> {
     fn get_rule_names(&self) -> &'static [&'static str] {
         &ruleNames
     }
@@ -256,191 +526,208 @@ impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input>{
         "Python3Lexer.g4"
     }
 
-	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","3");
-    	Self {
-			base: BaseLexer::new_base_lexer(
-				input,
-				LexerATNSimulator::new_lexer_atnsimulator(
-					_ATN.clone(),
-					_decision_to_DFA.clone(),
-					_shared_context_cache.clone(),
-				),
-				Python3LexerActions{
-					opened: 0,
-				},
-				tf
-			)
-	    }
-	}
+    pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
+        antlr_rust::recognizer::check_version("0", "3");
+        Self {
+            base: BaseLexer::new_base_lexer(
+                input,
+                LexerATNSimulator::new_lexer_atnsimulator(
+                    _ATN.clone(),
+                    _decision_to_DFA.clone(),
+                    _shared_context_cache.clone(),
+                ),
+                Python3LexerActions { opened: 0 },
+                tf,
+            ),
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input> where &'input LocalTokenFactory<'input>:Default{
-	pub fn new(input: Input) -> Self{
-		Python3Lexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
-	}
+impl<'input, Input: CharStream<From<'input>>> Python3Lexer<'input, Input>
+where
+    &'input LocalTokenFactory<'input>: Default,
+{
+    pub fn new(input: Input) -> Self {
+        Python3Lexer::new_with_token_factory(
+            input,
+            <&LocalTokenFactory<'input> as Default>::default(),
+        )
+    }
 }
 
 pub struct Python3LexerActions {
-	opened: usize,
+    opened: usize,
 }
 
-impl Python3LexerActions{
-	pub fn onNewLine(&mut self) {
-		todo!()
-	}
+impl Python3LexerActions {
+    pub fn onNewLine(&mut self) {
+        todo!()
+    }
 
-	pub fn openBrace(&mut self) {
-		self.opened += 1;
-	}
+    pub fn openBrace(&mut self) {
+        self.opened += 1;
+    }
 
-	pub fn closeBrace(&mut self) {
-		self.opened -= 1;
-	}
+    pub fn closeBrace(&mut self) {
+        self.opened -= 1;
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>> for Python3LexerActions{
-
-	fn action(_localctx: Option<&EmptyContext<'input,LocalTokenFactory<'input>> >, rule_index: isize, action_index: isize,
-	          recog:&mut BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>
-	    ){
-	    	match rule_index {
-			        41 =>
-			        	Python3Lexer::<'input>::NEWLINE_action(None, action_index, recog), 
-			        54 =>
-			        	Python3Lexer::<'input>::OPEN_PAREN_action(None, action_index, recog), 
-			        55 =>
-			        	Python3Lexer::<'input>::CLOSE_PAREN_action(None, action_index, recog), 
-			        61 =>
-			        	Python3Lexer::<'input>::OPEN_BRACK_action(None, action_index, recog), 
-			        62 =>
-			        	Python3Lexer::<'input>::CLOSE_BRACK_action(None, action_index, recog), 
-			        74 =>
-			        	Python3Lexer::<'input>::OPEN_BRACE_action(None, action_index, recog), 
-			        75 =>
-			        	Python3Lexer::<'input>::CLOSE_BRACE_action(None, action_index, recog), 
-			_ => {}
-		}
-	}
-	fn sempred(_localctx: Option<&EmptyContext<'input,LocalTokenFactory<'input>> >, rule_index: isize, pred_index: isize,
-	           recog:&mut BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>
-	    ) -> bool {
-	    	match rule_index {
-			        41 =>
-			        	Python3Lexer::<'input>::NEWLINE_sempred(None, pred_index, recog), 
-			_ => true
-		}
-	}
-
-	}
-
-	impl<'input, Input:CharStream<From<'input> >> Python3Lexer<'input,Input>{
-
-		fn NEWLINE_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		0=>{
-						recog.onNewLine();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn OPEN_PAREN_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		1=>{
-						recog.openBrace();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn CLOSE_PAREN_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		2=>{
-						recog.closeBrace();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn OPEN_BRACK_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		3=>{
-						recog.openBrace();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn CLOSE_BRACK_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		4=>{
-						recog.closeBrace();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn OPEN_BRACE_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		5=>{
-						recog.openBrace();
-					},
-
-				_ => {}
-			}
-		}
-
-		fn CLOSE_BRACE_action(_localctx: Option<&LexerContext<'input>>, action_index: isize,
-						   recog:&mut <Self as Deref>::Target
-			) {
-			match action_index {
-			 		6=>{
-						recog.closeBrace();
-					},
-
-				_ => {}
-			}
-		}
-		fn NEWLINE_sempred(_localctx: Option<&LexerContext<'input>>, pred_index:isize,
-							recog:&mut <Self as Deref>::Target
-			) -> bool {
-			match pred_index {
-					0=>{
-						recog.get_char_position_in_line() == 0 && recog.get_line() == 1
-					}
-				_ => true
-			}
-		}
-
-
+impl<'input, Input: CharStream<From<'input>>>
+    Actions<'input, BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>>
+    for Python3LexerActions
+{
+    fn action(
+        _localctx: Option<&EmptyContext<'input, LocalTokenFactory<'input>>>,
+        rule_index: isize,
+        action_index: isize,
+        recog: &mut BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>,
+    ) {
+        match rule_index {
+            41 => Python3Lexer::<'input>::NEWLINE_action(None, action_index, recog),
+            54 => Python3Lexer::<'input>::OPEN_PAREN_action(None, action_index, recog),
+            55 => Python3Lexer::<'input>::CLOSE_PAREN_action(None, action_index, recog),
+            61 => Python3Lexer::<'input>::OPEN_BRACK_action(None, action_index, recog),
+            62 => Python3Lexer::<'input>::CLOSE_BRACK_action(None, action_index, recog),
+            74 => Python3Lexer::<'input>::OPEN_BRACE_action(None, action_index, recog),
+            75 => Python3Lexer::<'input>::CLOSE_BRACE_action(None, action_index, recog),
+            _ => {}
+        }
+    }
+    fn sempred(
+        _localctx: Option<&EmptyContext<'input, LocalTokenFactory<'input>>>,
+        rule_index: isize,
+        pred_index: isize,
+        recog: &mut BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>,
+    ) -> bool {
+        match rule_index {
+            41 => Python3Lexer::<'input>::NEWLINE_sempred(None, pred_index, recog),
+            _ => true,
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> LexerRecog<'input,BaseLexer<'input,Python3LexerActions,Input,LocalTokenFactory<'input>>> for Python3LexerActions{
-}
-impl<'input> TokenAware<'input> for Python3LexerActions{
-	type TF = LocalTokenFactory<'input>;
+impl<'input, Input: CharStream<From<'input>>> Python3Lexer<'input, Input> {
+    fn NEWLINE_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            0 => {
+                recog.onNewLine();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn OPEN_PAREN_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            1 => {
+                recog.openBrace();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn CLOSE_PAREN_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            2 => {
+                recog.closeBrace();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn OPEN_BRACK_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            3 => {
+                recog.openBrace();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn CLOSE_BRACK_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            4 => {
+                recog.closeBrace();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn OPEN_BRACE_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            5 => {
+                recog.openBrace();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn CLOSE_BRACE_action(
+        _localctx: Option<&LexerContext<'input>>,
+        action_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) {
+        match action_index {
+            6 => {
+                recog.closeBrace();
+            }
+
+            _ => {}
+        }
+    }
+    fn NEWLINE_sempred(
+        _localctx: Option<&LexerContext<'input>>,
+        pred_index: isize,
+        recog: &mut <Self as Deref>::Target,
+    ) -> bool {
+        match pred_index {
+            0 => recog.get_char_position_in_line() == 0 && recog.get_line() == 1,
+            _ => true,
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for Python3Lexer<'input,Input>{
-	type TF = LocalTokenFactory<'input>;
+impl<'input, Input: CharStream<From<'input>>>
+    LexerRecog<'input, BaseLexer<'input, Python3LexerActions, Input, LocalTokenFactory<'input>>>
+    for Python3LexerActions
+{
+}
+impl<'input> TokenAware<'input> for Python3LexerActions {
+    type TF = LocalTokenFactory<'input>;
+}
+
+impl<'input, Input: CharStream<From<'input>>> TokenSource<'input> for Python3Lexer<'input, Input> {
+    type TF = LocalTokenFactory<'input>;
 
     fn next_token(&mut self) -> <Self::TF as TokenFactory<'input>>::Tok {
         self.base.next_token()
@@ -458,38 +745,30 @@ impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for Python3Lex
         self.base.get_input_stream()
     }
 
-	fn get_source_name(&self) -> String {
-		self.base.get_source_name()
-	}
+    fn get_source_name(&self) -> String {
+        self.base.get_source_name()
+    }
 
     fn get_token_factory(&self) -> &'input Self::TF {
         self.base.get_token_factory()
     }
 }
 
+lazy_static! {
+    static ref _ATN: Arc<ATN> =
+        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
+    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
+        let mut dfa = Vec::new();
+        let size = _ATN.decision_to_state.len();
+        for i in 0..size {
+            dfa.push(DFA::new(_ATN.clone(), _ATN.get_decision_state(i), i as isize).into())
+        }
+        Arc::new(dfa)
+    };
+}
 
-
-	lazy_static! {
-	    static ref _ATN: Arc<ATN> =
-	        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
-	    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
-	        let mut dfa = Vec::new();
-	        let size = _ATN.decision_to_state.len();
-	        for i in 0..size {
-	            dfa.push(DFA::new(
-	                _ATN.clone(),
-	                _ATN.get_decision_state(i),
-	                i as isize,
-	            ).into())
-	        }
-	        Arc::new(dfa)
-	    };
-	}
-
-
-
-	const _serializedATN:&'static str =
-		"\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
+const _serializedATN: &'static str =
+    "\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
 		\x68\u{390}\x08\x01\x04\x02\x09\x02\x04\x03\x09\x03\x04\x04\x09\x04\x04\
 		\x05\x09\x05\x04\x06\x09\x06\x04\x07\x09\x07\x04\x08\x09\x08\x04\x09\x09\
 		\x09\x04\x0a\x09\x0a\x04\x0b\x09\x0b\x04\x0c\x09\x0c\x04\x0d\x09\x0d\x04\

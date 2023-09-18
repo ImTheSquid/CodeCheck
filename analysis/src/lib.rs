@@ -1,11 +1,11 @@
-use std::{path::PathBuf, fs};
+use std::{fs, path::PathBuf};
 
-use thiserror::Error;
 use anyhow::Result;
+use thiserror::Error;
 
-mod gen;
 mod c;
 mod cpp;
+mod gen;
 
 /// Big-O runtime complexity
 pub enum RuntimeComplexity {
@@ -58,22 +58,36 @@ pub enum Language {
 }
 
 /// Attempts to parse a language and its tree from a string
-pub fn generate_tree<S: AsRef<str>, T: SyntaxTree>(input: S, language: Language) -> Result<T, TreeParseError> {
+pub fn generate_tree<S: AsRef<str>, T: SyntaxTree>(
+    _input: S,
+    _language: Language,
+) -> Result<T, TreeParseError> {
     todo!()
 }
 
 /// Attempts to parse a language and its tree from a file
-pub fn generate_tree_from_file<P: Into<PathBuf>, T: SyntaxTree>(input: P, language: Option<Language>) -> Result<T, TreeParseError> {
+pub fn generate_tree_from_file<P: Into<PathBuf>, T: SyntaxTree>(
+    input: P,
+    language: Option<Language>,
+) -> Result<T, TreeParseError> {
     let buf = input.into();
-    generate_tree(fs::read_to_string(buf.clone()).map_err(TreeParseError::FileError)?, match language {
-        Some(l) => l,
-        None => guess_language_from_path(buf)?,
-    })
+    generate_tree(
+        fs::read_to_string(buf.clone()).map_err(TreeParseError::FileError)?,
+        match language {
+            Some(l) => l,
+            None => guess_language_from_path(buf)?,
+        },
+    )
 }
 
 /// Attempts to guess the language of the file using a path
 fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
-    match path.extension().ok_or(TreeParseError::UnknownLanguage)?.to_str().ok_or(TreeParseError::UnknownLanguage)? {
+    match path
+        .extension()
+        .ok_or(TreeParseError::UnknownLanguage)?
+        .to_str()
+        .ok_or(TreeParseError::UnknownLanguage)?
+    {
         "java" => Ok(Language::Java),
         "py" => Ok(Language::Python),
         "c" | "h" => Ok(Language::C),
