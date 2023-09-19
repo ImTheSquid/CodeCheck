@@ -33,6 +33,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
 
         if try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all).is_some() {
+            visitor_result!(self.tree.close());
             return VisitorReturn(Ok(()));
         }
         
