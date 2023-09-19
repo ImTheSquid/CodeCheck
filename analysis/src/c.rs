@@ -1,24 +1,46 @@
+use antlr_rust::token::Token;
 use antlr_rust::tree::ParseTreeVisitorCompat;
 
 use crate::gen::cparser::*;
 use crate::gen::cvisitor::CVisitorCompat;
-use crate::{SyntaxTree, VisitorReturn};
+use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result, try_lexer_rules};
+
+#[derive(Debug, Clone, Copy)]
+pub enum CTreeItem {
+    PrimaryExpression,
+    Identifier,
+    Constant,
+    StringLiteral,
+}
 
 #[derive(Debug, Clone)]
-pub struct CTree {}
+pub struct CTree {
+    tree: syntree::Builder<CTreeItem, usize, usize>,
+}
 
 impl ParseTreeVisitorCompat<'_> for CTree {
     type Node = CParserContextType;
-    type Return = VisitorReturn<Self>;
+    type Return = VisitorReturn<()>;
 
     fn temp_result(&mut self) -> &mut Self::Return {
-        Box::leak(Box::new(Self::Return::default()))
+        Box::leak(Box::default())
     }
 }
 
+#[allow(non_snake_case)]
 impl CVisitorCompat<'_> for CTree {
     fn visit_primaryExpression(&mut self, ctx: &PrimaryExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
+
+        if try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all).is_some() {
+            return VisitorReturn(Ok(()));
+        }
+        
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_genericSelection(&mut self, ctx: &GenericSelectionContext<'_>) -> Self::Return {

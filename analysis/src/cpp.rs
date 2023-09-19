@@ -2,20 +2,28 @@ use antlr_rust::tree::ParseTreeVisitorCompat;
 
 use crate::gen::cpp14parser::*;
 use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
-use crate::{VisitorReturn};
+use crate::{VisitorReturn, SyntaxTree};
+
+#[derive(Debug, Clone, Copy)]
+pub enum CppTreeItem {
+
+}
 
 #[derive(Debug, Clone)]
-pub struct CppTree {}
+pub struct CppTree {
+    tree: syntree::Builder<CppTreeItem, usize, usize>,
+}
 
 impl ParseTreeVisitorCompat<'_> for CppTree {
     type Node = CPP14ParserContextType;
-    type Return = VisitorReturn<Self>;
+    type Return = VisitorReturn<()>;
 
     fn temp_result(&mut self) -> &mut Self::Return {
-        Box::leak(Box::new(Self::Return::default()))
+        Box::leak(Box::default())
     }
 }
 
+#[allow(non_snake_case)]
 impl CPP14ParserVisitorCompat<'_> for CppTree {
     fn visit_translationUnit(&mut self, ctx: &TranslationUnitContext<'_>) -> Self::Return {
         self.visit_children(ctx)
@@ -923,5 +931,19 @@ impl CPP14ParserVisitorCompat<'_> for CppTree {
 
     fn visit_literal(&mut self, ctx: &LiteralContext<'_>) -> Self::Return {
         self.visit_children(ctx)
+    }
+}
+
+impl SyntaxTree for CppTree {
+    fn compare(&self, other: &Self) -> f64 {
+        todo!()
+    }
+
+    fn worst_runtime_complexity(&self) -> crate::RuntimeComplexity {
+        todo!()
+    }
+
+    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<crate::RuntimeComplexity> {
+        todo!()
     }
 }

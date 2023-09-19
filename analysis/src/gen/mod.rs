@@ -1,3 +1,7 @@
+// The generated code is too annoying to deal with every linting error individually
+// This will probably bite me in the ass someday but that's not my today me's problem!
+#![allow(warnings)]
+
 // Public modules, implemented for each language tree
 pub mod cpp14parservisitor;
 pub mod cvisitor;

@@ -5,7 +5,42 @@ use thiserror::Error;
 
 mod c;
 mod cpp;
+#[macro_use]
 mod gen;
+
+#[macro_export]
+macro_rules! try_lexer_rules {
+    // I can't figure out a way to get the `_all` suffix to work properly in the original expression
+    ($ctx:expr, $tree:expr, $repr:ident, StringLiteral_all) => {
+        if let Some(val) = $ctx.StringLiteral_all().first() {
+            Some($crate::visitor_result!($tree.token($repr::StringLiteral, val.symbol.get_token_index() as usize)))
+        } else {
+            None
+        }
+    };
+
+    ($ctx:expr, $tree:expr, $repr:ident, $ty:ident) => {
+        if let Some(val) = $ctx.$ty() {
+            Some($crate::visitor_result!($tree.token($repr::$ty, val.symbol.get_token_index() as usize)))
+        } else {
+            None
+        }
+    };
+
+    ($ctx:expr, $tree:expr, $repr:ident, $ty:ident, $($tys:ident),+) => {
+        try_lexer_rules!($ctx, $tree, $repr, $ty).or(try_lexer_rules!($ctx, $tree, $repr, $($tys),+))
+    }
+}
+
+#[macro_export]
+macro_rules! visitor_result {
+    ($x:expr) => {
+        match $x {
+            Ok(v) => v,
+            Err(e) => return VisitorReturn(Err(TreeParseError::from(e))),
+        }
+    };
+}
 
 /// Big-O runtime complexity
 pub enum RuntimeComplexity {
@@ -41,11 +76,15 @@ pub trait SyntaxTree {
 #[derive(Debug, Error)]
 pub enum TreeParseError {
     #[error(transparent)]
-    FileError(std::io::Error),
+    FileError(#[from] std::io::Error),
     #[error("Unknown language")]
     UnknownLanguage,
     #[error("Invalid node")]
     InvalidNode,
+    #[error("Missing node")]
+    MissingNode,
+    #[error(transparent)]
+    TreeError(#[from] syntree::Error),
 }
 
 /// The language to be parsed
@@ -96,6 +135,7 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
     }
 }
 
+#[derive(Debug)]
 pub struct VisitorReturn<T>(Result<T, TreeParseError>);
 
 impl<T> Default for VisitorReturn<T> {
