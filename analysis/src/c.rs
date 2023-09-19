@@ -30,17 +30,23 @@ impl ParseTreeVisitorCompat<'_> for CTree {
 #[allow(non_snake_case)]
 impl CVisitorCompat<'_> for CTree {
     fn visit_primaryExpression(&mut self, ctx: &PrimaryExpressionContext<'_>) -> Self::Return {
+        // Open a tree node of type `PrimaryExpression` and make sure it was successful
         visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
 
+        // Check the lexer rules and see if there are any that match. If so, use them as a leaf node and return
         if try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all).is_some() {
+            // Close the current tree node
             visitor_result!(self.tree.close());
             return VisitorReturn(Ok(()));
         }
         
+        // Visit children nodes
         visitor_result!(self.visit_children(ctx).0);
 
+        // Close the `PrimaryExpression` tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
+        // Nothing wrong, return `Ok(())`
         VisitorReturn(Ok(()))
     }
 
