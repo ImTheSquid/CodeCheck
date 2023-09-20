@@ -2,7 +2,7 @@ use antlr_rust::tree::ParseTreeVisitorCompat;
 
 use crate::gen::cpp14parser::*;
 use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
-use crate::{VisitorReturn, SyntaxTree};
+use crate::{VisitorReturn, SyntaxTree, TreeParseError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CppTreeItem {
@@ -934,7 +934,7 @@ impl CPP14ParserVisitorCompat<'_> for CppTree {
     }
 }
 
-impl SyntaxTree for CppTree {
+impl SyntaxTree<'_> for CppTree {
     fn compare(&self, other: &Self) -> f64 {
         todo!()
     }
@@ -944,6 +944,14 @@ impl SyntaxTree for CppTree {
     }
 
     fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<crate::RuntimeComplexity> {
+        todo!()
+    }
+}
+
+impl TryFrom<&str> for CppTree {
+    type Error = TreeParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         todo!()
     }
 }

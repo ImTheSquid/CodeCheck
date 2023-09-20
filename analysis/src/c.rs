@@ -1,6 +1,9 @@
+use antlr_rust::InputStream;
+use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token::Token;
 use antlr_rust::tree::ParseTreeVisitorCompat;
 
+use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
 use crate::gen::cvisitor::CVisitorCompat;
 use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result, try_lexer_rules};
@@ -465,7 +468,7 @@ impl CVisitorCompat<'_> for CTree {
     }
 }
 
-impl SyntaxTree for CTree {
+impl SyntaxTree<'_> for CTree {
     fn compare(&self, _other: &Self) -> f64 {
         todo!()
     }
@@ -476,5 +479,45 @@ impl SyntaxTree for CTree {
 
     fn runtime_complexity_of_fn<S: AsRef<str>>(&self, _name: S) -> Option<crate::RuntimeComplexity> {
         todo!()
+    }
+}
+
+impl TryFrom<&str> for CTree {
+    type Error = TreeParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let lexer = CLexer::new(InputStream::new(value));
+        let mut parser = CParser::new(CommonTokenStream::new(lexer));
+
+        let root = parser.declarationList()?;
+
+        let mut tree = CTree {
+            tree: Default::default()
+        };
+
+        tree.visit(&*root).0?;
+
+        Ok(tree)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CTree;
+
+    #[test]
+    fn c_parse() {
+        let raw = 
+r#"#include <stdio.h>
+
+int
+main(int argc, char **argv) {
+    char *test = "world!";
+    int myval = 5;
+    printf("Hello, %s (%d)", test, myval);
+}
+"#;
+
+        CTree::try_from(raw).unwrap();
     }
 }
