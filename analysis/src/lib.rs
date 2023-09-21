@@ -88,6 +88,8 @@ pub enum TreeParseError {
     TreeError(#[from] syntree::Error),
     #[error(transparent)]
     AntlrError(#[from] ANTLRError),
+    #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
+    PlaceholderError,
 }
 
 /// The language to be parsed
@@ -143,6 +145,6 @@ pub struct VisitorReturn<T>(Result<T, TreeParseError>);
 
 impl<T> Default for VisitorReturn<T> {
     fn default() -> Self {
-        Self(Err(TreeParseError::InvalidNode))
+        Self(Err(TreeParseError::PlaceholderError))
     }
 }

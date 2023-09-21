@@ -469,7 +469,7 @@ impl CVisitorCompat<'_> for CTree {
 }
 
 impl SyntaxTree<'_> for CTree {
-    fn compare(&self, _other: &Self) -> f64 {
+    fn compare(&self, other: &Self) -> f64 {
         todo!()
     }
 
@@ -477,7 +477,7 @@ impl SyntaxTree<'_> for CTree {
         todo!()
     }
 
-    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, _name: S) -> Option<crate::RuntimeComplexity> {
+    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<crate::RuntimeComplexity> {
         todo!()
     }
 }
