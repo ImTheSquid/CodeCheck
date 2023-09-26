@@ -14,6 +14,7 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    ExternalDeclaration,
     FunctionDefinition,
     DeclarationList,
 }
@@ -458,7 +459,17 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_externalDeclaration(&mut self, ctx: &ExternalDeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ExternalDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ExternalDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        //Clsoe the "ExternalDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_functionDefinition(&mut self, ctx: &FunctionDefinitionContext<'_>) -> Self::Return {
@@ -468,7 +479,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "Declaration List" tree node and make sure it was successful
+        //Clsoe the "DeclarationList" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
