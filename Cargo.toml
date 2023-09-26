@@ -1,8 +1,6 @@
 [workspace]
 members = [
     "analysis",
-    "algorithm",
-    "plagiarism",
     "web",
     "util",
     "db",

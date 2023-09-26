@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
 use thiserror::Error;
 
@@ -61,7 +62,7 @@ pub enum RuntimeComplexity {
 }
 
 /// Represents any tree for a specific language
-pub trait SyntaxTree {
+pub trait SyntaxTree<'a>: TryFrom<&'a str> {
     /// Compares a tree with another tree of the specific language
     fn compare(&self, other: &Self) -> f64;
 
@@ -85,6 +86,16 @@ pub enum TreeParseError {
     MissingNode,
     #[error(transparent)]
     TreeError(#[from] syntree::Error),
+    #[error(transparent)]
+    AntlrError(#[from] Box<ANTLRError>),
+    #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
+    PlaceholderError,
+}
+
+impl From<ANTLRError> for TreeParseError {
+    fn from(value: ANTLRError) -> Self {
+        Self::from(Box::new(value))
+    }
 }
 
 /// The language to be parsed
@@ -97,7 +108,7 @@ pub enum Language {
 }
 
 /// Attempts to parse a language and its tree from a string
-pub fn generate_tree<S: AsRef<str>, T: SyntaxTree>(
+pub fn generate_tree<'a, S: AsRef<str>, T: SyntaxTree<'a>>(
     _input: S,
     _language: Language,
 ) -> Result<T, TreeParseError> {
@@ -105,7 +116,7 @@ pub fn generate_tree<S: AsRef<str>, T: SyntaxTree>(
 }
 
 /// Attempts to parse a language and its tree from a file
-pub fn generate_tree_from_file<P: Into<PathBuf>, T: SyntaxTree>(
+pub fn generate_tree_from_file<'a, P: Into<PathBuf>, T: SyntaxTree<'a>>(
     input: P,
     language: Option<Language>,
 ) -> Result<T, TreeParseError> {
@@ -140,6 +151,6 @@ pub struct VisitorReturn<T>(Result<T, TreeParseError>);
 
 impl<T> Default for VisitorReturn<T> {
     fn default() -> Self {
-        Self(Err(TreeParseError::InvalidNode))
+        Self(Err(TreeParseError::PlaceholderError))
     }
 }
