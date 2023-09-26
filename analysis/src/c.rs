@@ -22,6 +22,12 @@ pub enum CTreeItem {
     DeclarationSpecifier,
     InitDeclaratorListContext,
     InitDeclarator,
+    StorageClassSpecifier,
+    TypeSpecifierContext,
+    StructOrUnionSpecifier,
+    StructOrUnion,
+    StructDeclarationList,
+    StructDeclaration,
 }
 
 #[derive(Debug, Clone)]
@@ -44,15 +50,12 @@ impl CVisitorCompat<'_> for CTree {
         // Open a tree node of type `PrimaryExpression` and make sure it was successful
         visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
 
-        // Check the lexer rules and see if there are any that match. If so, use them as a leaf node and return
-        if try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all).is_some() {
-            // Close the current tree node
-            visitor_result!(self.tree.close());
-            return VisitorReturn(Ok(()));
-        }
-        
         // Visit children nodes
         visitor_result!(self.visit_children(ctx).0);
+
+        // Check the lexer rules and see if there are any that match. If so, use them as a leaf node and return
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all);
+        
 
         // Close the `PrimaryExpression` tree node and make sure it was successful
         visitor_result!(self.tree.close());
@@ -238,33 +241,52 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StorageClassSpecifierContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StorageClassSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_typeSpecifier(&mut self, ctx: &TypeSpecifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::TypeSpecifierContext));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structOrUnionSpecifier(
         &mut self,
         ctx: &StructOrUnionSpecifierContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructOrUnion));
+        visitor_result!(self.visit_children(ctx).0);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structOrUnion(&mut self, ctx: &StructOrUnionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructOrUnion));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclarationList(
         &mut self,
         ctx: &StructDeclarationListContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructDeclarationList));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclaration(&mut self, ctx: &StructDeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructDeclaration));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_specifierQualifierList(
