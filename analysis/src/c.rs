@@ -466,7 +466,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.tree.open(CTreeItem::FunctionDefinition));
 
         // Visit Children Nodes
-        visitor_result!(self.tree.open(CTreeItem::FunctionDefinition));
+        visitor_result!(self.visit_children(ctx).0);
 
         //Clsoe the "Declaration List" tree node and make sure it was successful
         visitor_result!(self.tree.close());
