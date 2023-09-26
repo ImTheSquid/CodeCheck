@@ -11,6 +11,14 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    Expression,
+    ConstantExpression,
+    Declaration,
+    DeclarationSpecifiers,
+    DeclarationSpecifiers2,
+    DeclarationSpecifier,
+    InitDeclaratorListContext,
+    InitDeclarator,
 }
 
 #[derive(Debug, Clone)]
@@ -159,44 +167,68 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_expression(&mut self, ctx: &ExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::Expression));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_constantExpression(&mut self, ctx: &ConstantExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::ConstantExpression));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_declaration(&mut self, ctx: &DeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::Declaration));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_declarationSpecifiers(
         &mut self,
         ctx: &DeclarationSpecifiersContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifiers));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_declarationSpecifiers2(
         &mut self,
         ctx: &DeclarationSpecifiers2Context<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifiers2));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_declarationSpecifier(
         &mut self,
         ctx: &DeclarationSpecifierContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_initDeclaratorList(&mut self, ctx: &InitDeclaratorListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::InitDeclaratorListContext));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_initDeclarator(&mut self, ctx: &InitDeclaratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::InitDeclarator));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_storageClassSpecifier(
