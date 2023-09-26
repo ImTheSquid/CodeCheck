@@ -14,6 +14,7 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    DeclarationList,
 }
 
 #[derive(Debug, Clone)]
@@ -464,7 +465,18 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_declarationList(&mut self, ctx: &DeclarationListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'DeclarationList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::DeclarationList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+        
+        // Close the "Declaration List" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
+
     }
 }
 
