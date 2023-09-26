@@ -87,9 +87,15 @@ pub enum TreeParseError {
     #[error(transparent)]
     TreeError(#[from] syntree::Error),
     #[error(transparent)]
-    AntlrError(#[from] ANTLRError),
+    AntlrError(#[from] Box<ANTLRError>),
     #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
     PlaceholderError,
+}
+
+impl From<ANTLRError> for TreeParseError {
+    fn from(value: ANTLRError) -> Self {
+        Self::from(Box::new(value))
+    }
 }
 
 /// The language to be parsed
