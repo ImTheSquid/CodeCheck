@@ -14,6 +14,9 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    ForDeclaration,
+    ForExpression,
+    JumpStatement,
     CompilationUnit,
     TranslationUnit,
     ExternalDeclaration,
@@ -441,15 +444,48 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_forDeclaration(&mut self, ctx: &ForDeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+         // Open a tree node of type 'ForDeclaration' and made sure it was successful
+         visitor_result!(self.tree.open(CTreeItem::ForDeclaration));
+
+         // Visit Children Nodes
+         visitor_result!(self.visit_children(ctx).0);
+ 
+         //Clsoe the "ForDeclaration" tree node and make sure it was successful
+         visitor_result!(self.tree.close());
+ 
+         // Nothing wrong, return 'Ok(())'
+         VisitorReturn(Ok(()))
     }
 
     fn visit_forExpression(&mut self, ctx: &ForExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ForExpression' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForExpression));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        //Clsoe the "ForExpression" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_jumpStatement(&mut self, ctx: &JumpStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'JumpStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::JumpStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // Need Jack to check
+
+        //Clsoe the "JumpStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_compilationUnit(&mut self, ctx: &CompilationUnitContext<'_>) -> Self::Return {
