@@ -443,9 +443,6 @@ impl CVisitorCompat<'_> for CTree {
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
-
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, While, Do, For); // NEED JACK TO CHECK
  
         //Clsoe the "IterationStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
