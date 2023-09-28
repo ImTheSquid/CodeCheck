@@ -14,6 +14,8 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    CompilationUnit,
+    TranslationUnit,
     ExternalDeclaration,
     FunctionDefinition,
     DeclarationList,
@@ -451,11 +453,31 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_compilationUnit(&mut self, ctx: &CompilationUnitContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'CompilationUnit' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::CompilationUnit));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        //Clsoe the "CompilationUnit" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_translationUnit(&mut self, ctx: &TranslationUnitContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'TranslationUnit' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::TranslationUnit));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        //Clsoe the "TranslationUnit" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_externalDeclaration(&mut self, ctx: &ExternalDeclarationContext<'_>) -> Self::Return {
