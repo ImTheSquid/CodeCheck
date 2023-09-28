@@ -14,6 +14,8 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    IterationStatement,
+    ForCondition,
     ForDeclaration,
     ForExpression,
     JumpStatement,
@@ -436,25 +438,48 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_iterationStatement(&mut self, ctx: &IterationStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'IterationStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::IterationStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, While, Do, For); // NEED JACK TO CHECK
+ 
+        //Clsoe the "IterationStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forCondition(&mut self, ctx: &ForConditionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ForCondition' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForCondition));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "ForCondition" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forDeclaration(&mut self, ctx: &ForDeclarationContext<'_>) -> Self::Return {
-         // Open a tree node of type 'ForDeclaration' and made sure it was successful
-         visitor_result!(self.tree.open(CTreeItem::ForDeclaration));
+        // Open a tree node of type 'ForDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForDeclaration));
 
-         // Visit Children Nodes
-         visitor_result!(self.visit_children(ctx).0);
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
  
-         //Clsoe the "ForDeclaration" tree node and make sure it was successful
-         visitor_result!(self.tree.close());
+        //Clsoe the "ForDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
  
-         // Nothing wrong, return 'Ok(())'
-         VisitorReturn(Ok(()))
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forExpression(&mut self, ctx: &ForExpressionContext<'_>) -> Self::Return {
@@ -479,7 +504,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
 
         // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // Need Jack to check
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
 
         //Clsoe the "JumpStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
