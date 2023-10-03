@@ -36,6 +36,28 @@ pub enum CTreeItem {
     ExternalDeclaration,
     FunctionDefinition,
     DeclarationList,
+    GenericSelection,
+    GenericAssocList,
+    GenericAssociation,
+    PostfixExpression,
+    ArgumentExpressionList,
+    UnaryExpression,
+    UnaryOperator,
+    CastExpression,
+    DigitSequence,
+    MultiplicativeExpression,
+    AdditiveExpression,
+    ShiftExpression,
+    RelationalExpression,
+    EqualityExpression,
+    AndExpression,
+    ExclusiveOrExpression,
+    InclusiveOrExpression,
+    LogicalAndExpression,
+    LogicalOrExpression,
+    ConditionalExpression,
+
+    AssignmentOperator,
 }
 
 #[derive(Debug, Clone)]
@@ -58,15 +80,11 @@ impl CVisitorCompat<'_> for CTree {
         // Open a tree node of type `PrimaryExpression` and make sure it was successful
         visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
 
-        // Check the lexer rules and see if there are any that match. If so, use them as a leaf node and return
-        if try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all).is_some() {
-            // Close the current tree node
-            visitor_result!(self.tree.close());
-            return VisitorReturn(Ok(()));
-        }
-        
         // Visit children nodes
         visitor_result!(self.visit_children(ctx).0);
+
+        // Check the lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all);
 
         // Close the `PrimaryExpression` tree node and make sure it was successful
         visitor_result!(self.tree.close());
@@ -76,111 +94,245 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_genericSelection(&mut self, ctx: &GenericSelectionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GenericSelection));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_genericAssocList(&mut self, ctx: &GenericAssocListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GenericAssocList));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_genericAssociation(&mut self, ctx: &GenericAssociationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GenericAssociation));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_postfixExpression(&mut self, ctx: &PostfixExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::PostfixExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier_all);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_argumentExpressionList(
         &mut self,
         ctx: &ArgumentExpressionListContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::ArgumentExpressionList));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_unaryExpression(&mut self, ctx: &UnaryExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::UnaryExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_unaryOperator(&mut self, ctx: &UnaryOperatorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::UnaryOperator));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_castExpression(&mut self, ctx: &CastExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::CastExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        try_lexer_rules!(ctx, self.tree, CTreeItem, DigitSequence);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_multiplicativeExpression(
         &mut self,
         ctx: &MultiplicativeExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::MultiplicativeExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_additiveExpression(&mut self, ctx: &AdditiveExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::AdditiveExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_shiftExpression(&mut self, ctx: &ShiftExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::ShiftExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_relationalExpression(
         &mut self,
         ctx: &RelationalExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::RelationalExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_equalityExpression(&mut self, ctx: &EqualityExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::EqualityExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_andExpression(&mut self, ctx: &AndExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::AndExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_exclusiveOrExpression(
         &mut self,
         ctx: &ExclusiveOrExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::ExclusiveOrExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_inclusiveOrExpression(
         &mut self,
         ctx: &InclusiveOrExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::InclusiveOrExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_logicalAndExpression(
         &mut self,
         ctx: &LogicalAndExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::LogicalAndExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_logicalOrExpression(&mut self, ctx: &LogicalOrExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::LogicalOrExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_conditionalExpression(
         &mut self,
         ctx: &ConditionalExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::ConditionalExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_assignmentExpression(
         &mut self,
         ctx: &AssignmentExpressionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::UnaryExpression));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        try_lexer_rules!(ctx, self.tree, CTreeItem, DigitSequence);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_assignmentOperator(&mut self, ctx: &AssignmentOperatorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::AssignmentOperator));
+
+        visitor_result!(self.visit_children(ctx).0);
+
+        visitor_result!(self.tree.close());
+
+        VisitorReturn(Ok(()))
     }
 
     fn visit_expression(&mut self, ctx: &ExpressionContext<'_>) -> Self::Return {
