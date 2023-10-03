@@ -28,6 +28,14 @@ pub enum CTreeItem {
     StructOrUnion,
     StructDeclarationList,
     StructDeclaration,
+    SpecifierQualifierList,
+    StructDeclaratorList,
+    StructDeclarator,
+    EnumSpecifier,
+    EnumeratorList,
+    Enumerator,
+    EnumerationConstant,
+    AtomicTypeSpecifier,
 }
 
 #[derive(Debug, Clone)]
@@ -293,38 +301,64 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &SpecifierQualifierListContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::SpecifierQualifierList));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclaratorList(
         &mut self,
         ctx: &StructDeclaratorListContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructDeclaratorList));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclarator(&mut self, ctx: &StructDeclaratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::StructDeclarator));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_enumSpecifier(&mut self, ctx: &EnumSpecifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::EnumSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_enumeratorList(&mut self, ctx: &EnumeratorListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::EnumeratorList));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_enumerator(&mut self, ctx: &EnumeratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::Enumerator));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_enumerationConstant(&mut self, ctx: &EnumerationConstantContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::EnumerationConstant));
+        visitor_result!(self.visit_children(ctx).0);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_atomicTypeSpecifier(&mut self, ctx: &AtomicTypeSpecifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::AtomicTypeSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_typeQualifier(&mut self, ctx: &TypeQualifierContext<'_>) -> Self::Return {
