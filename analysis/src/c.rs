@@ -80,6 +80,17 @@ pub enum CTreeItem {
     LogicalOrExpression,
     ConditionalExpression,
     AssignmentOperator,
+    FunctionSpecifier,
+    AlignmentSpecifier,
+    Declarator,
+    DirectDeclarator,
+    VcSpecificModifer,
+    GccDeclaratorExtension,
+    GccAttributeSpecifier,
+    GccAttributeList,
+    GccAttribute,
+    NestedParenthesesBlock,
+    Pointer,
 }
 
 #[derive(Debug, Clone)]
@@ -546,56 +557,91 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_functionSpecifier(&mut self, ctx: &FunctionSpecifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::FunctionSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_alignmentSpecifier(&mut self, ctx: &AlignmentSpecifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::AlignmentSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_declarator(&mut self, ctx: &DeclaratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::Declarator));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_directDeclarator(&mut self, ctx: &DirectDeclaratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::DirectDeclarator));
+        visitor_result!(self.visit_children(ctx).0);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, DigitSequence);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_vcSpecificModifer(&mut self, ctx: &VcSpecificModiferContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::VcSpecificModifer));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_gccDeclaratorExtension(
         &mut self,
         ctx: &GccDeclaratorExtensionContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GccDeclaratorExtension));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_gccAttributeSpecifier(
         &mut self,
         ctx: &GccAttributeSpecifierContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GccAttributeSpecifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_gccAttributeList(&mut self, ctx: &GccAttributeListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GccAttributeList));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_gccAttribute(&mut self, ctx: &GccAttributeContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::GccAttribute));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_nestedParenthesesBlock(
         &mut self,
         ctx: &NestedParenthesesBlockContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::NestedParenthesesBlock));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_pointer(&mut self, ctx: &PointerContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        visitor_result!(self.tree.open(CTreeItem::Pointer));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
     }
 
     fn visit_typeQualifierList(&mut self, ctx: &TypeQualifierListContext<'_>) -> Self::Return {
