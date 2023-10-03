@@ -98,6 +98,8 @@ pub enum TreeParseError {
     AntlrError(#[from] Box<ANTLRError>),
     #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
     PlaceholderError,
+    #[error("The input was empty")]
+    Empty,
 }
 
 impl From<ANTLRError> for TreeParseError {

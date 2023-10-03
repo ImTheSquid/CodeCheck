@@ -985,6 +985,10 @@ impl TryFrom<&str> for CTree {
     type Error = TreeParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            return Err(TreeParseError::Empty);
+        }
+
         let lexer = CLexer::new(InputStream::new(value));
         let mut parser = CParser::new(CommonTokenStream::new(lexer));
 
@@ -1002,10 +1006,26 @@ impl TryFrom<&str> for CTree {
 
 #[cfg(test)]
 mod tests {
+    use crate::TreeParseError;
     use super::CTree;
 
     #[test]
-    fn c_parse() {
+    fn empty_file() {
+        assert!(CTree::try_from("").is_err_and(|e| matches!(e, TreeParseError::Empty)));
+    }
+
+    #[test]
+    fn main_fn() {
+        let raw =
+r#"int main(int argc, char **argv) {
+    return 0;
+}
+"#;
+        CTree::try_from(raw).unwrap();
+    }
+
+    #[test]
+    fn simple() {
         let raw = 
 r#"#include <stdio.h>
 
@@ -1021,7 +1041,7 @@ main(int argc, char **argv) {
     }
 
     #[test]
-    fn c_parse_included() {
+    fn simple_macro_expanded() {
         let raw =
 r#"# 1 "test.c"
 # 1 "<built-in>" 1
