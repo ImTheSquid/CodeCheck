@@ -36,6 +36,7 @@ pub enum CTreeItem {
     Enumerator,
     EnumerationConstant,
     AtomicTypeSpecifier,
+    TypeQualifier,
 }
 
 #[derive(Debug, Clone)]
@@ -362,8 +363,10 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_typeQualifier(&mut self, ctx: &TypeQualifierContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
-    }
+        visitor_result!(self.tree.open(CTreeItem::TypeQualifier));
+        visitor_result!(self.visit_children(ctx).0);
+        visitor_result!(self.tree.close());
+        VisitorReturn(Ok(()))
 
     fn visit_functionSpecifier(&mut self, ctx: &FunctionSpecifierContext<'_>) -> Self::Return {
         self.visit_children(ctx)
