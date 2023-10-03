@@ -443,7 +443,7 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StructOrUnionSpecifierContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructOrUnion));
+        visitor_result!(self.tree.open(CTreeItem::StructOrUnionSpecifier));
         visitor_result!(self.visit_children(ctx).0);
         try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
         visitor_result!(self.tree.close());
@@ -543,6 +543,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
         visitor_result!(self.tree.close());
         VisitorReturn(Ok(()))
+    }
 
     fn visit_functionSpecifier(&mut self, ctx: &FunctionSpecifierContext<'_>) -> Self::Return {
         self.visit_children(ctx)
