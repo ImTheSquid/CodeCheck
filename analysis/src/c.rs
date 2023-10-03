@@ -14,6 +14,10 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    Designator,
+    DesignatorList,
+    StaticAssertDeclaration,
+    Statement,
     LabeledStatement,
     CompoundStatement,
     BlockItemList,
@@ -405,18 +409,51 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_designator(&mut self, ctx: &DesignatorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Designator' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Designator));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
+ 
+        // Close the "Designator" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_staticAssertDeclaration(
         &mut self,
         ctx: &StaticAssertDeclarationContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'StaticAssertDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::StaticAssertDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "StaticAssertDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_statement(&mut self, ctx: &StatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Statement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Statement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "Statement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_labeledStatement(&mut self, ctx: &LabeledStatementContext<'_>) -> Self::Return {
@@ -429,7 +466,7 @@ impl CVisitorCompat<'_> for CTree {
         // Check lexer rules and see if there are any that match
         try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
  
-        //Clsoe the "LabeledStatement" tree node and make sure it was successful
+        // Close the "LabeledStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -443,7 +480,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "CompoundStatement" tree node and make sure it was successful
+        // Close the "CompoundStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -457,7 +494,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "BlockItemList" tree node and make sure it was successful
+        // Close the "BlockItemList" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -471,7 +508,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "BlockItem" tree node and make sure it was successful
+        // Close the "BlockItem" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -485,7 +522,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "ExpressionStatement" tree node and make sure it was successful
+        // Close the "ExpressionStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -499,7 +536,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "SelectionStatement" tree node and make sure it was successful
+        // Close the "SelectionStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -513,7 +550,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "IterationStatement" tree node and make sure it was successful
+        // Close the "IterationStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -527,7 +564,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "ForCondition" tree node and make sure it was successful
+        // Close the "ForCondition" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -541,7 +578,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
  
-        //Clsoe the "ForDeclaration" tree node and make sure it was successful
+        // Close the "ForDeclaration" tree node and make sure it was successful
         visitor_result!(self.tree.close());
  
         // Nothing wrong, return 'Ok(())'
@@ -555,7 +592,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "ForExpression" tree node and make sure it was successful
+        // Close the "ForExpression" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
@@ -572,7 +609,7 @@ impl CVisitorCompat<'_> for CTree {
         // Check lexer rules and see if there are any that match
         try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
 
-        //Clsoe the "JumpStatement" tree node and make sure it was successful
+        // Close the "JumpStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
@@ -586,7 +623,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "CompilationUnit" tree node and make sure it was successful
+        // Close the "CompilationUnit" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
@@ -600,7 +637,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "TranslationUnit" tree node and make sure it was successful
+        // Close the "TranslationUnit" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
@@ -614,7 +651,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "ExternalDeclaration" tree node and make sure it was successful
+        // Close the "ExternalDeclaration" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
@@ -628,7 +665,7 @@ impl CVisitorCompat<'_> for CTree {
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        //Clsoe the "DeclarationList" tree node and make sure it was successful
+        // Close the "DeclarationList" tree node and make sure it was successful
         visitor_result!(self.tree.close());
 
         // Nothing wrong, return 'Ok(())'
