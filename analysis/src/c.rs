@@ -14,6 +14,9 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    LabeledStatement,
+    CompoundStatement,
+    BlockItemList,
     BlockItem,
     ExpressionStatement,
     SelectionStatement,
@@ -417,15 +420,48 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_labeledStatement(&mut self, ctx: &LabeledStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'LabeledStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::LabeledStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
+ 
+        //Clsoe the "LabeledStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_compoundStatement(&mut self, ctx: &CompoundStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'CompoundStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::CompoundStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "CompoundStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_blockItemList(&mut self, ctx: &BlockItemListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'BlockItemList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::BlockItemList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "BlockItemList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_blockItem(&mut self, ctx: &BlockItemContext<'_>) -> Self::Return {
