@@ -14,6 +14,9 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    BlockItem,
+    ExpressionStatement,
+    SelectionStatement,
     IterationStatement,
     ForCondition,
     ForDeclaration,
@@ -426,15 +429,45 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_blockItem(&mut self, ctx: &BlockItemContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'BlockItem' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::BlockItem));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "BlockItem" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_expressionStatement(&mut self, ctx: &ExpressionStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ExpressionStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ExpressionStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "ExpressionStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_selectionStatement(&mut self, ctx: &SelectionStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'SelectionStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::SelectionStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        //Clsoe the "SelectionStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_iterationStatement(&mut self, ctx: &IterationStatementContext<'_>) -> Self::Return {
