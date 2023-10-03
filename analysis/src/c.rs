@@ -675,7 +675,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
 
         // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier_all);
  
         // Close the "IdentifierList" tree node and make sure it was successful
         visitor_result!(self.tree.close());
