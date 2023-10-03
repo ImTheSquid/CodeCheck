@@ -448,7 +448,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
 
         // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
  
         // Close the "Designator" tree node and make sure it was successful
         visitor_result!(self.tree.close());
@@ -496,7 +496,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
 
         // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
  
         // Close the "LabeledStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
@@ -639,7 +639,7 @@ impl CVisitorCompat<'_> for CTree {
         visitor_result!(self.visit_children(ctx).0);
 
         // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier); // NEED JACK TO CHECK
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
 
         // Close the "JumpStatement" tree node and make sure it was successful
         visitor_result!(self.tree.close());
