@@ -14,8 +14,10 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
-    Designator,
+    InitializerList,
+    Designation,
     DesignatorList,
+    Designator,
     StaticAssertDeclaration,
     Statement,
     LabeledStatement,
@@ -397,15 +399,45 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_initializerList(&mut self, ctx: &InitializerListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'InitializerList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::InitializerList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "InitializerList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designation(&mut self, ctx: &DesignationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Designation' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Designation));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "Designation" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designatorList(&mut self, ctx: &DesignatorListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'DesignatorList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::DesignatorList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "DesignatorList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designator(&mut self, ctx: &DesignatorContext<'_>) -> Self::Return {
