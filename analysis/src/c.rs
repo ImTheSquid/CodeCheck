@@ -39,6 +39,9 @@ pub enum CTreeItem {
     TypeQualifier,
     InitializerList,
     Designation,
+    DirectAbstractDeclarator,
+    TypedefName,
+    Initializer,
     DesignatorList,
     Designator,
     StaticAssertDeclaration,
@@ -633,15 +636,48 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &DirectAbstractDeclaratorContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'DirectAbstractDeclarator' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::DirectAbstractDeclarator));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "DirectAbstractDeclarator" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_typedefName(&mut self, ctx: &TypedefNameContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'TypedefName' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::TypedefName));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+ 
+        // Close the "TypedefName" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_initializer(&mut self, ctx: &InitializerContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Initializer' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Initializer));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "Initializer" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_initializerList(&mut self, ctx: &InitializerListContext<'_>) -> Self::Return {
