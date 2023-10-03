@@ -14,6 +14,28 @@ pub enum CTreeItem {
     Identifier,
     Constant,
     StringLiteral,
+    InitializerList,
+    Designation,
+    DesignatorList,
+    Designator,
+    StaticAssertDeclaration,
+    Statement,
+    LabeledStatement,
+    CompoundStatement,
+    BlockItemList,
+    BlockItem,
+    ExpressionStatement,
+    SelectionStatement,
+    IterationStatement,
+    ForCondition,
+    ForDeclaration,
+    ForExpression,
+    JumpStatement,
+    CompilationUnit,
+    TranslationUnit,
+    ExternalDeclaration,
+    FunctionDefinition,
+    DeclarationList,
     GenericSelection,
     GenericAssocList,
     GenericAssociation,
@@ -529,94 +551,325 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_initializerList(&mut self, ctx: &InitializerListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'InitializerList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::InitializerList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "InitializerList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designation(&mut self, ctx: &DesignationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Designation' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Designation));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "Designation" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designatorList(&mut self, ctx: &DesignatorListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'DesignatorList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::DesignatorList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "DesignatorList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_designator(&mut self, ctx: &DesignatorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Designator' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Designator));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+ 
+        // Close the "Designator" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_staticAssertDeclaration(
         &mut self,
         ctx: &StaticAssertDeclarationContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'StaticAssertDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::StaticAssertDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "StaticAssertDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_statement(&mut self, ctx: &StatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'Statement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::Statement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "Statement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_labeledStatement(&mut self, ctx: &LabeledStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'LabeledStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::LabeledStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+ 
+        // Close the "LabeledStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_compoundStatement(&mut self, ctx: &CompoundStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'CompoundStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::CompoundStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "CompoundStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_blockItemList(&mut self, ctx: &BlockItemListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'BlockItemList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::BlockItemList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "BlockItemList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_blockItem(&mut self, ctx: &BlockItemContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'BlockItem' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::BlockItem));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "BlockItem" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_expressionStatement(&mut self, ctx: &ExpressionStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ExpressionStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ExpressionStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ExpressionStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_selectionStatement(&mut self, ctx: &SelectionStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'SelectionStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::SelectionStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "SelectionStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_iterationStatement(&mut self, ctx: &IterationStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'IterationStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::IterationStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "IterationStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forCondition(&mut self, ctx: &ForConditionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ForCondition' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForCondition));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ForCondition" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forDeclaration(&mut self, ctx: &ForDeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ForDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ForDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_forExpression(&mut self, ctx: &ForExpressionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ForExpression' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ForExpression));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Close the "ForExpression" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_jumpStatement(&mut self, ctx: &JumpStatementContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'JumpStatement' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::JumpStatement));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+
+        // Close the "JumpStatement" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_compilationUnit(&mut self, ctx: &CompilationUnitContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'CompilationUnit' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::CompilationUnit));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Close the "CompilationUnit" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_translationUnit(&mut self, ctx: &TranslationUnitContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'TranslationUnit' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::TranslationUnit));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Close the "TranslationUnit" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_externalDeclaration(&mut self, ctx: &ExternalDeclarationContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ExternalDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ExternalDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Close the "ExternalDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_functionDefinition(&mut self, ctx: &FunctionDefinitionContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'FunctionDefinition' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::FunctionDefinition));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Close the "DeclarationList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
+
     }
 
     fn visit_declarationList(&mut self, ctx: &DeclarationListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'DeclarationList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::DeclarationList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+        
+        // Close the "Declaration List" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
+
     }
 }
 
