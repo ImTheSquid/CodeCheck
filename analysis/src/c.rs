@@ -1008,26 +1008,47 @@ impl TryFrom<&str> for CTree {
 mod tests {
     use crate::TreeParseError;
     use super::CTree;
+    use crate::test_parse;
 
     #[test]
     fn empty_file() {
         assert!(CTree::try_from("").is_err_and(|e| matches!(e, TreeParseError::Empty)));
     }
 
-    #[test]
-    fn main_fn() {
-        let raw =
-r#"int main(int argc, char **argv) {
+    test_parse!(main_fn, CTree, r"int main(int argc, char **argv) {
     return 0;
 }
-"#;
-        CTree::try_from(raw).unwrap();
-    }
+");
 
-    #[test]
-    fn simple() {
-        let raw = 
-r#"#include <stdio.h>
+    test_parse!(single_var, CTree, r"int main(int argc, char **argv) {
+    int var = 3 + 4 / 2;
+    return var;
+}");
+
+    test_parse!(function_call, CTree,
+r"int main(int argc, char **argv) {
+    function();
+    return 0;
+}
+");
+
+    test_parse!(multiple_function_decls, CTree, r"int sum(int a, int b) {
+    return a + b;
+}
+
+int main(int argc, char **argv) {
+    int var = 3 + 4 / 2;
+    return sum(var, 3);
+}
+");
+
+    test_parse!(function_call_args, CTree, r#"int main(int argc, char **argv) {
+    int a = 3;
+    function(3, 45, "abcd", &a);
+    return 0;
+}"#);
+
+    test_parse!(simple, CTree, r#"##include <stdio.h>
 
 int
 main(int argc, char **argv) {
@@ -1035,15 +1056,9 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
-"#;
+"#);
 
-        CTree::try_from(raw).unwrap();
-    }
-
-    #[test]
-    fn simple_macro_expanded() {
-        let raw =
-r#"# 1 "test.c"
+    test_parse!(simple_macro_expanded, CTree, r#"# 1 "test.c"
 # 1 "<built-in>" 1
 # 1 "<built-in>" 3
 # 418 "<built-in>" 3
@@ -1604,8 +1619,5 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
-"#;
-
-        CTree::try_from(raw).unwrap();
-    }
+"#);
 }

@@ -164,3 +164,14 @@ impl<T> Default for VisitorReturn<T> {
         Self(Err(TreeParseError::PlaceholderError))
     }
 }
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! test_parse {
+    ($name: ident, $lang: ident, $code: expr) => {
+        #[test]
+        fn $name() {
+            $lang::try_from($code).unwrap();
+        }
+    };
+}
