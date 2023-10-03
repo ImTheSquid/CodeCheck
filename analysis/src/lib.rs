@@ -12,6 +12,14 @@ mod gen;
 #[macro_export]
 macro_rules! try_lexer_rules {
     // I can't figure out a way to get the `_all` suffix to work properly in the original expression
+    ($ctx:expr, $tree:expr, $repr:ident, Identifier_all) => {
+        if let Some(val) = $ctx.Identifier_all().first() {
+            Some($crate::visitor_result!($tree.token($repr::Identifier, val.symbol.get_token_index() as usize)))
+        } else {
+            None
+        }
+    };
+
     ($ctx:expr, $tree:expr, $repr:ident, StringLiteral_all) => {
         if let Some(val) = $ctx.StringLiteral_all().first() {
             Some($crate::visitor_result!($tree.token($repr::StringLiteral, val.symbol.get_token_index() as usize)))
