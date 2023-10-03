@@ -39,6 +39,13 @@ pub enum CTreeItem {
     TypeQualifier,
     InitializerList,
     Designation,
+    TypeQualifierList,
+    ParameterTypeList,
+    ParameterList,
+    ParameterDeclaration,
+    IdentifierList,
+    TypeName,
+    AbstractDeclarator,
     DirectAbstractDeclarator,
     TypedefName,
     Initializer,
@@ -602,34 +609,107 @@ impl CVisitorCompat<'_> for CTree {
     }
 
     fn visit_typeQualifierList(&mut self, ctx: &TypeQualifierListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'TypeQualifierList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::TypeQualifierList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "TypeQualifierList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_parameterTypeList(&mut self, ctx: &ParameterTypeListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ParameterTypeList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ParameterTypeList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ParameterTypeList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_parameterList(&mut self, ctx: &ParameterListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ParameterList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ParameterList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ParameterList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_parameterDeclaration(
         &mut self,
         ctx: &ParameterDeclarationContext<'_>,
     ) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'ParameterDeclaration' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::ParameterDeclaration));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "ParameterDeclaration" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_identifierList(&mut self, ctx: &IdentifierListContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'IdentifierList' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::IdentifierList));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+
+        // Check lexer rules and see if there are any that match
+        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
+ 
+        // Close the "IdentifierList" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_typeName(&mut self, ctx: &TypeNameContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'TypeName' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::TypeName));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "TypeName" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_abstractDeclarator(&mut self, ctx: &AbstractDeclaratorContext<'_>) -> Self::Return {
-        self.visit_children(ctx)
+        // Open a tree node of type 'AbstractDeclarator' and made sure it was successful
+        visitor_result!(self.tree.open(CTreeItem::AbstractDeclarator));
+
+        // Visit Children Nodes
+        visitor_result!(self.visit_children(ctx).0);
+ 
+        // Close the "AbstractDeclarator" tree node and make sure it was successful
+        visitor_result!(self.tree.close());
+ 
+        // Nothing wrong, return 'Ok(())'
+        VisitorReturn(Ok(()))
     }
 
     fn visit_directAbstractDeclarator(
