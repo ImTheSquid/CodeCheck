@@ -1,6 +1,5 @@
 use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
-use antlr_rust::token::Token;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 
 use crate::gen::clexer::CLexer;
@@ -9,11 +8,8 @@ use crate::gen::cvisitor::CVisitorCompat;
 use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result};
 
 #[derive(Debug, Clone, Copy)]
-pub enum CTreeItem {
+enum CTreeItem {
     PrimaryExpression,
-    Identifier,
-    Constant,
-    StringLiteral,
     Expression,
     ConstantExpression,
     Declaration,
@@ -77,7 +73,6 @@ pub enum CTreeItem {
     UnaryExpression,
     UnaryOperator,
     CastExpression,
-    DigitSequence,
     MultiplicativeExpression,
     AdditiveExpression,
     ShiftExpression,
