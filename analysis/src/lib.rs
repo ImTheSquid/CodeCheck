@@ -3,43 +3,12 @@ use std::{fs, path::PathBuf};
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
 use thiserror::Error;
+use crate::c::CTree;
 
 mod c;
 mod cpp;
 #[macro_use]
 mod gen;
-
-#[macro_export]
-macro_rules! try_lexer_rules {
-    // I can't figure out a way to get the `_all` suffix to work properly in the original expression
-    ($ctx:expr, $tree:expr, $repr:ident, Identifier_all) => {
-        if let Some(val) = $ctx.Identifier_all().first() {
-            Some($crate::visitor_result!($tree.token($repr::Identifier, val.symbol.get_token_index() as usize)))
-        } else {
-            None
-        }
-    };
-
-    ($ctx:expr, $tree:expr, $repr:ident, StringLiteral_all) => {
-        if let Some(val) = $ctx.StringLiteral_all().first() {
-            Some($crate::visitor_result!($tree.token($repr::StringLiteral, val.symbol.get_token_index() as usize)))
-        } else {
-            None
-        }
-    };
-
-    ($ctx:expr, $tree:expr, $repr:ident, $ty:ident) => {
-        if let Some(val) = $ctx.$ty() {
-            Some($crate::visitor_result!($tree.token($repr::$ty, val.symbol.get_token_index() as usize)))
-        } else {
-            None
-        }
-    };
-
-    ($ctx:expr, $tree:expr, $repr:ident, $ty:ident, $($tys:ident),+) => {
-        try_lexer_rules!($ctx, $tree, $repr, $ty).or(try_lexer_rules!($ctx, $tree, $repr, $($tys),+))
-    }
-}
 
 #[macro_export]
 macro_rules! visitor_result {
@@ -70,7 +39,7 @@ pub enum RuntimeComplexity {
 }
 
 /// Represents any tree for a specific language
-pub trait SyntaxTree<'a>: TryFrom<&'a str> {
+pub trait SyntaxTree {
     /// Compares a tree with another tree of the specific language
     fn compare(&self, other: &Self) -> f64;
 
@@ -78,7 +47,7 @@ pub trait SyntaxTree<'a>: TryFrom<&'a str> {
     fn worst_runtime_complexity(&self) -> RuntimeComplexity;
 
     /// Gets the runtime complexity of a single function, returns `Option::None` if not found
-    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<RuntimeComplexity>;
+    fn runtime_complexity_of_fn(&self, name: &str) -> Option<RuntimeComplexity>;
 }
 
 /// Any errors that may occur when generating a parse tree
@@ -118,18 +87,23 @@ pub enum Language {
 }
 
 /// Attempts to parse a language and its tree from a string
-pub fn generate_tree<'a, S: AsRef<str>, T: SyntaxTree<'a>>(
-    _input: S,
-    _language: Language,
-) -> Result<T, TreeParseError> {
-    todo!()
+pub fn generate_tree<'a, S: AsRef<str>>(
+    input: S,
+    language: Language,
+) -> Result<impl SyntaxTree, TreeParseError> {
+    match language {
+        Language::Java => todo!(),
+        Language::C => Ok(CTree::try_from(input.as_ref())?),
+        Language::Cpp => todo!(),
+        Language::Python => todo!(),
+    }
 }
 
 /// Attempts to parse a language and its tree from a file
-pub fn generate_tree_from_file<'a, P: Into<PathBuf>, T: SyntaxTree<'a>>(
+pub fn generate_tree_from_file<P: Into<PathBuf>>(
     input: P,
     language: Option<Language>,
-) -> Result<T, TreeParseError> {
+) -> Result<impl SyntaxTree, TreeParseError> {
     let buf = input.into();
     generate_tree(
         fs::read_to_string(buf.clone()).map_err(TreeParseError::FileError)?,

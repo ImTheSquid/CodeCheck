@@ -1,12 +1,12 @@
 use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::token::Token;
-use antlr_rust::tree::ParseTreeVisitorCompat;
+use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
 use crate::gen::cvisitor::CVisitorCompat;
-use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result, try_lexer_rules};
+use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result};
 
 #[derive(Debug, Clone, Copy)]
 pub enum CTreeItem {
@@ -20,10 +20,10 @@ pub enum CTreeItem {
     DeclarationSpecifiers,
     DeclarationSpecifiers2,
     DeclarationSpecifier,
-    InitDeclaratorListContext,
+    InitDeclaratorList,
     InitDeclarator,
     StorageClassSpecifier,
-    TypeSpecifierContext,
+    TypeSpecifier,
     StructOrUnionSpecifier,
     StructOrUnion,
     StructDeclarationList,
@@ -94,18 +94,35 @@ pub enum CTreeItem {
     AlignmentSpecifier,
     Declarator,
     DirectDeclarator,
-    VcSpecificModifer,
+    VcSpecificModifier,
     GccDeclaratorExtension,
     GccAttributeSpecifier,
     GccAttributeList,
     GccAttribute,
     NestedParenthesesBlock,
     Pointer,
+    Terminal,
+    Whitespace,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CTree {
-    tree: syntree::Builder<CTreeItem, usize, usize>,
+    /// Contains all necessary indices to reconstruct the source code from the original with
+    /// symbols. This tree also contains whitespace and variable names, so it may not work as
+    /// well for comparisons.
+    /// TODO: Figure if non-token structure tree is needed
+    symbol_tree: syntree::Builder<CTreeItem, usize, usize>,
+    /// Temporary variable for visitor
+    tmp: VisitorReturn<()>,
+}
+
+impl Clone for CTree {
+    fn clone(&self) -> Self {
+        Self {
+            symbol_tree: self.symbol_tree.clone(),
+            tmp: Default::default(),
+        }
+    }
 }
 
 impl ParseTreeVisitorCompat<'_> for CTree {
@@ -113,7 +130,21 @@ impl ParseTreeVisitorCompat<'_> for CTree {
     type Return = VisitorReturn<()>;
 
     fn temp_result(&mut self) -> &mut Self::Return {
-        Box::leak(Box::default())
+        &mut self.tmp
+    }
+
+    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+        if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
+            visitor_result!(self.symbol_tree.token(CTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
+        }
+
+        visitor_result!(self.symbol_tree.token(CTreeItem::Terminal, node.symbol.text.len()));
+
+        VisitorReturn(Ok(()))
+    }
+
+    fn visit_error_node(&mut self, _node: &ErrorNode<'_, Self::Node>) -> Self::Return {
+        VisitorReturn(Err(TreeParseError::InvalidNode))
     }
 }
 
@@ -121,59 +152,54 @@ impl ParseTreeVisitorCompat<'_> for CTree {
 impl CVisitorCompat<'_> for CTree {
     fn visit_primaryExpression(&mut self, ctx: &PrimaryExpressionContext<'_>) -> Self::Return {
         // Open a tree node of type `PrimaryExpression` and make sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::PrimaryExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::PrimaryExpression));
 
         // Visit children nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check the lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, Constant, StringLiteral_all);
-
         // Close the `PrimaryExpression` tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return `Ok(())`
         VisitorReturn(Ok(()))
     }
 
     fn visit_genericSelection(&mut self, ctx: &GenericSelectionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GenericSelection));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GenericSelection));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_genericAssocList(&mut self, ctx: &GenericAssocListContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GenericAssocList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GenericAssocList));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_genericAssociation(&mut self, ctx: &GenericAssociationContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GenericAssociation));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GenericAssociation));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_postfixExpression(&mut self, ctx: &PostfixExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::PostfixExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::PostfixExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier_all);
-
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -182,45 +208,41 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &ArgumentExpressionListContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::ArgumentExpressionList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ArgumentExpressionList));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_unaryExpression(&mut self, ctx: &UnaryExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::UnaryExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::UnaryExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_unaryOperator(&mut self, ctx: &UnaryOperatorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::UnaryOperator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::UnaryOperator));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_castExpression(&mut self, ctx: &CastExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::CastExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::CastExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        try_lexer_rules!(ctx, self.tree, CTreeItem, DigitSequence);
-
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -229,31 +251,31 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &MultiplicativeExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::MultiplicativeExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::MultiplicativeExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_additiveExpression(&mut self, ctx: &AdditiveExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::AdditiveExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AdditiveExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_shiftExpression(&mut self, ctx: &ShiftExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::ShiftExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ShiftExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -262,31 +284,31 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &RelationalExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::RelationalExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::RelationalExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_equalityExpression(&mut self, ctx: &EqualityExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::EqualityExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::EqualityExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_andExpression(&mut self, ctx: &AndExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::AndExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AndExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -295,11 +317,11 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &ExclusiveOrExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::ExclusiveOrExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ExclusiveOrExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -308,11 +330,11 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &InclusiveOrExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::InclusiveOrExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::InclusiveOrExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -321,21 +343,21 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &LogicalAndExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::LogicalAndExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::LogicalAndExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_logicalOrExpression(&mut self, ctx: &LogicalOrExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::LogicalOrExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::LogicalOrExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -344,11 +366,11 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &ConditionalExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::ConditionalExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ConditionalExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
@@ -357,45 +379,43 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &AssignmentExpressionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::UnaryExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::UnaryExpression));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        try_lexer_rules!(ctx, self.tree, CTreeItem, DigitSequence);
-
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_assignmentOperator(&mut self, ctx: &AssignmentOperatorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::AssignmentOperator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AssignmentOperator));
 
         visitor_result!(self.visit_children(ctx).0);
 
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         VisitorReturn(Ok(()))
     }
 
     fn visit_expression(&mut self, ctx: &ExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::Expression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Expression));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_constantExpression(&mut self, ctx: &ConstantExpressionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::ConstantExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ConstantExpression));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_declaration(&mut self, ctx: &DeclarationContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::Declaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Declaration));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -403,9 +423,9 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &DeclarationSpecifiersContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifiers));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DeclarationSpecifiers));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -413,9 +433,9 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &DeclarationSpecifiers2Context<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifiers2));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DeclarationSpecifiers2));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -423,23 +443,23 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &DeclarationSpecifierContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::DeclarationSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DeclarationSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_initDeclaratorList(&mut self, ctx: &InitDeclaratorListContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::InitDeclaratorListContext));
+        visitor_result!(self.symbol_tree.open(CTreeItem::InitDeclaratorList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_initDeclarator(&mut self, ctx: &InitDeclaratorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::InitDeclarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::InitDeclarator));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -447,16 +467,16 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StorageClassSpecifierContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StorageClassSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StorageClassSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_typeSpecifier(&mut self, ctx: &TypeSpecifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::TypeSpecifierContext));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TypeSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -464,17 +484,16 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StructOrUnionSpecifierContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructOrUnionSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructOrUnionSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_structOrUnion(&mut self, ctx: &StructOrUnionContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructOrUnion));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructOrUnion));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -482,16 +501,16 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StructDeclarationListContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructDeclarationList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructDeclarationList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclaration(&mut self, ctx: &StructDeclarationContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructDeclaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructDeclaration));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -499,9 +518,9 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &SpecifierQualifierListContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::SpecifierQualifierList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::SpecifierQualifierList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -509,97 +528,93 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &StructDeclaratorListContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructDeclaratorList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructDeclaratorList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_structDeclarator(&mut self, ctx: &StructDeclaratorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::StructDeclarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StructDeclarator));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_enumSpecifier(&mut self, ctx: &EnumSpecifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::EnumSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::EnumSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_enumeratorList(&mut self, ctx: &EnumeratorListContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::EnumeratorList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::EnumeratorList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_enumerator(&mut self, ctx: &EnumeratorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::Enumerator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Enumerator));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_enumerationConstant(&mut self, ctx: &EnumerationConstantContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::EnumerationConstant));
+        visitor_result!(self.symbol_tree.open(CTreeItem::EnumerationConstant));
         visitor_result!(self.visit_children(ctx).0);
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_atomicTypeSpecifier(&mut self, ctx: &AtomicTypeSpecifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::AtomicTypeSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AtomicTypeSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_typeQualifier(&mut self, ctx: &TypeQualifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::TypeQualifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TypeQualifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_functionSpecifier(&mut self, ctx: &FunctionSpecifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::FunctionSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::FunctionSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_alignmentSpecifier(&mut self, ctx: &AlignmentSpecifierContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::AlignmentSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AlignmentSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_declarator(&mut self, ctx: &DeclaratorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::Declarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Declarator));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_directDeclarator(&mut self, ctx: &DirectDeclaratorContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::DirectDeclarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DirectDeclarator));
         visitor_result!(self.visit_children(ctx).0);
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier, DigitSequence);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_vcSpecificModifer(&mut self, ctx: &VcSpecificModiferContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::VcSpecificModifer));
+        visitor_result!(self.symbol_tree.open(CTreeItem::VcSpecificModifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -607,9 +622,9 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &GccDeclaratorExtensionContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GccDeclaratorExtension));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GccDeclaratorExtension));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -617,23 +632,23 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &GccAttributeSpecifierContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GccAttributeSpecifier));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GccAttributeSpecifier));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_gccAttributeList(&mut self, ctx: &GccAttributeListContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GccAttributeList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GccAttributeList));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_gccAttribute(&mut self, ctx: &GccAttributeContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::GccAttribute));
+        visitor_result!(self.symbol_tree.open(CTreeItem::GccAttribute));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
@@ -641,57 +656,57 @@ impl CVisitorCompat<'_> for CTree {
         &mut self,
         ctx: &NestedParenthesesBlockContext<'_>,
     ) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::NestedParenthesesBlock));
+        visitor_result!(self.symbol_tree.open(CTreeItem::NestedParenthesesBlock));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_pointer(&mut self, ctx: &PointerContext<'_>) -> Self::Return {
-        visitor_result!(self.tree.open(CTreeItem::Pointer));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Pointer));
         visitor_result!(self.visit_children(ctx).0);
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
         VisitorReturn(Ok(()))
     }
 
     fn visit_typeQualifierList(&mut self, ctx: &TypeQualifierListContext<'_>) -> Self::Return {
         // Open a tree node of type 'TypeQualifierList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::TypeQualifierList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TypeQualifierList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "TypeQualifierList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_parameterTypeList(&mut self, ctx: &ParameterTypeListContext<'_>) -> Self::Return {
         // Open a tree node of type 'ParameterTypeList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ParameterTypeList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ParameterTypeList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ParameterTypeList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_parameterList(&mut self, ctx: &ParameterListContext<'_>) -> Self::Return {
         // Open a tree node of type 'ParameterList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ParameterList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ParameterList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ParameterList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
@@ -701,59 +716,56 @@ impl CVisitorCompat<'_> for CTree {
         ctx: &ParameterDeclarationContext<'_>,
     ) -> Self::Return {
         // Open a tree node of type 'ParameterDeclaration' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ParameterDeclaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ParameterDeclaration));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ParameterDeclaration" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_identifierList(&mut self, ctx: &IdentifierListContext<'_>) -> Self::Return {
         // Open a tree node of type 'IdentifierList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::IdentifierList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::IdentifierList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier_all);
- 
         // Close the "IdentifierList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_typeName(&mut self, ctx: &TypeNameContext<'_>) -> Self::Return {
         // Open a tree node of type 'TypeName' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::TypeName));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TypeName));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "TypeName" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_abstractDeclarator(&mut self, ctx: &AbstractDeclaratorContext<'_>) -> Self::Return {
         // Open a tree node of type 'AbstractDeclarator' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::AbstractDeclarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::AbstractDeclarator));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "AbstractDeclarator" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
@@ -763,104 +775,98 @@ impl CVisitorCompat<'_> for CTree {
         ctx: &DirectAbstractDeclaratorContext<'_>,
     ) -> Self::Return {
         // Open a tree node of type 'DirectAbstractDeclarator' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::DirectAbstractDeclarator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DirectAbstractDeclarator));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "DirectAbstractDeclarator" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_typedefName(&mut self, ctx: &TypedefNameContext<'_>) -> Self::Return {
         // Open a tree node of type 'TypedefName' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::TypedefName));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TypedefName));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
- 
         // Close the "TypedefName" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_initializer(&mut self, ctx: &InitializerContext<'_>) -> Self::Return {
         // Open a tree node of type 'Initializer' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::Initializer));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Initializer));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "Initializer" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_initializerList(&mut self, ctx: &InitializerListContext<'_>) -> Self::Return {
         // Open a tree node of type 'InitializerList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::InitializerList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::InitializerList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "InitializerList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_designation(&mut self, ctx: &DesignationContext<'_>) -> Self::Return {
         // Open a tree node of type 'Designation' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::Designation));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Designation));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "Designation" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_designatorList(&mut self, ctx: &DesignatorListContext<'_>) -> Self::Return {
         // Open a tree node of type 'DesignatorList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::DesignatorList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DesignatorList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "DesignatorList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_designator(&mut self, ctx: &DesignatorContext<'_>) -> Self::Return {
         // Open a tree node of type 'Designator' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::Designator));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Designator));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
- 
         // Close the "Designator" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
@@ -870,170 +876,167 @@ impl CVisitorCompat<'_> for CTree {
         ctx: &StaticAssertDeclarationContext<'_>,
     ) -> Self::Return {
         // Open a tree node of type 'StaticAssertDeclaration' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::StaticAssertDeclaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::StaticAssertDeclaration));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "StaticAssertDeclaration" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_statement(&mut self, ctx: &StatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'Statement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::Statement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::Statement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "Statement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_labeledStatement(&mut self, ctx: &LabeledStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'LabeledStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::LabeledStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::LabeledStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
- 
         // Close the "LabeledStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_compoundStatement(&mut self, ctx: &CompoundStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'CompoundStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::CompoundStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::CompoundStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "CompoundStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_blockItemList(&mut self, ctx: &BlockItemListContext<'_>) -> Self::Return {
         // Open a tree node of type 'BlockItemList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::BlockItemList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::BlockItemList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "BlockItemList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_blockItem(&mut self, ctx: &BlockItemContext<'_>) -> Self::Return {
         // Open a tree node of type 'BlockItem' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::BlockItem));
+        visitor_result!(self.symbol_tree.open(CTreeItem::BlockItem));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "BlockItem" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_expressionStatement(&mut self, ctx: &ExpressionStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'ExpressionStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ExpressionStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ExpressionStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ExpressionStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_selectionStatement(&mut self, ctx: &SelectionStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'SelectionStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::SelectionStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::SelectionStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "SelectionStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_iterationStatement(&mut self, ctx: &IterationStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'IterationStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::IterationStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::IterationStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "IterationStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_forCondition(&mut self, ctx: &ForConditionContext<'_>) -> Self::Return {
         // Open a tree node of type 'ForCondition' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ForCondition));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ForCondition));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ForCondition" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_forDeclaration(&mut self, ctx: &ForDeclarationContext<'_>) -> Self::Return {
         // Open a tree node of type 'ForDeclaration' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ForDeclaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ForDeclaration));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
- 
+
         // Close the "ForDeclaration" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
- 
+        visitor_result!(self.symbol_tree.close());
+
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
     }
 
     fn visit_forExpression(&mut self, ctx: &ForExpressionContext<'_>) -> Self::Return {
         // Open a tree node of type 'ForExpression' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ForExpression));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ForExpression));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
         // Close the "ForExpression" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1041,16 +1044,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_jumpStatement(&mut self, ctx: &JumpStatementContext<'_>) -> Self::Return {
         // Open a tree node of type 'JumpStatement' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::JumpStatement));
+        visitor_result!(self.symbol_tree.open(CTreeItem::JumpStatement));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
-        // Check lexer rules and see if there are any that match
-        try_lexer_rules!(ctx, self.tree, CTreeItem, Identifier);
-
         // Close the "JumpStatement" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1058,13 +1058,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_compilationUnit(&mut self, ctx: &CompilationUnitContext<'_>) -> Self::Return {
         // Open a tree node of type 'CompilationUnit' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::CompilationUnit));
+        visitor_result!(self.symbol_tree.open(CTreeItem::CompilationUnit));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
         // Close the "CompilationUnit" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1072,13 +1072,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_translationUnit(&mut self, ctx: &TranslationUnitContext<'_>) -> Self::Return {
         // Open a tree node of type 'TranslationUnit' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::TranslationUnit));
+        visitor_result!(self.symbol_tree.open(CTreeItem::TranslationUnit));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
         // Close the "TranslationUnit" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1086,13 +1086,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_externalDeclaration(&mut self, ctx: &ExternalDeclarationContext<'_>) -> Self::Return {
         // Open a tree node of type 'ExternalDeclaration' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::ExternalDeclaration));
+        visitor_result!(self.symbol_tree.open(CTreeItem::ExternalDeclaration));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
         // Close the "ExternalDeclaration" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1100,13 +1100,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_functionDefinition(&mut self, ctx: &FunctionDefinitionContext<'_>) -> Self::Return {
         // Open a tree node of type 'FunctionDefinition' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::FunctionDefinition));
+        visitor_result!(self.symbol_tree.open(CTreeItem::FunctionDefinition));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
 
         // Close the "DeclarationList" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1115,13 +1115,13 @@ impl CVisitorCompat<'_> for CTree {
 
     fn visit_declarationList(&mut self, ctx: &DeclarationListContext<'_>) -> Self::Return {
         // Open a tree node of type 'DeclarationList' and made sure it was successful
-        visitor_result!(self.tree.open(CTreeItem::DeclarationList));
+        visitor_result!(self.symbol_tree.open(CTreeItem::DeclarationList));
 
         // Visit Children Nodes
         visitor_result!(self.visit_children(ctx).0);
         
         // Close the "Declaration List" tree node and make sure it was successful
-        visitor_result!(self.tree.close());
+        visitor_result!(self.symbol_tree.close());
 
         // Nothing wrong, return 'Ok(())'
         VisitorReturn(Ok(()))
@@ -1129,7 +1129,7 @@ impl CVisitorCompat<'_> for CTree {
     }
 }
 
-impl SyntaxTree<'_> for CTree {
+impl SyntaxTree for CTree {
     fn compare(&self, other: &Self) -> f64 {
         todo!()
     }
@@ -1138,7 +1138,7 @@ impl SyntaxTree<'_> for CTree {
         todo!()
     }
 
-    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<crate::RuntimeComplexity> {
+    fn runtime_complexity_of_fn(&self, name: &str) -> Option<crate::RuntimeComplexity> {
         todo!()
     }
 }
@@ -1147,17 +1147,14 @@ impl TryFrom<&str> for CTree {
     type Error = TreeParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            return Err(TreeParseError::Empty);
-        }
-
         let lexer = CLexer::new(InputStream::new(value));
         let mut parser = CParser::new(CommonTokenStream::new(lexer));
 
-        let root = parser.declarationList()?;
+        let root = parser.compilationUnit()?;
 
         let mut tree = CTree {
-            tree: Default::default()
+            symbol_tree: Default::default(),
+            tmp: Default::default(),
         };
 
         tree.visit(&*root).0?;
@@ -1168,13 +1165,12 @@ impl TryFrom<&str> for CTree {
 
 #[cfg(test)]
 mod tests {
-    use crate::TreeParseError;
     use super::CTree;
     use crate::test_parse;
 
     #[test]
     fn empty_file() {
-        assert!(CTree::try_from("").is_err_and(|e| matches!(e, TreeParseError::Empty)));
+        CTree::try_from("").unwrap();
     }
 
     test_parse!(main_fn, CTree, r"int main(int argc, char **argv) {

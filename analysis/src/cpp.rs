@@ -934,7 +934,7 @@ impl CPP14ParserVisitorCompat<'_> for CppTree {
     }
 }
 
-impl SyntaxTree<'_> for CppTree {
+impl SyntaxTree for CppTree {
     fn compare(&self, other: &Self) -> f64 {
         todo!()
     }
@@ -943,7 +943,7 @@ impl SyntaxTree<'_> for CppTree {
         todo!()
     }
 
-    fn runtime_complexity_of_fn<S: AsRef<str>>(&self, name: S) -> Option<crate::RuntimeComplexity> {
+    fn runtime_complexity_of_fn(&self, name: &str) -> Option<crate::RuntimeComplexity> {
         todo!()
     }
 }
