@@ -1,6 +1,7 @@
-use antlr_rust::InputStream;
+use antlr_rust::{InputStream, TidExt};
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
+use downcast_rs::impl_downcast;
 
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
@@ -19,6 +20,8 @@ pub struct CTree {
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
+
+impl_downcast!(CTree);
 
 impl Clone for CTree {
     fn clone(&self) -> Self {
@@ -55,7 +58,12 @@ impl ParseTreeVisitorCompat<'_> for CTree {
 auto_visitor!(c, CTree, CTreeItem);
 
 impl SyntaxTree for CTree {
-    fn compare(&self, other: &Self) -> f64 {
+    fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64 {
+        let other = match other.downcast_ref::<Self>() {
+            Some(t) => t,
+            None => panic!("Invalid syntax tree cast! Failed to cast to CTree"),
+        };
+
         todo!()
     }
 

@@ -13,3 +13,5 @@ regex = "1.9.5"
 syntree = "0.14.5"
 thiserror = "1.0.48"
 macros = { path = "../macros" }
+downcast-rs = "1.2.0"
+nalgebra = "0.32.3"

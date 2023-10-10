@@ -23,7 +23,7 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
 auto_visitor!(cpp14parser, CppTree, CppTreeItem);
 
 impl SyntaxTree for CppTree {
-    fn compare(&self, other: &Self) -> f64 {
+    fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64 {
         todo!()
     }
 
