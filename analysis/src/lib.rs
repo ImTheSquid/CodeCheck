@@ -1,13 +1,20 @@
+#![feature(async_iterator)]
+#![feature(async_closure)]
+
 use std::{fs, path::PathBuf};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
+use async_recursion::async_recursion;
 use downcast_rs::{Downcast, impl_downcast};
 use nalgebra::DMatrix;
 use thiserror::Error;
+use tokio::sync::RwLock;
+use futures::StreamExt;
 use crate::c::CTree;
 use crate::cpp::CppTree;
 
@@ -141,93 +148,146 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
 type Tree<TreeItem> = syntree::Tree<TreeItem, usize, usize>;
 type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, usize, usize>;
 
-struct AssociatedTree<'a, Ident, TreeItem> {
+#[derive(Debug)]
+struct AssociatedStruct<'a, Ident, T> {
     /// The real owner of the AST
     owner: &'a Ident,
     /// The relative path of the source file the AST came from
     source: &'a str,
-    /// The AST
-    tree: &'a Tree<TreeItem>,
+    /// The inner item
+    inner: T,
+}
+
+impl<Ident, T: Clone> Clone for AssociatedStruct<'_, Ident, T> {
+    fn clone(&self) -> Self {
+        AssociatedStruct {
+            owner: self.owner,
+            source: self.source,
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<'a, TreeNode, Ident> AssociatedStruct<'a, Ident, Tree<TreeNode>> {
+    fn first(&self) -> Option<AssociatedStruct<'a, Ident, Node<'_, TreeNode>>> {
+        self.inner.first().map(|n| AssociatedStruct {
+            owner: self.owner,
+            source: self.source,
+            inner: n,
+        })
+    }
+}
+
+impl<'a, Ident, T> Deref for AssociatedStruct<'a, Ident, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+struct Caches<'a, Ident: Hash, TreeItem> {
+    subtree: HashMap<String, Vec<AssociatedStruct<'a, Ident, Node<'a, TreeItem>>>>
 }
 
 struct TreeCompare<'a, Ident: Hash, TreeItem> {
-    trees: &'a [AssociatedTree<'a, Ident, TreeItem>],
-    subtree_cache: HashMap<&'a str, Vec<Node<'a, TreeItem>>>,
+    trees: &'a [AssociatedStruct<'a, Ident, Tree<TreeItem>>],
+    cache: RwLock<Caches<'a, Ident, TreeItem>>,
 }
 const LAMBDA_TREE: f64 = 0.1;
 
-impl<'a, Ident: Hash, TreeItem> TreeCompare<'a, Ident, TreeItem> {
-    pub async fn comparison_matrix(trees: &'a [AssociatedTree<'a, Ident, TreeItem>]) -> DMatrix<f64> {
-        let comp = TreeCompare { trees, subtree_cache: Default::default() };
+impl<'a, Ident: Hash + Sync, TreeItem: PartialEq + Sync> TreeCompare<'a, Ident, TreeItem> {
+    pub async fn comparison_matrix(trees: &'a [AssociatedStruct<'a, Ident, Tree<TreeItem>>]) -> DMatrix<f64> {
+        let comp = TreeCompare { trees, cache: RwLock::new(Caches { subtree: HashMap::new() }) };
         todo!()
     }
 
-    fn ns(&mut self, subtree: &AssociatedTree<'a, Ident, TreeItem>) -> usize {
-        self.subtrees(subtree).len()
+    async fn ns(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
+        self.subtrees(subtree).await.len()
     }
 
     /// This is a heavy operation, so cache as much as possible
-    fn subtrees(&mut self, tree: &AssociatedTree<'a, Ident, TreeItem>) -> &[Node<'a, TreeItem>] {
+    async fn subtrees(&self, tree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> Vec<AssociatedStruct<'a, Ident, Node<'a, TreeItem>>> {
         let mut hasher = DefaultHasher::default();
         tree.owner.hash(&mut hasher);
         let ident = format!("{}{}", hasher.finish(), tree.source);
 
-        if let Some(cached) = self.subtree_cache.get(&ident) {
-            return cached.as_slice();
+        if let Some(cached) = self.cache.read().await.subtree.get(&ident) {
+            return cached.to_vec();
         }
 
-        let subtrees = tree.tree.children().into_iter().filter(|n| n.has_children()).collect::<Vec<_>>();
-        self.subtree_cache.insert(&ident, subtrees);
+        let subtrees = tree.children().into_iter().filter(|n| n.has_children()).map(|n| AssociatedStruct {
+            owner: tree.owner,
+            source: tree.source,
+            inner: n,
+        }).collect::<Vec<_>>();
+        self.cache.write().await.subtree.insert(ident.clone(), subtrees);
 
-        self.subtree_cache.get(ident).unwrap().as_slice()
+        self.cache.read().await.subtree.get(&ident).unwrap().to_vec()
     }
 
-    fn cnt(&mut self, subtree: &Tree<TreeItem>, tree: &Tree<TreeItem>) -> f64 {
+    fn cnt(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
         todo!()
     }
 
-    fn n(&mut self, tree: &AssociatedTree<'a, Ident, TreeItem>) -> usize {
-        self.subtrees(tree).len()
+    async fn n(&self, tree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
+        self.subtrees(tree).await.len()
     }
 
-    fn w_st(&mut self, subtree: &Tree<TreeItem>, tree: &Tree<TreeItem>) -> f64 {
-        self.tf(subtree, tree) * self.idf(subtree)
+    async fn w_st(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
+        self.tf(subtree, tree).await * self.idf(subtree)
     }
 
-    fn tf(&mut self, subtree: &Tree<TreeItem>, tree: &Tree<TreeItem>) -> f64 {
-        self.cnt(subtree, tree) / self.n(tree) as f64
+    async fn tf(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
+        self.cnt(subtree, tree) / self.n(&tree.first().unwrap()).await as f64
     }
 
-    fn trees_contain_s(&mut self, subtree: &Tree<TreeItem>) -> usize {
+    fn trees_contain_s(&self, subtree: &Node<'a, TreeItem>) -> usize {
         todo!()
     }
 
-    fn idf(&mut self, subtree: &Tree<TreeItem>) -> f64 {
+    fn idf(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> f64 {
         (1.0 + self.trees.len() as f64 / self.trees_contain_s(subtree) as f64).log2()
     }
 
-    fn k(&mut self, a: &Tree<TreeItem>, b: &Tree<TreeItem>) -> f64 {
-        self.subtrees(a)
-            .into_iter()
-            .fold(0.0, |acc, e_a| acc + self.subtrees(b).into_iter().fold(0.0, |acc , e_b| acc + self.c(&e_a, a,&e_b, b)))
+    async fn k(&self, a: &'a AssociatedStruct<'a, Ident, syntree::Tree<TreeItem, usize, usize>>, b: &'a AssociatedStruct<'a, Ident, syntree::Tree<TreeItem, usize, usize>>) -> f64 {
+        if !a.first().is_some_and(|n| n.has_children()) || !b.first().is_some_and(|n| n.has_children()) {
+            return 0.0;
+        }
+
+        futures::stream::iter(self.subtrees(&a.first().unwrap()).await)
+            .fold(0.0, async move |acc, e_a| {
+                acc + futures::stream::iter(self.subtrees(&b.first().unwrap()).await).zip(futures::stream::repeat_with(|| e_a.clone())).fold(0.0, async move |acc, (e_b, e_a) | {
+                    acc + self.c(&e_a, a, &e_b, b).await
+                }).await
+            }).await
     }
 
-    fn c(&mut self, a: &Tree<TreeItem>, a_full: &Tree<TreeItem>, b: &Tree<TreeItem>, b_full: &Tree<TreeItem>) -> f64 {
+    #[async_recursion]
+    async fn c(&self, a: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, a_full: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>, b: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, b_full: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
         if a.first() != b.first() {
             0.0
         } else if a.first().is_some_and(|n| !n.has_children()) && b.first().is_some_and(|n| !n.has_children()) {
-            LAMBDA_TREE * self.w_st(a, a_full) * self.w_st(b, b_full)
+            LAMBDA_TREE * self.w_st(a, a_full).await * self.w_st(b, b_full).await
         } else {
-            let product = (1.0..=self.ns(a) as f64).into_iter();
-            let max_iter = (1.0..=self.ns(b) as f64).into_iter();
+            let product = futures::stream::iter(1..=self.ns(a).await);
 
-            LAMBDA_TREE * product.fold(1.0, |acc, i| acc * (1 + max_iter.fold(0.0, |acc, j| acc.max(self.c(a, a_full, b, b_full))))) * self.w_st(a, a_full) * self.w_st(b, b_full)
+            LAMBDA_TREE * product.fold(1.0, async move |acc, i| acc * (1.0 + futures::stream::iter(1..=self.ns(b).await).fold(0.0_f64, async move |acc, j| acc.max(self.c(&AssociatedStruct {
+                owner: a.owner,
+                source: a.source,
+                inner: a.children().nth(i).unwrap(),
+            }, a_full, &AssociatedStruct {
+                owner: b.owner,
+                source: b.source,
+                inner: b.children().nth(j).unwrap(),
+            }, b_full).await)).await)).await * self.w_st(a, a_full).await * self.w_st(b, b_full).await
         }
     }
 
     /// Cosine similarity
-    fn k_prime(&mut self, a: &Tree<TreeItem>, b: &Tree<TreeItem>) -> f64 {
-        self.k(a, b) / (self.k(a, a) * self.k(b, b)).sqrt()
+    async fn k_prime(&self, a: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>, b: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
+        self.k(a, b).await / (self.k(a, a).await * self.k(b, b).await).sqrt()
     }
 }
 
