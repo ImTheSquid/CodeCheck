@@ -1,11 +1,11 @@
 use std::{fs, path::PathBuf};
-use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
+use downcast_rs::{Downcast, impl_downcast};
 use nalgebra::DMatrix;
 use thiserror::Error;
 use crate::c::CTree;
@@ -45,7 +45,7 @@ pub enum RuntimeComplexity {
 }
 
 /// Represents any tree for a specific language
-pub trait SyntaxTree {
+pub trait SyntaxTree: Downcast {
     /// Compares a tree with another tree of the specific language
     fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64;
 
@@ -55,6 +55,8 @@ pub trait SyntaxTree {
     /// Gets the runtime complexity of a single function, returns `Option::None` if not found
     fn runtime_complexity_of_fn(&self, name: &str) -> Option<RuntimeComplexity>;
 }
+
+impl_downcast!(SyntaxTree);
 
 /// Any errors that may occur when generating a parse tree
 #[derive(Debug, Error)]
@@ -154,13 +156,13 @@ struct TreeCompare<'a, Ident: Hash, TreeItem> {
 }
 const LAMBDA_TREE: f64 = 0.1;
 
-impl<'a, Ident, TreeItem> TreeCompare<'a, Ident, TreeItem> {
+impl<'a, Ident: Hash, TreeItem> TreeCompare<'a, Ident, TreeItem> {
     pub async fn comparison_matrix(trees: &'a [AssociatedTree<'a, Ident, TreeItem>]) -> DMatrix<f64> {
         let comp = TreeCompare { trees, subtree_cache: Default::default() };
         todo!()
     }
 
-    fn ns(&mut self, subtree: &Tree<TreeItem>) -> usize {
+    fn ns(&mut self, subtree: &AssociatedTree<'a, Ident, TreeItem>) -> usize {
         self.subtrees(subtree).len()
     }
 
@@ -177,14 +179,14 @@ impl<'a, Ident, TreeItem> TreeCompare<'a, Ident, TreeItem> {
         let subtrees = tree.tree.children().into_iter().filter(|n| n.has_children()).collect::<Vec<_>>();
         self.subtree_cache.insert(&ident, subtrees);
 
-        self.subtree_cache.get(&ident).unwrap().as_slice()
+        self.subtree_cache.get(ident).unwrap().as_slice()
     }
 
     fn cnt(&mut self, subtree: &Tree<TreeItem>, tree: &Tree<TreeItem>) -> f64 {
         todo!()
     }
 
-    fn n(&mut self, tree: &Tree<TreeItem>) -> usize {
+    fn n(&mut self, tree: &AssociatedTree<'a, Ident, TreeItem>) -> usize {
         self.subtrees(tree).len()
     }
 
@@ -193,7 +195,7 @@ impl<'a, Ident, TreeItem> TreeCompare<'a, Ident, TreeItem> {
     }
 
     fn tf(&mut self, subtree: &Tree<TreeItem>, tree: &Tree<TreeItem>) -> f64 {
-        self.cnt(subtree, tree) / self.n(tree)
+        self.cnt(subtree, tree) / self.n(tree) as f64
     }
 
     fn trees_contain_s(&mut self, subtree: &Tree<TreeItem>) -> usize {
