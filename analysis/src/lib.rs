@@ -16,7 +16,6 @@ use nalgebra::{DMatrix, Dyn, VecStorage};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use futures::StreamExt;
-use tokio::task::spawn_blocking;
 use crate::c::CTree;
 use crate::cpp::CppTree;
 
@@ -104,7 +103,7 @@ pub enum Language {
 }
 
 /// Attempts to parse a language and its tree from a string
-pub fn generate_tree<'a, S: AsRef<str>>(
+pub fn generate_tree<S: AsRef<str>>(
     input: S,
     language: Language,
 ) -> Result<Box<dyn SyntaxTree>, TreeParseError> {
@@ -151,7 +150,7 @@ type Tree<TreeItem> = syntree::Tree<TreeItem, usize, usize>;
 type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, usize, usize>;
 
 #[derive(Debug)]
-struct AssociatedStruct<'a, Ident, T> {
+pub struct AssociatedStruct<'a, Ident, T> {
     /// The real owner of the AST
     owner: &'a Ident,
     /// The relative path of the source file the AST came from
@@ -194,7 +193,7 @@ struct Caches<'a, Ident: Hash, TreeItem> {
 }
 
 #[derive(Debug, Clone)]
-struct TreeCompare<'a, Ident: Hash, TreeItem> {
+pub struct TreeCompare<'a, Ident: Hash, TreeItem> {
     trees: Vec<AssociatedStruct<'a, Ident, Tree<TreeItem>>>,
     cache: Arc<RwLock<Caches<'a, Ident, TreeItem>>>,
 }
