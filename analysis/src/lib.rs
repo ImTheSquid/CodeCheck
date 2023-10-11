@@ -6,15 +6,17 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::sync::Arc;
 
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
 use async_recursion::async_recursion;
 use downcast_rs::{Downcast, impl_downcast};
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, Dyn, VecStorage};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use futures::StreamExt;
+use tokio::task::spawn_blocking;
 use crate::c::CTree;
 use crate::cpp::CppTree;
 
@@ -186,21 +188,30 @@ impl<'a, Ident, T> Deref for AssociatedStruct<'a, Ident, T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Caches<'a, Ident: Hash, TreeItem> {
     subtree: HashMap<String, Vec<AssociatedStruct<'a, Ident, Node<'a, TreeItem>>>>
 }
 
+#[derive(Debug, Clone)]
 struct TreeCompare<'a, Ident: Hash, TreeItem> {
-    trees: &'a [AssociatedStruct<'a, Ident, Tree<TreeItem>>],
-    cache: RwLock<Caches<'a, Ident, TreeItem>>,
+    trees: Vec<AssociatedStruct<'a, Ident, Tree<TreeItem>>>,
+    cache: Arc<RwLock<Caches<'a, Ident, TreeItem>>>,
 }
 const LAMBDA_TREE: f64 = 0.1;
 
-impl<'a, Ident: Hash + Sync, TreeItem: PartialEq + Sync> TreeCompare<'a, Ident, TreeItem> {
-    pub async fn comparison_matrix(trees: &'a [AssociatedStruct<'a, Ident, Tree<TreeItem>>]) -> DMatrix<f64> {
-        let comp = TreeCompare { trees, cache: RwLock::new(Caches { subtree: HashMap::new() }) };
-        todo!()
+impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone + 'static> TreeCompare<'a, Ident, TreeItem> {
+    pub async fn comparison_matrix(trees: Vec<AssociatedStruct<'a, Ident, Tree<TreeItem>>>) -> DMatrix<f64> {
+        let comp = Arc::new(TreeCompare { trees, cache: Arc::new(RwLock::new(Caches { subtree: HashMap::new() })) });
+        let mut mat = DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), Vec::with_capacity(comp.trees.len().pow(2))));
+
+        for i in 0..=comp.trees.len() - 1 {
+            for j in i + 1..=comp.trees.len() {
+                mat[(i, j)] = comp.k_prime(&comp.trees[i], &comp.trees[j]).await;
+            }
+        }
+
+        mat
     }
 
     async fn ns(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
@@ -227,8 +238,38 @@ impl<'a, Ident: Hash + Sync, TreeItem: PartialEq + Sync> TreeCompare<'a, Ident, 
         self.cache.read().await.subtree.get(&ident).unwrap().to_vec()
     }
 
-    fn cnt(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
-        todo!()
+    async fn subtree_appearances_in_tree(&self, subtree: &Node<'a, TreeItem>, tree: &AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> usize {
+        let mut appearances = 0_usize;
+
+        for node in tree.walk() {
+            if subtree.value() == node.value() {
+                let mut are_equal = true;
+                // This is a really shitty way of doing it that I know has bugs, but it should work for now
+                let mut node_iter = node.walk();
+                let mut subtree_iter = subtree.walk();
+                while let Some((s_node, t_node)) = (&mut node_iter).zip(&mut subtree_iter).next() {
+                    if s_node.value() != t_node.value() {
+                        are_equal = false;
+                        break
+                    }
+                }
+
+                // If the zip had an unequal number of elements, the trees can't be the same
+                if node_iter.next().is_some() || subtree_iter.next().is_some() {
+                    continue
+                }
+
+                if are_equal {
+                    appearances += 1;
+                }
+            }
+        }
+
+        appearances
+    }
+
+    async fn cnt(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &'a AssociatedStruct<'a, Ident, syntree::Tree<TreeItem, usize, usize>>) -> f64 {
+        self.subtree_appearances_in_tree(subtree, tree).await as f64 / self.n(&tree.first().unwrap()).await as f64
     }
 
     async fn n(&self, tree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
@@ -236,19 +277,26 @@ impl<'a, Ident: Hash + Sync, TreeItem: PartialEq + Sync> TreeCompare<'a, Ident, 
     }
 
     async fn w_st(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
-        self.tf(subtree, tree).await * self.idf(subtree)
+        self.tf(subtree, tree).await * self.idf(subtree).await
     }
 
     async fn tf(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>, tree: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
-        self.cnt(subtree, tree) / self.n(&tree.first().unwrap()).await as f64
+        self.cnt(subtree, tree).await / self.n(&tree.first().unwrap()).await as f64
     }
 
-    fn trees_contain_s(&self, subtree: &Node<'a, TreeItem>) -> usize {
-        todo!()
+    async fn trees_contain_s(&self, subtree: &Node<'a, TreeItem>) -> usize {
+        let mut count = 0_usize;
+        for tree in &self.trees {
+            if self.subtree_appearances_in_tree(subtree, tree).await > 0 {
+                count += 1;
+            }
+        }
+
+        count
     }
 
-    fn idf(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> f64 {
-        (1.0 + self.trees.len() as f64 / self.trees_contain_s(subtree) as f64).log2()
+    async fn idf(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> f64 {
+        (1.0 + self.trees.len() as f64 / self.trees_contain_s(subtree).await as f64).log2()
     }
 
     async fn k(&self, a: &'a AssociatedStruct<'a, Ident, syntree::Tree<TreeItem, usize, usize>>, b: &'a AssociatedStruct<'a, Ident, syntree::Tree<TreeItem, usize, usize>>) -> f64 {
