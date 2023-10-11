@@ -1,6 +1,7 @@
-use antlr_rust::{InputStream, TidExt};
+use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
+use syntree::Tree;
 
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
@@ -15,7 +16,7 @@ pub struct CTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    symbol_tree: syntree::Builder<CTreeItem, usize, usize>,
+    pub symbol_tree: syntree::Builder<CTreeItem, usize, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -55,29 +56,17 @@ impl ParseTreeVisitorCompat<'_> for CTree {
 auto_visitor!(c, CTree, CTreeItem);
 
 impl SyntaxTree for CTree {
-    fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64 {
-        let other = match other.downcast_ref::<&Self>() {
-            Some(t) => t,
-            None => panic!("Invalid syntax tree cast! Failed to cast to CTree"),
-        };
-
-        todo!()
-    }
-
-    fn worst_runtime_complexity(&self) -> crate::RuntimeComplexity {
-        todo!()
-    }
-
-    fn runtime_complexity_of_fn(&self, name: &str) -> Option<crate::RuntimeComplexity> {
-        todo!()
+    type Item = CTreeItem;
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
+        Ok(self.symbol_tree.build()?)
     }
 }
 
-impl TryFrom<&str> for CTree {
+impl TryFrom<String> for CTree {
     type Error = TreeParseError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let lexer = CLexer::new(InputStream::new(value));
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let lexer = CLexer::new(InputStream::new(value.as_str()));
         let mut parser = CParser::new(CommonTokenStream::new(lexer));
 
         let root = parser.compilationUnit()?;

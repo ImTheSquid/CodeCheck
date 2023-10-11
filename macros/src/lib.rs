@@ -85,8 +85,8 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     let trait_name = &visitor_trait.ident;
     let trait_name: Ident = syn::parse_str(&format!("{}Compat", trait_name)).unwrap();
     let res = quote! {
-        #[derive(Debug, Copy, Clone)]
-        enum #tree_enum {
+        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        pub enum #tree_enum {
             #(#generated_enum_cases),*
         }
 

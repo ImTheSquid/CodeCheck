@@ -1,4 +1,5 @@
 use antlr_rust::tree::ParseTreeVisitorCompat;
+use syntree::Tree;
 use macros::auto_visitor;
 
 use crate::gen::cpp14parser::*;
@@ -23,23 +24,16 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
 auto_visitor!(cpp14parser, CppTree, CppTreeItem);
 
 impl SyntaxTree for CppTree {
-    fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64 {
-        todo!()
-    }
-
-    fn worst_runtime_complexity(&self) -> crate::RuntimeComplexity {
-        todo!()
-    }
-
-    fn runtime_complexity_of_fn(&self, name: &str) -> Option<crate::RuntimeComplexity> {
-        todo!()
+    type Item = CppTreeItem;
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
+        Ok(self.symbol_tree.build()?)
     }
 }
 
-impl TryFrom<&str> for CppTree {
+impl TryFrom<String> for CppTree {
     type Error = TreeParseError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: String) -> Result<Self, Self::Error> {
         todo!()
     }
 }

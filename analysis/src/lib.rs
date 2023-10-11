@@ -1,7 +1,8 @@
 #![feature(async_iterator)]
 #![feature(async_closure)]
+#![feature(iterator_try_collect)]
 
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -11,13 +12,12 @@ use std::sync::Arc;
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
 use async_recursion::async_recursion;
-use downcast_rs::{Downcast, impl_downcast};
+use async_trait::async_trait;
 use nalgebra::{DMatrix, Dyn, VecStorage};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use futures::StreamExt;
-use crate::c::CTree;
-use crate::cpp::CppTree;
+use crate::c::{CTree, CTreeItem};
 
 mod c;
 mod cpp;
@@ -53,18 +53,10 @@ pub enum RuntimeComplexity {
 }
 
 /// Represents any tree for a specific language
-pub trait SyntaxTree: Downcast {
-    /// Compares a tree with another tree of the specific language
-    fn compare(&self, other: &Box<dyn SyntaxTree>) -> f64;
-
-    /// Gets the worst runtime complexity within the tree
-    fn worst_runtime_complexity(&self) -> RuntimeComplexity;
-
-    /// Gets the runtime complexity of a single function, returns `Option::None` if not found
-    fn runtime_complexity_of_fn(&self, name: &str) -> Option<RuntimeComplexity>;
+pub trait SyntaxTree {
+    type Item: PartialEq;
+    fn symbol_tree(self) -> Result<syntree::Tree<Self::Item, usize, usize>, TreeParseError>;
 }
-
-impl_downcast!(SyntaxTree);
 
 /// Any errors that may occur when generating a parse tree
 #[derive(Debug, Error)]
@@ -79,8 +71,8 @@ pub enum TreeParseError {
     MissingNode,
     #[error(transparent)]
     TreeError(#[from] syntree::Error),
-    #[error(transparent)]
-    AntlrError(#[from] Box<ANTLRError>),
+    #[error("ANTLR Error: {0}")]
+    AntlrError(String),
     #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
     PlaceholderError,
     #[error("The input was empty")]
@@ -89,7 +81,7 @@ pub enum TreeParseError {
 
 impl From<ANTLRError> for TreeParseError {
     fn from(value: ANTLRError) -> Self {
-        Self::from(Box::new(value))
+        TreeParseError::AntlrError(value.to_string())
     }
 }
 
@@ -100,34 +92,6 @@ pub enum Language {
     C,
     Cpp,
     Python,
-}
-
-/// Attempts to parse a language and its tree from a string
-pub fn generate_tree<S: AsRef<str>>(
-    input: S,
-    language: Language,
-) -> Result<Box<dyn SyntaxTree>, TreeParseError> {
-    Ok(match language {
-        Language::Java => todo!(),
-        Language::C => Box::new(CTree::try_from(input.as_ref())?),
-        Language::Cpp => Box::new(CppTree::try_from(input.as_ref())?),
-        Language::Python => todo!(),
-    })
-}
-
-/// Attempts to parse a language and its tree from a file
-pub fn generate_tree_from_file<P: Into<PathBuf>>(
-    input: P,
-    language: Option<Language>,
-) -> Result<Box<dyn SyntaxTree>, TreeParseError> {
-    let buf = input.into();
-    generate_tree(
-        fs::read_to_string(buf.clone()).map_err(TreeParseError::FileError)?,
-        match language {
-            Some(l) => l,
-            None => guess_language_from_path(buf)?,
-        },
-    )
 }
 
 /// Attempts to guess the language of the file using a path
@@ -144,6 +108,56 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
         "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
         _ => Err(TreeParseError::UnknownLanguage),
     }
+}
+
+#[async_trait]
+pub trait AssociatedFileProvider {
+    async fn read_files<'a, Ident: Hash, S: AsRef<str>>(&self) -> Result<Vec<AssociatedStruct<'a, Ident, S>>>;
+}
+
+pub async fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync, S: AsRef<str>>(provider: &impl AssociatedFileProvider, language: Option<Language>) -> Result<DMatrix<f64>> {
+    let sources = provider.read_files().await?;
+
+    if sources.is_empty() {
+        return Ok(DMatrix::from_data(VecStorage::new(Dyn(0), Dyn(0), Vec::new())));
+    }
+
+    let language = match language {
+        None => guess_language_from_path(PathBuf::from(sources[0].source))?,
+        Some(l) => l,
+    };
+
+    Ok(match language {
+        Language::Java => todo!(),
+        Language::C => TreeCompare::comparison_matrix(convert_sources_to_trees::<'_, Ident, S, CTree, CTreeItem>(sources)?).await,
+        Language::Cpp => todo!(),
+        Language::Python => todo!(),
+    })
+}
+
+fn convert_sources_to_trees<'a, Ident, S, T, I>(
+    sources: Vec<AssociatedStruct<'a, Ident, S>>
+) -> Result<Vec<AssociatedStruct<'a, Ident, Tree<I>>>, TreeParseError>
+where
+    S: AsRef<str> + 'a,
+    T: TryFrom<String, Error = TreeParseError> + SyntaxTree<Item = I>,
+{
+    let mut out = Vec::with_capacity(sources.len());
+    for source in sources {
+        let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
+        match T::try_from(inner_value) {
+            Ok(t) => match t.symbol_tree() {
+                Ok(st) => out.push(AssociatedStruct {
+                    owner: source.owner,
+                    source: source.source,
+                    inner: st,
+                }),
+                Err(e) => return Err(e),
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(out)
 }
 
 type Tree<TreeItem> = syntree::Tree<TreeItem, usize, usize>;
@@ -187,7 +201,7 @@ impl<'a, Ident, T> Deref for AssociatedStruct<'a, Ident, T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Caches<'a, Ident: Hash, TreeItem> {
     subtree: HashMap<String, Vec<AssociatedStruct<'a, Ident, Node<'a, TreeItem>>>>
 }
