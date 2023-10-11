@@ -217,7 +217,7 @@ impl<'a, Ident: Hash + Sync, TreeItem: PartialEq + Sync> TreeCompare<'a, Ident, 
             return cached.to_vec();
         }
 
-        let subtrees = tree.children().into_iter().filter(|n| n.has_children()).map(|n| AssociatedStruct {
+        let subtrees = tree.walk().filter(|n| n.has_children()).map(|n| AssociatedStruct {
             owner: tree.owner,
             source: tree.source,
             inner: n,
