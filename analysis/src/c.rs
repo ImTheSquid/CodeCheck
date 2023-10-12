@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn empty_file() {
-        CTree::try_from("").unwrap();
+        CTree::try_from("".to_owned()).unwrap();
     }
 
     test_parse!(main_fn, CTree, r"int main(int argc, char **argv) {

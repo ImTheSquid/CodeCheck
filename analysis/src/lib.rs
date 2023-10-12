@@ -216,7 +216,7 @@ const LAMBDA_TREE: f64 = 0.1;
 impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone + 'static> TreeCompare<'a, Ident, TreeItem> {
     pub async fn comparison_matrix(trees: Vec<AssociatedStruct<'a, Ident, Tree<TreeItem>>>) -> DMatrix<f64> {
         let comp = Arc::new(TreeCompare { trees, cache: Arc::new(RwLock::new(Caches { subtree: HashMap::new() })) });
-        let mut mat = DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), Vec::with_capacity(comp.trees.len().pow(2))));
+        let mut mat = DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), vec![1.0; comp.trees.len().pow(2)]));
 
         for i in 0..=comp.trees.len() - 1 {
             for j in i + 1..=comp.trees.len() {
@@ -367,7 +367,7 @@ macro_rules! test_parse {
     ($name: ident, $lang: ident, $code: expr) => {
         #[test]
         fn $name() {
-            $lang::try_from($code).unwrap();
+            $lang::try_from($code.to_owned()).unwrap();
         }
     };
 }
