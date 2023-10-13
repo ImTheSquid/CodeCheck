@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -112,10 +113,12 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
 
 #[async_trait]
 pub trait AssociatedFileProvider {
-    async fn read_files<'a, Ident: Hash, S: AsRef<str>>(&self) -> Result<Vec<AssociatedStruct<'a, Ident, S>>>;
+    type Ident: Hash;
+    type S: AsRef<str>;
+    async fn read_files(&self) -> Result<Vec<AssociatedStruct<'_, Self::Ident, Self::S>>>;
 }
 
-pub async fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync, S: AsRef<str>>(provider: &impl AssociatedFileProvider, language: Option<Language>) -> Result<DMatrix<f64>> {
+pub async fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync, S: AsRef<str>>(provider: &impl AssociatedFileProvider<Ident = Ident, S = S>, language: Option<Language>) -> Result<DMatrix<f64>> {
     let sources = provider.read_files().await?;
 
     if sources.is_empty() {
@@ -219,16 +222,16 @@ impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone +
         let mut mat = DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), vec![1.0; comp.trees.len().pow(2)]));
 
         for i in 0..=comp.trees.len() - 1 {
-            for j in i + 1..=comp.trees.len() {
+            for j in i + 1..comp.trees.len() {
                 mat[(i, j)] = comp.k_prime(&comp.trees[i], &comp.trees[j]).await;
             }
         }
 
-        mat
+        mat.lower_triangle()
     }
 
     async fn ns(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
-        self.subtrees(subtree).await.len()
+        subtree.children().count()
     }
 
     /// This is a heavy operation, so cache as much as possible
@@ -332,9 +335,9 @@ impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone +
         } else if a.first().is_some_and(|n| !n.has_children()) && b.first().is_some_and(|n| !n.has_children()) {
             LAMBDA_TREE * self.w_st(a, a_full).await * self.w_st(b, b_full).await
         } else {
-            let product = futures::stream::iter(1..=self.ns(a).await);
+            let product = futures::stream::iter(1..self.ns(a).await);
 
-            LAMBDA_TREE * product.fold(1.0, async move |acc, i| acc * (1.0 + futures::stream::iter(1..=self.ns(b).await).fold(0.0_f64, async move |acc, j| acc.max(self.c(&AssociatedStruct {
+            LAMBDA_TREE * product.fold(1.0, async move |acc, i| acc * (1.0 + futures::stream::iter(1..self.ns(b).await).fold(0.0_f64, async move |acc, j| acc.max(self.c(&AssociatedStruct {
                 owner: a.owner,
                 source: a.source,
                 inner: a.children().nth(i).unwrap(),
@@ -370,4 +373,111 @@ macro_rules! test_parse {
             $lang::try_from($code.to_owned()).unwrap();
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use nalgebra::{DMatrix, Dyn, VecStorage};
+    use crate::{AssociatedFileProvider, AssociatedStruct, detect_plagiarism_in_sources, Language, TreeCompare};
+
+    struct PhonyProvider<'a> {
+        store: Vec<AssociatedStruct<'a, usize, String>>,
+    }
+
+    #[async_trait]
+    impl AssociatedFileProvider for PhonyProvider<'_> {
+        type Ident = usize;
+        type S = String;
+        async fn read_files(&self) -> anyhow::Result<Vec<AssociatedStruct<'_, Self::Ident, Self::S>>> {
+            Ok(self.store.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn compare_same() {
+        let a = r#"#include"stdio.h"
+int main()
+{
+int M,N;
+scanf("%d",&M);
+scanf("%d",&N);
+if (M%N==0)
+printf("YES\n");
+else
+printf("NO\n");
+return 0;
+}
+"#;
+
+        let store = PhonyProvider {
+            store: vec![AssociatedStruct {
+                owner: &1234,
+                source: "a.c",
+                inner: a.to_string(),
+            }, AssociatedStruct {
+                owner: &5678,
+                source: "b.c",
+                inner: a.to_string(),
+            }]
+        };
+
+        let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
+        assert_eq!(res[(0, 0)], 1.0);
+        assert_eq!(res[(0, 1)], 0.0);
+        assert_eq!(res[(1, 1)], 1.0);
+        assert_eq!(res[(1, 0)], 1.0);
+    }
+
+    #[tokio::test]
+    async fn example_test() {
+                let a = r#"#include"stdio.h"
+int main()
+{
+int M,N;
+scanf("%d",&M);
+scanf("%d",&N);
+if (M%N==0)
+printf("YES\n");
+else
+printf("NO\n");
+return 0;
+}
+"#;
+
+        let b = r#"#include<stdio.h>
+int main()
+{int a,b;
+scanf("%d",&a);
+scanf("%d",&b);
+if (a%b==0)
+printf("YES");
+else
+printf("NO");
+
+
+
+
+}
+"#;
+
+        let store = PhonyProvider {
+            store: vec![AssociatedStruct {
+                owner: &1234,
+                source: "a.c",
+                inner: a.to_string(),
+            }, AssociatedStruct {
+                owner: &5678,
+                source: "b.c",
+                inner: b.to_string(),
+            }]
+        };
+
+        let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
+        assert_eq!(res[(0, 0)], 1.0);
+        assert_eq!(res[(0, 1)], 0.0);
+        assert_eq!(res[(1, 1)], 1.0);
+        assert_ne!(res[(1, 0)], 1.0);
+        assert_ne!(res[(1, 0)], 0.0);
+    }
 }
