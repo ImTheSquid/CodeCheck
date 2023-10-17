@@ -480,4 +480,57 @@ printf("NO");
         assert_ne!(res[(1, 0)], 1.0);
         assert_ne!(res[(1, 0)], 0.0);
     }
+
+        #[tokio::test]
+    async fn slight_difference_test() {
+                let a = r#"#include"stdio.h"
+int main()
+{
+int M = 0;
+int N = 4;
+scanf("%d",&M);
+scanf("%d",&N);
+if (M%N!=0)
+printf("YES\n");
+else
+printf("NO\n");
+return 3;
+}
+"#;
+
+        let b = r#"#include<stdio.h>
+int main()
+{int a,b;
+scanf("%d",&a);
+scanf("%d",&b);
+if (a%b==0)
+printf("YES");
+else
+printf("NO");
+
+
+
+
+}
+"#;
+
+        let store = PhonyProvider {
+            store: vec![AssociatedStruct {
+                owner: &1234,
+                source: "a.c",
+                inner: a.to_string(),
+            }, AssociatedStruct {
+                owner: &5678,
+                source: "b.c",
+                inner: b.to_string(),
+            }]
+        };
+
+        let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
+        assert_eq!(res[(0, 0)], 1.0);
+        assert_eq!(res[(0, 1)], 0.0);
+        assert_eq!(res[(1, 1)], 1.0);
+        assert_ne!(res[(1, 0)], 1.0);
+        assert_ne!(res[(1, 0)], 0.0);
+    }
 }
