@@ -35,7 +35,7 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
     type Return = VisitorReturn<()>;
 
     fn temp_result(&mut self) -> &mut Self::Return {
-        Box::leak(Box::default())
+        &mut self.tmp
     }
 
     fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
@@ -135,13 +135,64 @@ main(int argc, char **argv) {
 }
 "#);
 
-    test_parse!(simple_macro_expanded, CppTree, r#"# 1 "test.c"
+    test_parse!(simple_macro_expanded, CppTree, r#"# 1 "test.cc"
 # 1 "<built-in>" 1
 # 1 "<built-in>" 3
-# 418 "<built-in>" 3
+# 433 "<built-in>" 3
 # 1 "<command line>" 1
 # 1 "<built-in>" 2
-# 1 "test.c" 2
+# 1 "test.cc" 2
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio" 1 3
+# 98 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio" 3
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert" 1 3
+# 13 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert" 3
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 1 3
+# 13 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 3
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config_site" 1 3
+# 39 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config_site" 3
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmacro-redefined"
+
+
+
+
+
+
+#pragma clang diagnostic pop
+# 14 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 2 3
+# 23 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 3
+# 481 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 3
+typedef __char16_t char16_t;
+typedef __char32_t char32_t;
+# 717 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__config" 3
+namespace std { inline namespace __1 { }}
+# 14 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert" 2 3
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__verbose_abort" 1 3
+# 13 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__verbose_abort" 3
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__availability" 1 3
+# 17 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__availability" 3
+# 14 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__verbose_abort" 2 3
+# 18 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__verbose_abort" 3
+
+
+namespace std { inline namespace __1 {
+
+
+
+__attribute__((__noreturn__)) __attribute__((__visibility__("default"))) __attribute__((__format__(__printf__, 1, 2)))
+void __libcpp_verbose_abort(const char *__format, ...);
+# 55 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__verbose_abort" 3
+}}
+# 15 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert" 2 3
+# 18 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert" 3
+# 99 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio" 2 3
+
+
+# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/stdio.h" 1 3
+# 105 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/stdio.h" 3
+
+
+
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 1 3 4
 # 64 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_stdio.h" 1 3 4
@@ -424,13 +475,19 @@ typedef __darwin_size_t size_t;
 # 78 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_stdio.h" 2 3 4
 
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stdio.h" 1 3 4
-# 47 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stdio.h" 3 4
+# 45 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stdio.h" 3 4
+extern "C" {
+
 int renameat(int, const char *, int, const char *) __attribute__((availability(macosx,introduced=10.10)));
 
 
 
 int renamex_np(const char *, const char *, unsigned int) __attribute__((availability(macosx,introduced=10.12))) __attribute__((availability(ios,introduced=10.0))) __attribute__((availability(tvos,introduced=10.0))) __attribute__((availability(watchos,introduced=3.0)));
 int renameatx_np(int, const char *, int, const char *, unsigned int) __attribute__((availability(macosx,introduced=10.12))) __attribute__((availability(ios,introduced=10.0))) __attribute__((availability(tvos,introduced=10.0))) __attribute__((availability(watchos,introduced=3.0)));
+
+
+
+}
 # 80 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_stdio.h" 2 3 4
 
 typedef __darwin_off_t fpos_t;
@@ -480,35 +537,37 @@ typedef struct __sFILE {
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_seek_set.h" 1 3 4
 # 67 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 2 3 4
 
-
+extern "C" {
 extern FILE *__stdinp;
 extern FILE *__stdoutp;
 extern FILE *__stderrp;
-# 134 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+}
+# 133 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+extern "C" {
 void clearerr(FILE *);
 int fclose(FILE *);
 int feof(FILE *);
 int ferror(FILE *);
 int fflush(FILE *);
 int fgetc(FILE *);
-int fgetpos(FILE * restrict, fpos_t *);
-char *fgets(char * restrict, int, FILE *);
+int fgetpos(FILE * , fpos_t *);
+char *fgets(char * , int, FILE *);
 
 
 
-FILE *fopen(const char * restrict __filename, const char * restrict __mode) __asm("_" "fopen" );
+FILE *fopen(const char * __filename, const char * __mode) __asm("_" "fopen" );
 
-int fprintf(FILE * restrict, const char * restrict, ...) __attribute__((__format__ (__printf__, 2, 3)));
+int fprintf(FILE * , const char * , ...) __attribute__((__format__ (__printf__, 2, 3)));
 int fputc(int, FILE *);
-int fputs(const char * restrict, FILE * restrict) __asm("_" "fputs" );
-size_t fread(void * restrict __ptr, size_t __size, size_t __nitems, FILE * restrict __stream);
-FILE *freopen(const char * restrict, const char * restrict,
-                 FILE * restrict) __asm("_" "freopen" );
-int fscanf(FILE * restrict, const char * restrict, ...) __attribute__((__format__ (__scanf__, 2, 3)));
+int fputs(const char * , FILE * ) __asm("_" "fputs" );
+size_t fread(void * __ptr, size_t __size, size_t __nitems, FILE * __stream);
+FILE *freopen(const char * , const char * ,
+                 FILE * ) __asm("_" "freopen" );
+int fscanf(FILE * , const char * , ...) __attribute__((__format__ (__scanf__, 2, 3)));
 int fseek(FILE *, long, int);
 int fsetpos(FILE *, const fpos_t *);
 long ftell(FILE *);
-size_t fwrite(const void * restrict __ptr, size_t __size, size_t __nitems, FILE * restrict __stream) __asm("_" "fwrite" );
+size_t fwrite(const void * __ptr, size_t __size, size_t __nitems, FILE * __stream) __asm("_" "fwrite" );
 int getc(FILE *);
 int getchar(void);
 
@@ -518,24 +577,24 @@ __attribute__((__deprecated__("This function is provided for compatibility reaso
 char *gets(char *);
 
 void perror(const char *) __attribute__((__cold__));
-int printf(const char * restrict, ...) __attribute__((__format__ (__printf__, 1, 2)));
+int printf(const char * , ...) __attribute__((__format__ (__printf__, 1, 2)));
 int putc(int, FILE *);
 int putchar(int);
 int puts(const char *);
 int remove(const char *);
 int rename (const char *__old, const char *__new);
 void rewind(FILE *);
-int scanf(const char * restrict, ...) __attribute__((__format__ (__scanf__, 1, 2)));
-void setbuf(FILE * restrict, char * restrict);
-int setvbuf(FILE * restrict, char * restrict, int, size_t);
+int scanf(const char * , ...) __attribute__((__format__ (__scanf__, 1, 2)));
+void setbuf(FILE * , char * );
+int setvbuf(FILE * , char * , int, size_t);
 
 __attribute__((__availability__(swift, unavailable, message="Use snprintf instead.")))
 
 __attribute__((__deprecated__("This function is provided for compatibility reasons only.  Due to security concerns inherent in the design of sprintf(3), it is highly recommended that you use snprintf(3) instead.")))
 
-int sprintf(char * restrict, const char * restrict, ...) __attribute__((__format__ (__printf__, 2, 3)));
+int sprintf(char * , const char * , ...) __attribute__((__format__ (__printf__, 2, 3)));
 
-int sscanf(const char * restrict, const char * restrict, ...) __attribute__((__format__ (__scanf__, 2, 3)));
+int sscanf(const char * , const char * , ...) __attribute__((__format__ (__scanf__, 2, 3)));
 FILE *tmpfile(void);
 
 __attribute__((__availability__(swift, unavailable, message="Use mkstemp(3) instead.")))
@@ -545,21 +604,26 @@ __attribute__((__deprecated__("This function is provided for compatibility reaso
 char *tmpnam(char *);
 
 int ungetc(int, FILE *);
-int vfprintf(FILE * restrict, const char * restrict, va_list) __attribute__((__format__ (__printf__, 2, 0)));
-int vprintf(const char * restrict, va_list) __attribute__((__format__ (__printf__, 1, 0)));
+int vfprintf(FILE * , const char * , va_list) __attribute__((__format__ (__printf__, 2, 0)));
+int vprintf(const char * , va_list) __attribute__((__format__ (__printf__, 1, 0)));
 
 __attribute__((__availability__(swift, unavailable, message="Use vsnprintf instead.")))
 
 __attribute__((__deprecated__("This function is provided for compatibility reasons only.  Due to security concerns inherent in the design of sprintf(3), it is highly recommended that you use vsnprintf(3) instead.")))
 
-int vsprintf(char * restrict, const char * restrict, va_list) __attribute__((__format__ (__printf__, 2, 0)));
+int vsprintf(char * , const char * , va_list) __attribute__((__format__ (__printf__, 2, 0)));
+}
 # 213 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_ctermid.h" 1 3 4
-# 31 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_ctermid.h" 3 4
+# 29 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/_ctermid.h" 3 4
+extern "C" {
+
 char *ctermid(char *);
+
+}
 # 214 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 2 3 4
 
-
+extern "C" {
 
 
 
@@ -567,24 +631,37 @@ char *ctermid(char *);
 FILE *fdopen(int, const char *) __asm("_" "fdopen" );
 
 int fileno(FILE *);
-# 233 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+}
+# 232 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+extern "C" {
 int pclose(FILE *) __attribute__((__availability__(swift, unavailable, message="Use posix_spawn APIs or NSTask instead. (On iOS, process spawning is unavailable.)")));
 
 
 
 FILE *popen(const char *, const char *) __asm("_" "popen" ) __attribute__((__availability__(swift, unavailable, message="Use posix_spawn APIs or NSTask instead. (On iOS, process spawning is unavailable.)")));
-# 252 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+
+}
+# 251 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+extern "C" {
 int __srget(FILE *);
 int __svfscanf(FILE *, const char *, va_list) __attribute__((__format__ (__scanf__, 2, 0)));
 int __swbuf(int, FILE *);
-# 263 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+}
+
+
+
+
+
+
+
 inline __attribute__ ((__always_inline__)) int __sputc(int _c, FILE *_p) {
  if (--_p->_w >= 0 || (_p->_w >= _p->_lbfsize && (char)_c != '\n'))
   return (*_p->_p++ = _c);
  else
   return (__swbuf(_c, _p));
 }
-# 289 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+# 288 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+extern "C" {
 void flockfile(FILE *);
 int ftrylockfile(FILE *);
 void funlockfile(FILE *);
@@ -604,50 +681,60 @@ __attribute__((__availability__(swift, unavailable, message="Use mkstemp(3) inst
 __attribute__((__deprecated__("This function is provided for compatibility reasons only.  Due to security concerns inherent in the design of tempnam(3), it is highly recommended that you use mkstemp(3) instead.")))
 
 char *tempnam(const char *__dir, const char *__prefix) __asm("_" "tempnam" );
+}
 # 327 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_off_t.h" 1 3 4
 # 31 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_off_t.h" 3 4
 typedef __darwin_off_t off_t;
 # 328 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 2 3 4
 
-
+extern "C" {
 int fseeko(FILE * __stream, off_t __offset, int __whence);
 off_t ftello(FILE * __stream);
+}
 
 
 
-
-
-int snprintf(char * restrict __str, size_t __size, const char * restrict __format, ...) __attribute__((__format__ (__printf__, 3, 4)));
-int vfscanf(FILE * restrict __stream, const char * restrict __format, va_list) __attribute__((__format__ (__scanf__, 2, 0)));
-int vscanf(const char * restrict __format, va_list) __attribute__((__format__ (__scanf__, 1, 0)));
-int vsnprintf(char * restrict __str, size_t __size, const char * restrict __format, va_list) __attribute__((__format__ (__printf__, 3, 0)));
-int vsscanf(const char * restrict __str, const char * restrict __format, va_list) __attribute__((__format__ (__scanf__, 2, 0)));
+extern "C" {
+int snprintf(char * __str, size_t __size, const char * __format, ...) __attribute__((__format__ (__printf__, 3, 4)));
+int vfscanf(FILE * __stream, const char * __format, va_list) __attribute__((__format__ (__scanf__, 2, 0)));
+int vscanf(const char * __format, va_list) __attribute__((__format__ (__scanf__, 1, 0)));
+int vsnprintf(char * __str, size_t __size, const char * __format, va_list) __attribute__((__format__ (__printf__, 3, 0)));
+int vsscanf(const char * __str, const char * __format, va_list) __attribute__((__format__ (__scanf__, 2, 0)));
+}
 # 352 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
 # 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_ssize_t.h" 1 3 4
 # 31 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/_types/_ssize_t.h" 3 4
 typedef __darwin_ssize_t ssize_t;
 # 353 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 2 3 4
 
-
-int dprintf(int, const char * restrict, ...) __attribute__((__format__ (__printf__, 2, 3))) __attribute__((availability(macosx,introduced=10.7)));
-int vdprintf(int, const char * restrict, va_list) __attribute__((__format__ (__printf__, 2, 0))) __attribute__((availability(macosx,introduced=10.7)));
-ssize_t getdelim(char ** restrict __linep, size_t * restrict __linecapp, int __delimiter, FILE * restrict __stream) __attribute__((availability(macosx,introduced=10.7)));
-ssize_t getline(char ** restrict __linep, size_t * restrict __linecapp, FILE * restrict __stream) __attribute__((availability(macosx,introduced=10.7)));
-FILE *fmemopen(void * restrict __buf, size_t __size, const char * restrict __mode) __attribute__((availability(macos,introduced=10.13))) __attribute__((availability(ios,introduced=11.0))) __attribute__((availability(tvos,introduced=11.0))) __attribute__((availability(watchos,introduced=4.0)));
+extern "C" {
+int dprintf(int, const char * , ...) __attribute__((__format__ (__printf__, 2, 3))) __attribute__((availability(macosx,introduced=10.7)));
+int vdprintf(int, const char * , va_list) __attribute__((__format__ (__printf__, 2, 0))) __attribute__((availability(macosx,introduced=10.7)));
+ssize_t getdelim(char ** __linep, size_t * __linecapp, int __delimiter, FILE * __stream) __attribute__((availability(macosx,introduced=10.7)));
+ssize_t getline(char ** __linep, size_t * __linecapp, FILE * __stream) __attribute__((availability(macosx,introduced=10.7)));
+FILE *fmemopen(void * __buf, size_t __size, const char * __mode) __attribute__((availability(macos,introduced=10.13))) __attribute__((availability(ios,introduced=11.0))) __attribute__((availability(tvos,introduced=11.0))) __attribute__((availability(watchos,introduced=4.0)));
 FILE *open_memstream(char **__bufp, size_t *__sizep) __attribute__((availability(macos,introduced=10.13))) __attribute__((availability(ios,introduced=11.0))) __attribute__((availability(tvos,introduced=11.0))) __attribute__((availability(watchos,introduced=4.0)));
-# 370 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
+}
+
+
+
+
+
+
+
+extern "C" {
 extern const int sys_nerr;
 extern const char *const sys_errlist[];
 
-int asprintf(char ** restrict, const char * restrict, ...) __attribute__((__format__ (__printf__, 2, 3)));
+int asprintf(char ** , const char * , ...) __attribute__((__format__ (__printf__, 2, 3)));
 char *ctermid_r(char *);
 char *fgetln(FILE *, size_t *);
 const char *fmtcheck(const char *, const char *) __attribute__((format_arg(2)));
 int fpurge(FILE *);
 void setbuffer(FILE *, char *, int);
 int setlinebuf(FILE *);
-int vasprintf(char ** restrict, const char * restrict, va_list) __attribute__((__format__ (__printf__, 2, 0)));
+int vasprintf(char ** , const char * , va_list) __attribute__((__format__ (__printf__, 2, 0)));
 
 
 
@@ -658,37 +745,78 @@ FILE *funopen(const void *,
                  int (* _Nullable)(void *, const char *, int),
                  fpos_t (* _Nullable)(void *, fpos_t, int),
                  int (* _Nullable)(void *));
-# 409 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 3 4
-# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_stdio.h" 1 3 4
-# 31 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_stdio.h" 3 4
-# 1 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_common.h" 1 3 4
-# 32 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_stdio.h" 2 3 4
-# 42 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_stdio.h" 3 4
-extern int __sprintf_chk (char * restrict, int, size_t,
-     const char * restrict, ...);
-# 52 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/secure/_stdio.h" 3 4
-extern int __snprintf_chk (char * restrict, size_t, int, size_t,
-      const char * restrict, ...);
+}
+# 109 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/stdio.h" 2 3
+# 102 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio" 2 3
+# 113 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio" 3
 
 
+namespace std { inline namespace __1 {
 
+using ::FILE __attribute__((__using_if_exists__));
+using ::fpos_t __attribute__((__using_if_exists__));
+using ::size_t __attribute__((__using_if_exists__));
 
+using ::fclose __attribute__((__using_if_exists__));
+using ::fflush __attribute__((__using_if_exists__));
+using ::setbuf __attribute__((__using_if_exists__));
+using ::setvbuf __attribute__((__using_if_exists__));
+using ::fprintf __attribute__((__using_if_exists__));
+using ::fscanf __attribute__((__using_if_exists__));
+using ::snprintf __attribute__((__using_if_exists__));
+using ::sprintf __attribute__((__using_if_exists__));
+using ::sscanf __attribute__((__using_if_exists__));
+using ::vfprintf __attribute__((__using_if_exists__));
+using ::vfscanf __attribute__((__using_if_exists__));
+using ::vsscanf __attribute__((__using_if_exists__));
+using ::vsnprintf __attribute__((__using_if_exists__));
+using ::vsprintf __attribute__((__using_if_exists__));
+using ::fgetc __attribute__((__using_if_exists__));
+using ::fgets __attribute__((__using_if_exists__));
+using ::fputc __attribute__((__using_if_exists__));
+using ::fputs __attribute__((__using_if_exists__));
+using ::getc __attribute__((__using_if_exists__));
+using ::putc __attribute__((__using_if_exists__));
+using ::ungetc __attribute__((__using_if_exists__));
+using ::fread __attribute__((__using_if_exists__));
+using ::fwrite __attribute__((__using_if_exists__));
 
+using ::fgetpos __attribute__((__using_if_exists__));
 
+using ::fseek __attribute__((__using_if_exists__));
 
-extern int __vsprintf_chk (char * restrict, int, size_t,
-      const char * restrict, va_list);
+using ::fsetpos __attribute__((__using_if_exists__));
 
+using ::ftell __attribute__((__using_if_exists__));
+using ::rewind __attribute__((__using_if_exists__));
+using ::clearerr __attribute__((__using_if_exists__));
+using ::feof __attribute__((__using_if_exists__));
+using ::ferror __attribute__((__using_if_exists__));
+using ::perror __attribute__((__using_if_exists__));
 
+using ::fopen __attribute__((__using_if_exists__));
+using ::freopen __attribute__((__using_if_exists__));
 
+using ::remove __attribute__((__using_if_exists__));
 
+using ::rename __attribute__((__using_if_exists__));
+using ::tmpfile __attribute__((__using_if_exists__));
+using ::tmpnam __attribute__((__using_if_exists__));
 
+using ::getchar __attribute__((__using_if_exists__));
 
+using ::gets __attribute__((__using_if_exists__));
 
-extern int __vsnprintf_chk (char * restrict, size_t, int, size_t,
-       const char * restrict, va_list);
-# 410 "/Applications/Xcode-13.4.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/stdio.h" 2 3 4
-# 2 "test.c" 2
+using ::scanf __attribute__((__using_if_exists__));
+using ::vscanf __attribute__((__using_if_exists__));
+
+using ::printf __attribute__((__using_if_exists__));
+using ::putchar __attribute__((__using_if_exists__));
+using ::puts __attribute__((__using_if_exists__));
+using ::vprintf __attribute__((__using_if_exists__));
+
+}}
+# 2 "test.cc" 2
 
 int
 main(int argc, char **argv) {
@@ -696,5 +824,6 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
+
 "#);
 }
