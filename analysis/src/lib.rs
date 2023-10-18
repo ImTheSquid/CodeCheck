@@ -224,10 +224,11 @@ impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone +
         for i in 0..=comp.trees.len() - 1 {
             for j in i + 1..comp.trees.len() {
                 mat[(i, j)] = comp.k_prime(&comp.trees[i], &comp.trees[j]).await;
+                mat[(j, i)] = mat[(i, j)];
             }
         }
 
-        mat.lower_triangle()
+        mat
     }
 
     async fn ns(&self, subtree: &AssociatedStruct<'a, Ident, Node<'a, TreeItem>>) -> usize {
@@ -351,7 +352,11 @@ impl<'a, Ident: Hash + Sync + Clone, TreeItem: PartialEq + Sync + Send + Clone +
 
     /// Cosine similarity
     async fn k_prime(&self, a: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>, b: &'a AssociatedStruct<'a, Ident, Tree<TreeItem>>) -> f64 {
-        self.k(a, b).await / (self.k(a, a).await * self.k(b, b).await).sqrt()
+        let numerator = self.k(a, b).await;
+        let denom_a = self.k(a, a).await;
+        let denom_b = self.k(b, b).await;
+
+        numerator / (denom_a * denom_b).sqrt()
     }
 }
 
@@ -378,8 +383,8 @@ macro_rules! test_parse {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use nalgebra::{DMatrix, Dyn, VecStorage};
-    use crate::{AssociatedFileProvider, AssociatedStruct, detect_plagiarism_in_sources, Language, TreeCompare};
+    use nalgebra::matrix;
+    use crate::{AssociatedFileProvider, AssociatedStruct, detect_plagiarism_in_sources, Language};
 
     struct PhonyProvider<'a> {
         store: Vec<AssociatedStruct<'a, usize, String>>,
@@ -423,10 +428,10 @@ return 0;
         };
 
         let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
-        assert_eq!(res[(0, 0)], 1.0);
-        assert_eq!(res[(0, 1)], 0.0);
-        assert_eq!(res[(1, 1)], 1.0);
-        assert_eq!(res[(1, 0)], 1.0);
+        assert_eq!(res, matrix![
+            1.0, 1.0;
+            1.0, 1.0;
+        ]);
     }
 
     #[tokio::test]
@@ -474,9 +479,8 @@ printf("NO");
         };
 
         let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
-        assert_eq!(res[(0, 0)], 1.0);
-        assert_eq!(res[(0, 1)], 0.0);
-        assert_eq!(res[(1, 1)], 1.0);
+        assert_ne!(res[(0, 1)], 1.0);
+        assert_ne!(res[(0, 1)], 0.0);
         assert_ne!(res[(1, 0)], 1.0);
         assert_ne!(res[(1, 0)], 0.0);
     }
@@ -527,9 +531,8 @@ printf("NO");
         };
 
         let res = detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C)).await.unwrap();
-        assert_eq!(res[(0, 0)], 1.0);
-        assert_eq!(res[(0, 1)], 0.0);
-        assert_eq!(res[(1, 1)], 1.0);
+        assert_ne!(res[(0, 1)], 1.0);
+        assert_ne!(res[(0, 1)], 0.0);
         assert_ne!(res[(1, 0)], 1.0);
         assert_ne!(res[(1, 0)], 0.0);
     }
