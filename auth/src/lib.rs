@@ -1,14 +1,25 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use async_trait::async_trait;
+use anyhow::Result;
+use thiserror::Error;
+
+#[cfg(feature = "saml_auth")]
+pub mod saml;
+
+#[cfg(feature = "basic_auth")]
+pub mod basic;
+
+#[derive(Debug, Error)]
+pub enum AuthError {
+
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[async_trait]
+pub trait AuthProvider {
+    async fn logout(&self) -> Result<(), AuthError>;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+    fn register_endpoints(&self);
+}
+
+pub async fn validate_session() {
+    todo!()
 }

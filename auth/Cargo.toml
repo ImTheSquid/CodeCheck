@@ -4,5 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+saml_auth = ["samael/xmlsec"]
+basic_auth = []
 
 [dependencies]
+anyhow = "1.0.75"
+async-trait = "0.1.74"
+samael = { version = "0.0.13", features = ["xmlsec"] }
+thiserror = "1.0.49"
