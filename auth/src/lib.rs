@@ -1,3 +1,4 @@
+use actix_web::web;
 use async_trait::async_trait;
 use anyhow::Result;
 use thiserror::Error;
@@ -17,7 +18,7 @@ pub enum AuthError {
 pub trait AuthProvider {
     async fn logout(&self) -> Result<(), AuthError>;
 
-    fn register_endpoints(&self);
+    fn register_endpoints(&self, cfg: &mut web::ServiceConfig);
 }
 
 pub async fn validate_session() {

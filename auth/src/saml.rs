@@ -1,3 +1,4 @@
+use actix_web::web;
 use async_trait::async_trait;
 
 use crate::{AuthProvider, AuthError};
@@ -12,7 +13,7 @@ impl AuthProvider for SamlAuthProvider {
         todo!()
     }
 
-    fn register_endpoints(&self) {
+    fn register_endpoints(&self, cfg: &mut web::ServiceConfig) {
         todo!()
     }
 }
