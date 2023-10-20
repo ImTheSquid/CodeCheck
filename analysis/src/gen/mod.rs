@@ -5,7 +5,7 @@
 // Public modules, implemented for each language tree
 pub mod cpp14parservisitor;
 pub mod cvisitor;
-pub mod java20parservisitor;
+pub mod javaparservisitor;
 pub mod python3parservisitor;
 
 // Private modules, only for support
@@ -17,9 +17,9 @@ pub mod cpp14lexer;
 pub mod cpp14parser;
 mod cpp14parserlistener;
 
-mod java20lexer;
-mod java20parser;
-mod java20parserlistener;
+pub mod javalexer;
+pub mod javaparser;
+mod javaparserlistener;
 
 mod python3lexer;
 mod python3parser;
