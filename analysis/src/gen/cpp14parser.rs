@@ -1158,10 +1158,13 @@ where
         pred_index: isize,
         recog: &mut <Self as Deref>::Target,
     ) -> bool {
-        match pred_index {
-            9 => recog.IsPureSpecifierAllowed(localctx.unwrap()),
-            10 => recog.IsPureSpecifierAllowed(localctx.unwrap()),
-            _ => true,
+        match localctx {
+            Some(localctx) => match pred_index {
+                9 => recog.IsPureSpecifierAllowed(localctx),
+                10 => recog.IsPureSpecifierAllowed(localctx),
+                _ => true,
+            },
+            None => false,
         }
     }
 }
