@@ -826,4 +826,70 @@ main(int argc, char **argv) {
 }
 
 "#);
+
+// Calculates the factorial of a number (FROM PAPER)
+    test_parse!(factorial_level0, CppTree, 
+        r#"using namespace std
+        
+        int factorial(int num) {
+            int result = 1;
+            for(int i = 2; i <= num; i++){
+                result = result * i;
+            }
+            return result;
+        }
+
+        int main(){
+            int number = 0;
+            int value = 0;
+            cout << "Calculate the factorial of the number." << end1;
+            cout << "Enter a number: ";
+            cin >> number;
+            value = factorial(number);
+            cout << "The factorial of " << number << " is: " << value << end1;
+            system("PAUSE");
+        }
+    "#);
+
+    test_parse!(factorial_level5, CppTree,
+        r#"using namespace std;
+
+        int number = 0, value = 1, index = 2;
+
+        // Main function
+        int main(){
+            cout << "Calculate the factorial of the number.\n";
+            cout << "Enter a number: ";
+            cin >> number;
+            while(index <= number){
+                value *= index;
+                index++;
+            }
+            cout << "The factorial of " << number << " is: " << value << end1;
+            system("PAUSE");
+        }
+    "#);
+
+    test_parse!(factorial_level6, CppTree,
+        r#"using namespace std;
+
+        int number = 0;
+
+        // Function to calculate factorial
+        int factorial(int num){
+            if(num == 1)
+                return 1;
+            else
+                return num * factorial(num - 1);
+        }
+
+        // Main function
+        int main(){
+            cout << "Calculate the factorial of the number.\n";
+            cout << "Enter a number: ";
+            cin >> number;
+            cout << "The factorial of " << number << " is: " << factorial(number) << "\n";
+            system("PAUSE");
+        }
+    "#);
 }
