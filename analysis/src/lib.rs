@@ -421,7 +421,7 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     }
 
     fn subtrees<'a, 'b>(&self, tree: &AssociatedStruct<'b, Ident, Node<'a, TreeItem>>) -> Vec<AssociatedStruct<'b, Ident, Node<'a, TreeItem>>> {
-        tree.inner.walk().par_bridge().map(|n| AssociatedStruct {
+        tree.inner.walk().map(|n| AssociatedStruct {
             owner: tree.owner,
             source: tree.source,
             inner: n,
