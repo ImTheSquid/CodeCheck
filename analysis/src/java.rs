@@ -1,7 +1,7 @@
 use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
-use syntree::Tree;
+use syntree::{Tree, Empty};
 
 use crate::gen::javalexer::JavaLexer;
 use crate::gen::javaparser::*;
@@ -16,7 +16,7 @@ pub struct JavaTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<JavaTreeItem, usize, usize>,
+    pub symbol_tree: syntree::Builder<JavaTreeItem, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -38,12 +38,14 @@ impl ParseTreeVisitorCompat<'_> for JavaTree {
         &mut self.tmp
     }
 
-    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
-        if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
-            visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
-        }
+    fn visit_terminal(&mut self, _node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+        // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
+        //     visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
+        // }
 
-        visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
+        // visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
+
+        visitor_result!(self.symbol_tree.token_empty(JavaTreeItem::Terminal));
 
         VisitorReturn(Ok(()))
     }
@@ -57,7 +59,7 @@ auto_visitor!(javaparser, JavaTree, JavaTreeItem);
 
 impl SyntaxTree for JavaTree {
     type Item = JavaTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }

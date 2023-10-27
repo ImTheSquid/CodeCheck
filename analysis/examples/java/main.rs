@@ -1,10 +1,12 @@
 #![feature(async_closure)]
 
-use std::{env::args, fs, path::{Path, PathBuf}, io::Write};
+use std::{env::args, fs, path::{Path, PathBuf}, io::Write, time::Duration, thread::spawn};
 
 use analysis::{AssociatedFileProvider, AssociatedStruct, detect_plagiarism_in_sources, Language};
 use async_trait::async_trait;
 use futures::{stream::StreamExt, future::join_all};
+use std::sync::mpsc;
+use indicatif::{ProgressBar, ProgressStyle, HumanDuration};
 
 extern crate analysis;
 
@@ -23,7 +25,7 @@ impl AssociatedFileProvider for FileProvider {
     async fn read_files(&self) -> anyhow::Result<Vec<AssociatedStruct<Self::Ident, Self::S>>> {
         let iter = futures::stream::iter([&self.original]).chain(futures::stream::iter(self.plagiarized.iter())).chain(futures::stream::iter(self.non_plagiarized.iter()));
 
-        let res = iter.map(async move |p| AssociatedStruct { owner: 1234, source: p.to_str().unwrap().to_owned(), inner: tokio::fs::read_to_string(p).await.unwrap() }).collect::<Vec<_>>().await;
+        let res = iter.map(async move |p| AssociatedStruct { owner: &1234, source: p.to_str().unwrap(), inner: tokio::fs::read_to_string(p).await.unwrap() }).collect::<Vec<_>>().await;
         let res = join_all(res).await;
         Ok(res)
     }
@@ -67,16 +69,33 @@ async fn main() {
         f.write_all(b",").unwrap();
 
         let orig = vec![original_file];
-        let it = orig.iter().chain(plagiarized_files.iter()).chain(non_plagiarized_files.iter());
+        let it = orig.iter().chain(plagiarized_files.iter()).chain(non_plagiarized_files.iter()).collect::<Vec<_>>();
+
+        let num_comps = {
+            let num_trees = it.len();
+            num_trees * (num_trees - 1) / 2
+        };
         
-        for path in it.clone() {
+        for path in &it {
             f.write_all(format!("{}, ", path.to_string_lossy()).as_bytes()).unwrap();
         }
 
         f.write_all(b"\n").unwrap();
 
-        let mat = detect_plagiarism_in_sources(&provider, Some(Language::Java)).await.unwrap();
-        for (row, file) in mat.row_iter().zip(it) {
+        println!("Starting dataset {}", case.file_name().to_string_lossy());
+        let (tx, rx) = mpsc::channel();
+        let jh = spawn(move || {
+            let pb = ProgressBar::new(num_comps as u64).with_style(ProgressStyle::with_template("[{elapsed_precise}] {spinner} Executing comparisons... {wide_bar} {pos:>7}/{len:7} ({percent}%)").unwrap());
+            pb.enable_steady_tick(Duration::from_millis(100));
+            while let Ok(()) = rx.recv() {
+                pb.inc(1);
+            }
+            pb.finish();
+            println!("✅ Comparisons finished in {}", HumanDuration(pb.elapsed()));
+        });
+
+        let mat = detect_plagiarism_in_sources(&provider, Some(Language::Java), Some(tx)).await.unwrap();
+        for (row, file) in mat.row_iter().zip(&it) {
             f.write_all(format!("{}, ", file.to_string_lossy()).as_bytes()).unwrap();
 
             for item in &row {
@@ -85,6 +104,8 @@ async fn main() {
 
             f.write_all(b"\n").unwrap();
         }
+
+        jh.join().unwrap();
     }
 }
 

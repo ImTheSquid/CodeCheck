@@ -1,7 +1,7 @@
 use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
-use syntree::Tree;
+use syntree::{Tree, Empty};
 
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
@@ -16,7 +16,7 @@ pub struct CTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<CTreeItem, usize, usize>,
+    pub symbol_tree: syntree::Builder<CTreeItem, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -38,12 +38,14 @@ impl ParseTreeVisitorCompat<'_> for CTree {
         &mut self.tmp
     }
 
-    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
-        if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
-            visitor_result!(self.symbol_tree.token(CTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
-        }
+    fn visit_terminal(&mut self, _node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+        // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
+        //     visitor_result!(self.symbol_tree.token(CTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
+        // }
 
-        visitor_result!(self.symbol_tree.token(CTreeItem::Terminal, node.symbol.text.len()));
+        // visitor_result!(self.symbol_tree.token(CTreeItem::Terminal, node.symbol.text.len()));
+
+        visitor_result!(self.symbol_tree.token_empty(CTreeItem::Terminal));
 
         VisitorReturn(Ok(()))
     }
@@ -57,7 +59,7 @@ auto_visitor!(c, CTree, CTreeItem);
 
 impl SyntaxTree for CTree {
     type Item = CTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }

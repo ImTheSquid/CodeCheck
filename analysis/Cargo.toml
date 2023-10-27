@@ -18,3 +18,7 @@ tokio = { version = "1.33.0", features = ["full"] }
 futures = "0.3.28"
 async-recursion = "1.0.5"
 async-trait = "0.1.73"
+rayon = "1.8.0"
+
+[dev-dependencies]
+indicatif = { version = "0.17.7", features = ["improved_unicode"] }
