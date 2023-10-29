@@ -1,39 +1,15 @@
 #![feature(async_closure)]
 
-use std::{env::args, fs, path::{Path, PathBuf}, io::Write, time::Duration, thread::spawn};
+use std::{env::args, fs, path::{Path, PathBuf}, io::Write, time::Duration, thread::spawn, borrow::Cow};
 
-use analysis::{AssociatedFileProvider, AssociatedStruct, detect_plagiarism_in_sources, Language};
-use async_trait::async_trait;
-use futures::{stream::StreamExt, future::join_all};
+use analysis::{AssociatedStruct, detect_plagiarism_in_sources, Language};
 use std::sync::mpsc;
 use indicatif::{ProgressBar, ProgressStyle, HumanDuration};
 
 extern crate analysis;
 
-struct FileProvider {
-    original: PathBuf,
-    plagiarized: Vec<PathBuf>,
-    non_plagiarized: Vec<PathBuf>,
-}
-
-#[async_trait]
-impl AssociatedFileProvider for FileProvider {
-    type Ident = usize;
-
-    type S = String;
-
-    async fn read_files(&self) -> anyhow::Result<Vec<AssociatedStruct<Self::Ident, Self::S>>> {
-        let iter = futures::stream::iter([&self.original]).chain(futures::stream::iter(self.plagiarized.iter())).chain(futures::stream::iter(self.non_plagiarized.iter()));
-
-        let res = iter.map(async move |p| AssociatedStruct { owner: &1234, source: p.to_str().unwrap(), inner: tokio::fs::read_to_string(p).await.unwrap() }).collect::<Vec<_>>().await;
-        let res = join_all(res).await;
-        Ok(res)
-    }
-}
-
 // Examples from https://infedu.vu.lt/journal/INFEDU/article/16/info (https://github.com/oscarkarnalim/sourcecodeplagiarismdataset)
-#[tokio::main]
-async fn main() {
+fn main() {
     let mut args = args().skip(1);
     if args.len() != 2 {
         panic!("Inavlid usage! Usage: <exec> <dataset root path> <output parent path>");
@@ -58,12 +34,6 @@ async fn main() {
 
         let original_file = get_single_file_from_dir(case.path().join("original"));
 
-        let provider = FileProvider {
-            original: original_file.clone(),
-            plagiarized: plagiarized_files.clone(),
-            non_plagiarized: non_plagiarized_files.clone(),
-        };
-
         let mut f = fs::File::create(output.join(format!("{}.csv", case.file_name().to_string_lossy()))).unwrap();
 
         f.write_all(b",").unwrap();
@@ -80,6 +50,12 @@ async fn main() {
             f.write_all(format!("{}, ", path.to_string_lossy()).as_bytes()).unwrap();
         }
 
+        let sources = it.iter().map(|p| AssociatedStruct {
+            owner: &1234,
+            source: Cow::Owned(p.as_os_str().to_string_lossy().as_ref().to_owned()),
+            inner: fs::read_to_string(p).unwrap(),
+        }).collect::<Vec<_>>();
+
         f.write_all(b"\n").unwrap();
 
         println!("Starting dataset {}", case.file_name().to_string_lossy());
@@ -94,7 +70,7 @@ async fn main() {
             println!("✅ Comparisons finished in {}", HumanDuration(pb.elapsed()));
         });
 
-        let mat = detect_plagiarism_in_sources(&provider, Some(Language::Java), Some(tx)).await.unwrap();
+        let mat = detect_plagiarism_in_sources(&sources, Some(Language::Java), Some(tx)).unwrap();
         for (row, file) in mat.row_iter().zip(&it) {
             f.write_all(format!("{}, ", file.to_string_lossy()).as_bytes()).unwrap();
 

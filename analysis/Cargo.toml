@@ -14,10 +14,6 @@ syntree = "0.14.5"
 thiserror = "1.0.48"
 macros = { path = "../macros" }
 nalgebra = "0.32.3"
-tokio = { version = "1.33.0", features = ["full"] }
-futures = "0.3.28"
-async-recursion = "1.0.5"
-async-trait = "0.1.73"
 rayon = "1.8.0"
 
 [dev-dependencies]
