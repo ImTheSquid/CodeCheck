@@ -1,3 +1,4 @@
+use bson::serde_helpers::chrono_datetime_as_bson_datetime;
 use goldleaf::CollectionIdentity;
 use mongodb::bson::oid::ObjectId;
 use serde::{Serialize, Deserialize};
@@ -14,9 +15,11 @@ pub type UserId = ObjectId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
-    token: String,
-    expiration: DateTime<Utc>,
-    last_use: DateTime<Utc>,
+    pub token: String,
+    #[serde(with = "chrono_datetime_as_bson_datetime")]
+    pub expiration: DateTime<Utc>,
+    #[serde(with = "chrono_datetime_as_bson_datetime")]
+    pub last_use: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
@@ -79,4 +82,6 @@ pub struct Submission {
     pub id: Option<SubmissionId>,
     pub assignment: AssignmentId,
     pub author: String,
+    #[serde(with = "chrono_datetime_as_bson_datetime")]
+    pub timestamp: DateTime<Utc>,
 }
