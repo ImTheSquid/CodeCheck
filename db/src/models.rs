@@ -69,7 +69,26 @@ pub struct Assignment {
     pub id: Option<AssignmentId>,
     pub name: String,
     pub course: CourseSectionId,
-    pub last_ast: Option<Vec<f64>>,
+    pub last_ast_path: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Span {
+    start: usize,
+    end: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AstCell {
+    similarity: f64,
+    span_a: Span,
+    span_b: Span,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AstRun {
+    matrix: Vec<AstCell>,
+    size: usize,
 }
 
 pub type SubmissionId = ObjectId;

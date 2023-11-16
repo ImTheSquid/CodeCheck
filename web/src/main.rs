@@ -13,9 +13,12 @@ async fn main() -> std::io::Result<()> {
     let routes = generate_route_list(App);
     println!("listening on http://{}", &addr);
 
+    let state = web::Data::new(::web::server::WebState::new().unwrap());
+
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
+        let state = state.clone();
 
         App::new()
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
@@ -27,6 +30,7 @@ async fn main() -> std::io::Result<()> {
             .service(favicon)
             .leptos_routes(leptos_options.to_owned(), routes.to_owned(), App)
             .app_data(web::Data::new(leptos_options.to_owned()))
+            .app_data(state)
         //.wrap(middleware::Compress::default())
     })
     .bind(&addr)?
