@@ -25,6 +25,9 @@ if #[cfg(feature = "hydrate")] {
 pub mod server {
     use std::sync::RwLock;
 
+    const CONFIG_DIRECTORY: &str = "/etc/codecheck";
+    const CONFIG_FILE_NAME: &str = "config.toml";
+
     #[derive(Debug)]
     pub struct WebState {
         pub config: RwLock<Config>,
@@ -41,8 +44,6 @@ pub mod server {
     use std::{path::Path, fs};
 
     use serde::{Serialize, Deserialize};
-
-    use crate::{CONFIG_DIRECTORY, CONFIG_FILE_NAME};
 
     #[derive(Debug, Deserialize, Serialize, Default)]
     pub struct Config {
@@ -70,6 +71,3 @@ pub mod server {
         }
     }
 }
-
-const CONFIG_DIRECTORY: &str = "/etc/codecheck";
-const CONFIG_FILE_NAME: &str = "config.toml";

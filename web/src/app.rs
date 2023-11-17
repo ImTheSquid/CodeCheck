@@ -15,7 +15,7 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/codecheck.css"/>
 
         // sets the document title
-        <Title text="Welcome to CodeCheck"/>
+        <Title text="CodeCheck"/>
 
         // content for this welcome page
         <Router>

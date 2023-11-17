@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::{*, html::Button};
 use leptos_meta::*;
 use leptos_router::*;
 
@@ -43,22 +43,57 @@ fn AuthSetup() -> impl IntoView {
     view! {
         <div>
             <h2>"Authentication Setup"</h2>
-            <AuthSetupInner/>
+            <AuthSetupInner on_complete=move |_| {}/>
         </div>
     }
 }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "basic_auth")] {
+        #[server(AuthenticationSetup)]
+        async fn setup_authentication(username: String, password: String) -> Result<Result<(), String>, ServerFnError> {
+            use leptos_actix::extract;
+            use actix_web::web::Data;
+            use crate::server::WebState;
+
+            extract(|data: Data<WebState>| async move {
+                todo!()
+            }).await
+        }
+
         #[component]
-        fn AuthSetupInner() -> impl IntoView {
+        fn AuthSetupInner(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
+            let setup_authentication = create_server_action::<AuthenticationSetup>();
+
+            let (username, set_username) = create_signal("".to_string());
+            let (password, set_password) = create_signal("".to_string());
+            let button = create_node_ref::<Button>();
+
+            create_effect(move |_| {
+                button.get().unwrap().set_disabled(username.with(|u| u.is_empty()) || password.with(|p| p.is_empty()));
+            });
+
             view! {
-                <p>"basic auth"</p>
+                <ActionForm action=setup_authentication class="vertical spaced_children">
+                    <label>
+                        "Enter Root Username"
+                        <input type="text" name="username" prop:value=username on:input=move |ev| {
+                            set_username(event_target_value(&ev));
+                        }/>
+                    </label>
+                    <label>
+                        "Enter Root Password"
+                        <input type="password" name="password" prop:value=password on:input=move |ev| {
+                            set_password(event_target_value(&ev));   
+                        }/>
+                    </label>
+                    <button type="submit" disabled node_ref=button>"Submit"</button>
+                </ActionForm>
             }
         }
     } else {
         #[component]
-        fn AuthSetupInner() -> impl IntoView {
+        fn AuthSetupInner(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
             view! {
                 <p style="color: red;">"ERROR! No authentication backend selected."</p>
             }
