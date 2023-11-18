@@ -22,6 +22,9 @@ auth = { path = "../auth", optional = true }
 db = { path = "../db", optional = true }
 toml = { version = "0.8.8", optional = true }
 anyhow = "1.0.75"
+mongodb = { version = "2.7.0", optional = true }
+goldleaf = { version = "0.1.4", optional = true }
+argon2 = "0.5.2"
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
@@ -32,12 +35,14 @@ ssr = [
   "dep:leptos_actix",
   "dep:auth",
   "dep:db",
+  "dep:mongodb",
   "dep:toml",
+  "dep:goldleaf",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
 ]
-basic_auth = ["auth?/basic_auth"]
+basic_auth = ["auth?/basic_auth", "db?/basic_auth"]
 
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]

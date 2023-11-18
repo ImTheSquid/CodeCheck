@@ -23,7 +23,8 @@ if #[cfg(feature = "hydrate")] {
 
 #[cfg(feature = "ssr")]
 pub mod server {
-    use std::sync::RwLock;
+    use std::{sync::RwLock, env};
+    use mongodb::Database;
 
     const CONFIG_DIRECTORY: &str = "/etc/codecheck";
     const CONFIG_FILE_NAME: &str = "config.toml";
@@ -31,12 +32,14 @@ pub mod server {
     #[derive(Debug)]
     pub struct WebState {
         pub config: RwLock<Config>,
+        pub database: Database,
     }
 
     impl WebState {
-        pub fn new() -> Result<Self, anyhow::Error> {
+        pub async fn new() -> Result<Self, anyhow::Error> {
             Ok(Self {
-                config: RwLock::new(Config::read()?)
+                config: RwLock::new(Config::read()?),
+                database: db::connect(&env::var("CODECHECK_MONGO_URI").expect("`CODECHECK_MONGO_URI` variable required!"), "codecheck").await?, 
             })
         }
     }

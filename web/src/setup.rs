@@ -5,13 +5,18 @@ use leptos_router::*;
 #[server(CheckSetupStatus)]
 async fn check_setup_status() -> Result<bool, ServerFnError> {
     use leptos_actix::extract;
-    use actix_web::dev::ConnectionInfo;
-    use actix_web::web::{Data, Query};
+    use actix_web::web::Data;
     use crate::server::WebState;
 
     extract(|data: Data<WebState>| async move {
         data.config.read().expect("Failed to get read lock for config!").setup_complete
     }).await
+}
+
+#[derive(Debug)]
+enum SetupStage {
+    Authentication,
+    Files,
 }
 
 #[component]
@@ -30,20 +35,37 @@ pub fn Setup() -> impl IntoView {
         }
     }
 
+    let (stage, set_stage) = create_signal(SetupStage::Authentication);
+
     view! {
         <div>
             <h1>"CodeCheck Setup"</h1>
-            <AuthSetup/>
+            {move || stage.with(|stage| match stage {
+                    SetupStage::Authentication => 
+                        view! { <AuthSetup on_complete=move |_| { set_stage(SetupStage::Files) }/> },
+                    SetupStage::Files =>
+                        view! { <FilesSetup/> },
+                })
+            }
         </div>
     }
 }
 
 #[component]
-fn AuthSetup() -> impl IntoView {
+fn FilesSetup() -> impl IntoView {
+    view! {
+        <div>
+            <h2>"Files Setup"</h2>
+        </div>
+    }
+}
+
+#[component]
+fn AuthSetup(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
     view! {
         <div>
             <h2>"Authentication Setup"</h2>
-            <AuthSetupInner on_complete=move |_| {}/>
+            <AuthSetupInner on_complete=on_complete/>
         </div>
     }
 }
@@ -51,19 +73,34 @@ fn AuthSetup() -> impl IntoView {
 cfg_if::cfg_if! {
     if #[cfg(feature = "basic_auth")] {
         #[server(AuthenticationSetup)]
-        async fn setup_authentication(username: String, password: String) -> Result<Result<(), String>, ServerFnError> {
+        async fn setup_authentication(username: String, password: String) -> Result<(), ServerFnError> {
             use leptos_actix::extract;
             use actix_web::web::Data;
             use crate::server::WebState;
+            use db::models::User;
+            use goldleaf::AutoCollection;
+            use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
 
             extract(|data: Data<WebState>| async move {
-                todo!()
-            }).await
+                let salt = SaltString::generate(&mut OsRng);
+                let password = Argon2::default().hash_password(password.as_bytes(), &salt).map_err(|e| ServerFnError::ServerError(e.to_string()))?.to_string();
+
+                data.database.auto_collection::<User>().insert_one(User {
+                    id: None,
+                    username,
+                    role: db::models::Role::Admin,
+                    password,
+                    salt: salt.to_string(),
+                    sessions: Vec::new(),
+                }, None).await?;
+
+                Ok(())
+            }).await?
         }
 
         #[component]
         fn AuthSetupInner(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
-            let setup_authentication = create_server_action::<AuthenticationSetup>();
+            let auth_action = create_server_action::<AuthenticationSetup>();
 
             let (username, set_username) = create_signal("".to_string());
             let (password, set_password) = create_signal("".to_string());
@@ -73,8 +110,18 @@ cfg_if::cfg_if! {
                 button.get().unwrap().set_disabled(username.with(|u| u.is_empty()) || password.with(|p| p.is_empty()));
             });
 
+            create_effect(move |_| {
+                if auth_action.value().with(|value| value.is_some()) {
+                    let val = auth_action.value().get().unwrap();
+                    match val {
+                        Ok(_) => on_complete(()),
+                        Err(e) => println!("Leptos: {}", e),
+                    }
+                }
+            });
+
             view! {
-                <ActionForm action=setup_authentication class="vertical spaced_children">
+                <ActionForm action=auth_action class="vertical spaced_children">
                     <label>
                         "Enter Root Username"
                         <input type="text" name="username" prop:value=username on:input=move |ev| {

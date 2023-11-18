@@ -13,7 +13,7 @@ async fn main() -> std::io::Result<()> {
     let routes = generate_route_list(App);
     println!("listening on http://{}", &addr);
 
-    let state = web::Data::new(::web::server::WebState::new().unwrap());
+    let state = web::Data::new(::web::server::WebState::new().await.unwrap());
 
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;

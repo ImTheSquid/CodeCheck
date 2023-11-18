@@ -1,16 +1,22 @@
+use anyhow::Result;
+use mongodb::{Database, Client, options::{ConnectionString, ClientOptions}};
+
+use crate::models::User;
+
 pub mod models;
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+pub async fn connect(uri: &str, name: &str) -> Result<Database> {
+    let config = ClientOptions::parse_connection_string(ConnectionString::parse(uri)?).await?;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    let client = Client::with_options(config)?;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+    let database = client.database(name);
+
+    // Not needed now, but maybe later
+    User::create_indices(&database).await?;
+    // Course::create_indices(&database).await?;
+    // Assignment::create_indices(&database).await?;
+    // Submission::create_indices(&database).await?;
+    
+    Ok(database)
 }

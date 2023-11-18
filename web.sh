@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-docker rm "$(docker stop "$(docker ps -a -q --filter ancestor=mongo:latest --format="{{.ID}}")")"
+# docker rm "$(docker stop "$(docker ps -a -q --filter ancestor=mongo:latest --format="{{.ID}}")")"
 
 cargo leptos build
 

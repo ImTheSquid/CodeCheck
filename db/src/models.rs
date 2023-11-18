@@ -28,6 +28,7 @@ pub struct User {
     #[db(native_id_field)]
     #[serde(rename="_id", skip_serializing_if="Option::is_none")]
     pub id: Option<UserId>,
+    #[db(indexing(index = 1, unique))]
     pub username: String,
     pub role: Role,
     #[cfg(feature = "basic_auth")]

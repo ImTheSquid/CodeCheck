@@ -87,7 +87,7 @@ RUN --mount=type=cache,target=/usr/src/codecheck/target \
 RUN mkdir /usr/src/codecheck/out
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/src/codecheck/target \
-    cargo leptos build --features ${AUTH_BACKEND} --release; mv /usr/src/codecheck/target/release/web /usr/src/codecheck/out/app; mv /usr/src/codecheck/target/site /usr/src/codecheck/out/
+    cargo leptos build --features ${AUTH_BACKEND} --release && mv /usr/src/codecheck/target/release/web /usr/src/codecheck/out/app && mv /usr/src/codecheck/target/site /usr/src/codecheck/out/
 
 FROM alpine AS webserver
 
@@ -95,7 +95,7 @@ ARG APP=/usr/src
 ENV RUST_BACKTRACE=1
 
 EXPOSE 8080
-EXPOSE 27017
+# EXPOSE 27017
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="site"
 #
