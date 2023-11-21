@@ -51,6 +51,7 @@ pub mod server {
     #[derive(Debug, Deserialize, Serialize, Default)]
     pub struct Config {
         pub setup_complete: bool,
+        pub vocareum_key: Option<String>,
     }
 
     impl Config {

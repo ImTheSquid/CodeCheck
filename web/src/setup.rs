@@ -13,6 +13,20 @@ async fn check_setup_status() -> Result<bool, ServerFnError> {
     }).await
 }
 
+#[server(CompleteSetup)]
+async fn complete_setup() -> Result<(), ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    
+    extract(|data: Data<WebState>| async move {
+        let mut write = data.config.write().expect("Failed to get write lock for config!");
+        write.setup_complete = true;
+        write.write().map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+        Ok(())
+    }).await?
+}
+
 #[derive(Debug)]
 enum SetupStage {
     Authentication,
@@ -25,35 +39,48 @@ pub fn Setup() -> impl IntoView {
         check_setup_status().await
     });
 
-    #[cfg(feature = "ssr")]
-    {
-        if setup_is_complete.with(|sic| sic.as_ref().is_some_and(|val| val.as_ref().is_ok_and(|r| *r))) {
-            // this can be done inline because it's synchronous
-            // if it were async, we'd use a server function
-            let resp = expect_context::<leptos_actix::ResponseOptions>();
-            resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
-        }
-    }
-
     let (stage, set_stage) = create_signal(SetupStage::Authentication);
 
     view! {
-        <div>
+        <Suspense fallback=move || view!{<p>"Verifying setup availability..."</p>}>
+        {move || if setup_is_complete.with(|sic| sic.as_ref().is_some_and(|val| val.as_ref().is_ok_and(|r| *r)))  {
+                view!{<div><p style="color: red;">"Setup has already been completed!"</p></div>}
+            } else {
+                view!{
+<div>
             <h1>"CodeCheck Setup"</h1>
             {move || stage.with(|stage| match stage {
                     SetupStage::Authentication => 
                         view! { <AuthSetup on_complete=move |_| { set_stage(SetupStage::Files) }/> },
                     SetupStage::Files =>
-                        view! { <FilesSetup on_complete=move |_| { use_navigate()("/login?next=%2Fadmin", Default::default()) }/> },
+                        view! { <FilesSetup on_complete=move |_| {
+                            create_resource(||(), |_| async move {
+                                complete_setup().await
+                            });
+                            use_navigate()("/login?next=%2Fadmin", Default::default()) 
+                        }/> },
                 })
             }
         </div>
+                }
+            }
+        }
+        </Suspense>
     }
 }
 
 #[server(FilesSetup)]
 async fn setup_files(vocareum_api_key: String) -> Result<(), ServerFnError> {
-    todo!()
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    
+    extract(|data: Data<WebState>| async move {
+        let mut write = data.config.write().expect("Failed to get write lock for config!");
+        write.vocareum_key = if vocareum_api_key.is_empty() { None } else { Some(vocareum_api_key) };
+        write.write().map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+        Ok(())
+    }).await?
 }
 
 #[component]
