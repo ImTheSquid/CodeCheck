@@ -25,6 +25,8 @@ anyhow = "1.0.75"
 mongodb = { version = "2.7.0", optional = true }
 goldleaf = { version = "0.1.4", optional = true }
 argon2 = "0.5.2"
+vocareum = { path = "../vocareum", optional = true }
+storage = { path = "../storage" }
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
@@ -38,6 +40,7 @@ ssr = [
   "dep:mongodb",
   "dep:toml",
   "dep:goldleaf",
+  "dep:vocareum",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",

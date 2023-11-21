@@ -12,3 +12,10 @@ body {
 .spaced_children > * {
 	margin: 0.1em;
 }
+
+span.code {
+  font-family: 'Courier New', monospace;
+  background-color: #f4f4f4;
+  padding: 2px 4px;
+  border-radius: 4px;
+}

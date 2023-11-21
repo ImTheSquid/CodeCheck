@@ -44,18 +44,40 @@ pub fn Setup() -> impl IntoView {
                     SetupStage::Authentication => 
                         view! { <AuthSetup on_complete=move |_| { set_stage(SetupStage::Files) }/> },
                     SetupStage::Files =>
-                        view! { <FilesSetup/> },
+                        view! { <FilesSetup on_complete=move |_| { use_navigate()("/login?next=%2Fadmin", Default::default()) }/> },
                 })
             }
         </div>
     }
 }
 
+#[server(FilesSetup)]
+async fn setup_files(vocareum_api_key: String) -> Result<(), ServerFnError> {
+    todo!()
+}
+
 #[component]
-fn FilesSetup() -> impl IntoView {
+fn FilesSetup(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
+    let setup_files_action = create_server_action::<FilesSetup>();
+
+    create_effect(move |_| {
+        if setup_files_action.value().with(|value| matches!(value, Some(Ok(())))) {
+            on_complete(());
+        }
+    });
+
     view! {
         <div>
             <h2>"Files Setup"</h2>
+            <p>"Files are stored at "<span class="code">{storage::MAIN_STORAGE_DIRECTORY}</span>". Connect an external volume to mount this directory in your real file system if necessary. CodeCheck will automatically create directories as needed in this directory " <strong>"WITHOUT CHECKING IF FILES ALREADY EXIST!"</strong>" Make sure the directory is clear!"</p>
+            <ActionForm action=setup_files_action class="vertical spaced_children">
+                <label>
+                    "Vocareum API key (optional)"
+                    <input type="text" name="vocareum_api_key"/>
+                </label>
+
+                <button type="submit">"Submit"</button>
+            </ActionForm>
         </div>
     }
 }
