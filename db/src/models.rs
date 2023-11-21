@@ -4,11 +4,33 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub enum Role {
     Admin,
     Instructor,
     Assistant,
+}
+
+impl PartialOrd for Role {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(match self {
+            Self::Admin => if *other == Self::Admin {
+                std::cmp::Ordering::Equal
+            } else {
+                std::cmp::Ordering::Greater
+            },
+            Self::Assistant => if *other == Self::Assistant {
+                std::cmp::Ordering::Equal
+            } else {
+                std::cmp::Ordering::Less
+            },
+            Self::Instructor => match *other {
+                Self::Admin => std::cmp::Ordering::Less,
+                Self::Assistant => std::cmp::Ordering::Greater,
+                Self::Instructor => std::cmp::Ordering::Equal,
+            }
+        })
+    }
 }
 
 pub type UserId = ObjectId;

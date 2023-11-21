@@ -1,6 +1,7 @@
 #![feature(fs_try_exists)]
 pub mod app;
 pub mod setup;
+pub mod login;
 
 use cfg_if::cfg_if;
 
