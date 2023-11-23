@@ -126,24 +126,9 @@ cfg_if::cfg_if! {
             use leptos_actix::extract;
             use actix_web::web::Data;
             use crate::server::WebState;
-            use db::models::User;
-            use goldleaf::AutoCollection;
-            use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
-
+            
             extract(|data: Data<WebState>| async move {
-                let salt = SaltString::generate(&mut OsRng);
-                let password = Argon2::default().hash_password(password.as_bytes(), &salt).map_err(|e| ServerFnError::ServerError(e.to_string()))?.to_string();
-
-                data.database.auto_collection::<User>().insert_one(User {
-                    id: None,
-                    username,
-                    role: db::models::Role::Admin,
-                    password,
-                    salt: salt.to_string(),
-                    sessions: Vec::new(),
-                }, None).await?;
-
-                Ok(())
+                auth::basic::enroll_root(&data.database, username, password).await.map_err(|e| ServerFnError::ServerError(e.to_string()))
             }).await?
         }
 

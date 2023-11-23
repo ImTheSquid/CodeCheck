@@ -3,43 +3,13 @@ use goldleaf::CollectionIdentity;
 use mongodb::bson::oid::ObjectId;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
-pub enum Role {
-    Admin,
-    Instructor,
-    Assistant,
-}
-
-impl PartialOrd for Role {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(match self {
-            Self::Admin => if *other == Self::Admin {
-                std::cmp::Ordering::Equal
-            } else {
-                std::cmp::Ordering::Greater
-            },
-            Self::Assistant => if *other == Self::Assistant {
-                std::cmp::Ordering::Equal
-            } else {
-                std::cmp::Ordering::Less
-            },
-            Self::Instructor => match *other {
-                Self::Admin => std::cmp::Ordering::Less,
-                Self::Assistant => std::cmp::Ordering::Greater,
-                Self::Instructor => std::cmp::Ordering::Equal,
-            }
-        })
-    }
-}
-
-pub type UserId = ObjectId;
+use crate::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
     pub token: String,
     #[serde(with = "chrono_datetime_as_bson_datetime")]
-    pub expiration: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
     #[serde(with = "chrono_datetime_as_bson_datetime")]
     pub last_use: DateTime<Utc>,
 }
@@ -55,8 +25,6 @@ pub struct User {
     pub role: Role,
     #[cfg(feature = "basic_auth")]
     pub password: String,
-    #[cfg(feature = "basic_auth")]
-    pub salt: String,
     pub sessions: Vec<Session>,
 }
 

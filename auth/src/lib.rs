@@ -1,18 +1,15 @@
-use actix_web::web;
-use async_trait::async_trait;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use thiserror::Error;
-use mongodb::{Database, bson::doc};
-use db::models::{UserId, User};
-use goldleaf::AutoCollection;
+use db::{UserId, Role};
 
 #[cfg(feature = "saml_auth")]
 pub mod saml;
 
-#[cfg(feature = "basic_auth")]
+#[cfg(all(feature = "basic_auth", feature = "server"))]
 pub mod basic;
 
+#[cfg(feature = "server")]
 #[derive(Debug, Error)]
 pub enum AuthError {
     #[error(transparent)]
@@ -21,14 +18,12 @@ pub enum AuthError {
     InvalidToken,
 }
 
-#[async_trait]
-pub trait AuthProvider {
-    async fn logout(&self) -> Result<(), AuthError>;
+#[cfg(feature = "server")]
+pub async fn validate_session(db: &mongodb::Database, token: &str) -> Result<UserId, AuthError> {
+    use mongodb::bson::doc;
+    use goldleaf::AutoCollection;
+    use db::models::User;
 
-    fn register_endpoints(&self, cfg: &mut web::ServiceConfig);
-}
-
-pub async fn validate_session(db: &Database, token: &str) -> Result<UserId, AuthError> {
     let mut user = db.auto_collection::<User>().find_one(doc! {
         "sessions.token": token,
         "sessions.expiration": Utc::now(),
@@ -37,4 +32,10 @@ pub async fn validate_session(db: &Database, token: &str) -> Result<UserId, Auth
     user.sessions.iter_mut().find(|s| s.token == token).unwrap().last_use = Utc::now();
 
     Ok(user.id.unwrap())
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct ValidatedUser {
+    pub id: UserId,
+    pub role: Role,
 }

@@ -6,13 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 basic_auth = []
+# Allows for separation between client and server features
+# Server features are always a superset of client features
+server = ["dep:mongodb", "db/server", "dep:goldleaf"]
 
 [dependencies]
-actix-web = "4.4.0"
 anyhow = "1.0.75"
 async-trait = "0.1.74"
-mongodb = { version = "2.7.0", features = ["bson-chrono-0_4"] }
+mongodb = { version = "2.7.0", features = ["bson-chrono-0_4"], optional = true }
 thiserror = "1.0.49"
 db = { path = "../db" }
-goldleaf = "0.1.4"
+goldleaf = { version = "0.1.4", optional = true }
 chrono = "0.4.31"
+argon2 = "0.5.2"
+rand = "0.8.5"
+serde = { version = "1.0.193", features = ["derive"] }
