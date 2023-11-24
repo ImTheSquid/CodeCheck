@@ -28,6 +28,7 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/assets", site_root))
             // serve the favicon from /favicon.ico
             .service(favicon)
+            .service(logout)
             .leptos_routes(leptos_options.to_owned(), routes.to_owned(), App)
             .app_data(web::Data::new(leptos_options.to_owned()))
             .app_data(state)
@@ -48,6 +49,33 @@ async fn favicon(
     Ok(actix_files::NamedFile::open(format!(
         "{site_root}/favicon.ico"
     ))?)
+}
+
+#[cfg(feature = "ssr")]
+#[actix_web::get("/logout")]
+async fn logout(
+    req: actix_web::HttpRequest,
+    data: actix_web::web::Data<web::server::WebState>
+) -> impl actix_web::Responder {
+    use actix_web::cookie::Cookie;
+    use actix_web::cookie::time::OffsetDateTime;
+    use actix_web::http::header::HeaderValue;
+    use actix_web::Responder;
+    match req.cookie("session") {
+        None => {},
+        Some(cookie) => {
+            auth::logout(&data.database, cookie.value()).await.unwrap();
+        }
+    }
+
+    // Clear session cookie if it exists
+    let cookie = Cookie::build("session", "").expires(Some(OffsetDateTime::now_utc())).path("/").finish();
+    // response.insert_header(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
+
+    let mut res = actix_web::HttpResponse::SeeOther().finish();
+    res.headers_mut().insert(actix_web::http::header::LOCATION, "/".parse().unwrap());
+    res.headers_mut().insert(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
+    res
 }
 
 #[cfg(not(any(feature = "ssr", feature = "csr")))]

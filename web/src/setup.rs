@@ -136,14 +136,6 @@ cfg_if::cfg_if! {
         fn AuthSetupInner(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
             let auth_action = create_server_action::<AuthenticationSetup>();
 
-            let (username, set_username) = create_signal("".to_string());
-            let (password, set_password) = create_signal("".to_string());
-            let button = create_node_ref::<Button>();
-
-            create_effect(move |_| {
-                button.get().unwrap().set_disabled(username.with(|u| u.is_empty()) || password.with(|p| p.is_empty()));
-            });
-
             create_effect(move |_| {
                 if auth_action.value().with(|value| value.is_some()) {
                     let val = auth_action.value().get().unwrap();
@@ -158,17 +150,13 @@ cfg_if::cfg_if! {
                 <ActionForm action=auth_action class="vertical spaced_children">
                     <label>
                         "Enter Root Username"
-                        <input type="text" name="username" prop:value=username on:input=move |ev| {
-                            set_username(event_target_value(&ev));
-                        }/>
+                        <input type="text" name="username" required/>
                     </label>
                     <label>
                         "Enter Root Password"
-                        <input type="password" name="password" prop:value=password on:input=move |ev| {
-                            set_password(event_target_value(&ev));   
-                        }/>
+                        <input type="password" name="password" required/>
                     </label>
-                    <button type="submit" disabled node_ref=button>"Submit"</button>
+                    <button type="submit">"Submit"</button>
                 </ActionForm>
             }
         }

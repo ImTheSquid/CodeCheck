@@ -3,6 +3,8 @@ use leptos_meta::*;
 use leptos_router::*;
 
 use crate::setup::Setup;
+use crate::login::Login;
+use crate::admin::Admin;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -23,6 +25,8 @@ pub fn App() -> impl IntoView {
                 <Routes>
                     <Route path="" view=HomePage/>
                     <Route path="/setup" view=Setup/>
+                    <Route path="/login" view=Login/>
+                    <Route path="/admin" view=Admin/>
                     <Route path="/*any" view=NotFound/>
                 </Routes>
             </main>
@@ -38,7 +42,7 @@ fn HomePage() -> impl IntoView {
     let on_click = move |_| set_count.update(|count| *count += 1);
 
     view! {
-        <h1>"Welcome to Leptos!"</h1>
+        <h1>"Welcome to CodeCheck!"</h1>
         <button on:click=on_click>"Click Me: " {count}</button>
     }
 }

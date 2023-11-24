@@ -8,20 +8,10 @@ use crate::ValidatedUser;
 use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}, PasswordVerifier, PasswordHash};
 use goldleaf::{AutoCollection, CollectionIdentity};
 use std::time::Duration;
+use crate::AuthError;
 
-#[derive(Debug, Error)]
-pub enum AuthError {
-    #[error("Error while checking password: {0}")]
-    PasswordError(String),
-    #[error("User does not exist")]
-    UserDoesNotExist,
-    #[error("Invalid password")]
-    InvalidPassword,
-    #[error("Invalid session")]
-    InvalidSession,
-}
 
-pub async fn enroll_root(db: &Database, username: String, password: String) -> Result<()> {
+pub async fn enroll_root(db: &Database, username: String, password: String) -> Result<(), AuthError> {
     let salt = SaltString::generate(&mut OsRng);
     let password = Argon2::default().hash_password(password.as_bytes(), &salt).map_err(|e| AuthError::PasswordError(e.to_string()))?.to_string();
 
@@ -37,7 +27,7 @@ pub async fn enroll_root(db: &Database, username: String, password: String) -> R
 }
 
 /// Authenticates a user
-pub async fn authenticate(db: &Database, username: &str, password: &str) -> Result<String> {
+pub async fn authenticate(db: &Database, username: &str, password: &str) -> Result<String, AuthError> {
     let user = db.auto_collection::<User>().find_one(doc! {
         "username": username
     }, None).await?;
@@ -70,36 +60,4 @@ pub async fn authenticate(db: &Database, username: &str, password: &str) -> Resu
     user.save(db).await?;
 
     Ok(token)
-}
-
-const TOKEN_LIFETIME: Duration = Duration::from_secs(60 * 60 * 24 * 30);
-
-// Validates a token and returns the necessary information for getting a user
-pub async fn validate_token(db: &Database, token: &str) -> Result<ValidatedUser> {
-    let user = db.auto_collection::<User>()
-        .find_one(doc! {
-            "sessions.token": token
-        }, None).await?;
-
-    match user {
-        None => Err(AuthError::InvalidSession.into()),
-        Some(mut user) => {
-            let session = user.sessions.iter_mut().find(|s| s.token == token).unwrap();
-
-            if session.timestamp + TOKEN_LIFETIME < Utc::now() {
-                user.sessions.retain(|s| s.token != token);
-                user.save(db).await?;
-                return Err(AuthError::InvalidSession.into());
-            }
-
-            session.last_use = Utc::now();
-
-            user.save(db).await?;
-
-            Ok(ValidatedUser {
-                id: user.id.unwrap(),
-                role: user.role
-            })
-        }
-    }
 }
