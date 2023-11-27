@@ -3,7 +3,7 @@ use leptos_meta::*;
 use leptos_router::*;
 
 use crate::setup::Setup;
-use crate::login::Login;
+use crate::login::{Login, LoggedIn};
 use crate::admin::Admin;
 
 #[component]
@@ -26,7 +26,11 @@ pub fn App() -> impl IntoView {
                     <Route path="" view=HomePage/>
                     <Route path="/setup" view=Setup/>
                     <Route path="/login" view=Login/>
-                    <Route path="/admin" view=Admin/>
+                    <Route path="/admin" view=|| view! {
+                        <LoggedIn>
+                            <Admin/>
+                        </LoggedIn>
+                    }/>
                     <Route path="/*any" view=NotFound/>
                 </Routes>
             </main>
