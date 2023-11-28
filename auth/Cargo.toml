@@ -8,7 +8,7 @@ edition = "2021"
 basic_auth = []
 # Allows for separation between client and server features
 # Server features are always a superset of client features
-server = ["dep:mongodb", "db/server", "dep:goldleaf"]
+server = ["dep:mongodb", "db/server", "dep:goldleaf", "dep:actix-web"]
 
 [dependencies]
 anyhow = "1.0.75"
@@ -21,3 +21,4 @@ chrono = "0.4.31"
 argon2 = "0.5.2"
 rand = "0.8.5"
 serde = { version = "1.0.193", features = ["derive"] }
+actix-web = { version = "4.4.0", optional = true }

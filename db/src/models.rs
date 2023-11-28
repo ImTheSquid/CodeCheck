@@ -65,20 +65,27 @@ pub struct Assignment {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Span {
-    start: usize,
-    end: usize,
+    start_line: usize,
+    end_line: usize,
+    file: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AstCell {
+pub struct SpanPair {
+    row: Span,
+    column: Span,
     similarity: f64,
-    span_a: Span,
-    span_b: Span,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AstRun {
-    matrix: Vec<AstCell>,
+pub struct DetectionCell {
+    similarity: f64,
+    span_pairs: Vec<SpanPair>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DetectionResult {
+    matrix: Vec<DetectionCell>,
     size: usize,
 }
 

@@ -1,4 +1,5 @@
 #![feature(fs_try_exists)]
+#![feature(adt_const_params)]
 pub mod app;
 pub mod setup;
 pub mod login;
@@ -22,6 +23,40 @@ if #[cfg(feature = "hydrate")] {
     }
 }
 }
+
+#[cfg(feature = "ssr")]
+pub struct AuthedUser<const R: db::Role> {
+    pub id: db::UserId,
+    pub token: String,
+}
+
+#[cfg(feature = "ssr")]
+impl<const R: db::Role> actix_web::FromRequest for AuthedUser<R> {
+    type Error = auth::AuthError;
+    type Future = futures_util::future::LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_request(req: &actix_web::HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let cookie = match req.cookie("sessionToken") {
+            None => return Box::pin(async move { Err(auth::AuthError::InvalidSession) }),
+            Some(c) => c,
+        };
+
+        let data = req.app_data::<actix_web::web::Data<server::WebState>>().unwrap().clone(); 
+
+        Box::pin(async move {
+            let validation_result = match auth::validate_token(&data.database, cookie.value()).await {
+                Ok(validated_user) => validated_user,
+                Err(e) => return Err(e),
+            };
+
+            Ok(AuthedUser {
+                id: validation_result.id,
+                token: cookie.value().to_string(),
+            })
+        })
+    }
+}
+
 
 #[cfg(feature = "ssr")]
 pub mod server {

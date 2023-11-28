@@ -1,3 +1,5 @@
+#![feature(adt_const_params)]
+
 use anyhow::Result;
 use bson::oid::ObjectId;
 
@@ -25,7 +27,7 @@ pub async fn connect(uri: &str, name: &str) -> Result<mongodb::Database> {
     Ok(database)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy, core::marker::ConstParamTy)]
 pub enum Role {
     Admin,
     Instructor,

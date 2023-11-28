@@ -22,6 +22,20 @@ pub enum AuthError {
     Mongo(#[from] mongodb::error::Error),
 }
 
+#[cfg(feature = "server")]
+impl actix_web::ResponseError for AuthError {
+    fn status_code(&self) -> actix_web::http::StatusCode {
+        use actix_web::http::StatusCode;
+        match self {
+            Self::PasswordError(_) |
+            Self::Mongo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::UserDoesNotExist => StatusCode::NOT_FOUND,
+            Self::InvalidPassword |
+            Self::InvalidSession => StatusCode::UNAUTHORIZED,
+        }
+    }
+}
+
 pub const TOKEN_LIFETIME: Duration = Duration::from_secs(60 * 60 * 24 * 30);
 
 // Validates a token and returns the necessary information for getting a user

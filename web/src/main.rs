@@ -1,3 +1,6 @@
+#![feature(adt_const_params)]
+use db::UserId;
+
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
