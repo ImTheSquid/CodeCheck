@@ -1,4 +1,3 @@
-#![feature(adt_const_params)]
 use db::UserId;
 
 #[cfg(feature = "ssr")]
