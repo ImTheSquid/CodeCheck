@@ -22,10 +22,28 @@ pub struct User {
     pub id: Option<UserId>,
     #[db(indexing(index = 1, unique))]
     pub username: String,
+    pub name: String,
     pub role: Role,
     #[cfg(feature = "basic_auth")]
     pub password: String,
     pub sessions: Vec<Session>,
+    pub email: Option<VerifiedResource>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerifiedResource {
+    pub resource: String,
+    pub status: VerificationStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum VerificationStatus {
+    Unverified {
+        token: String,
+        expiration: DateTime<Utc>,
+    },
+    /// Resource is verified
+    Verified,
 }
 
 pub type CourseId = ObjectId;
@@ -48,6 +66,7 @@ pub struct Course {
     pub instructors: Vec<UserId>,
     pub graders: Vec<UserId>,
     pub sections: Vec<CourseSection>,
+    // TODO: Term string
 }
 
 pub type AssignmentId = ObjectId;

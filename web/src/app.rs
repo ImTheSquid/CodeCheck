@@ -5,6 +5,7 @@ use leptos_router::*;
 use crate::setup::Setup;
 use crate::login::{Login, LoggedIn};
 use crate::admin::Admin;
+use crate::admin;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -30,7 +31,9 @@ pub fn App() -> impl IntoView {
                         <LoggedIn>
                             <Admin/>
                         </LoggedIn>
-                    }/>
+                    }>
+                        <Route path="users" view=admin::Users/>
+                    </Route>
                     <Route path="/*any" view=NotFound/>
                 </Routes>
             </main>
@@ -47,6 +50,8 @@ fn HomePage() -> impl IntoView {
 
     view! {
         <h1>"Welcome to CodeCheck!"</h1>
+        <h2>"A research project by Jack Hogan, Vidit Patel, and Ava Lyall"</h2>
+        <h3><a href="https://github.com/ImTheSquid/CodeCheck" target="_blank" rel="noopener">"Source Repository"</a></h3>
         <button on:click=on_click>"Click Me: " {count}</button>
     }
 }
