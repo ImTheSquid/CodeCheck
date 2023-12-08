@@ -18,9 +18,11 @@ pub async fn enroll_root(db: &Database, username: String, password: String) -> R
     db.auto_collection::<User>().insert_one(User {
         id: None,
         username,
+        name: "Admin User".to_string(),
         role: db::Role::Admin,
         password,
         sessions: Vec::new(),
+        email: None,
     }, None).await?;
 
     Ok(())

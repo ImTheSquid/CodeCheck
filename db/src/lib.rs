@@ -1,5 +1,7 @@
 #![feature(adt_const_params)]
 
+use std::str::FromStr;
+
 use anyhow::Result;
 use bson::oid::ObjectId;
 
@@ -32,6 +34,28 @@ pub enum Role {
     Admin,
     Instructor,
     Assistant,
+}
+
+impl ToString for Role {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Admin => "Admin",
+            Self::Instructor => "Instructor",
+            Self::Assistant => "Assistant",
+        }.to_string()
+    }
+}
+
+impl FromStr for Role {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        match s {
+            "admin" => Ok(Role::Admin),
+            "instructor" => Ok(Role::Instructor),
+            "assistant" => Ok(Role::Assistant),
+            _ => Err(anyhow::anyhow!("Invalid type from str for Role!")),
+        }
+    }
 }
 
 impl PartialOrd for Role {

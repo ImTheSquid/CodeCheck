@@ -36,7 +36,7 @@ impl<const R: db::Role> actix_web::FromRequest for AuthedUser<R> {
     type Future = futures_util::future::LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
     fn from_request(req: &actix_web::HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
-        let cookie = match req.cookie("sessionToken") {
+        let cookie = match req.cookie("session") {
             None => return Box::pin(async move { Err(auth::AuthError::InvalidSession) }),
             Some(c) => c,
         };
