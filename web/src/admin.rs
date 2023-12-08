@@ -52,8 +52,14 @@ async fn get_all_users() -> Result<Vec<DisplayUser>, ServerFnError> {
 }
 
 #[server(CreateUser)]
-async fn create_user(username: String, name: String, role: String, email: Option<String>, email_verified: bool, password: String) -> Result<(), ServerFnError> {
+async fn create_user(username: String, name: String, role: String, email: String, email_verified: Option<bool>, password: String) -> Result<(), ServerFnError> {
     let role = db::Role::from_str(&role).unwrap();
+    let email = if email.is_empty() {
+        None
+    } else {
+        Some(email)
+    };
+    let email_verified = email_verified.unwrap_or_default();
     use leptos_actix::{extract, ResponseOptions};
     use actix_web::HttpRequest;
     use actix_web::web::Data;
@@ -166,7 +172,6 @@ pub fn Users() -> impl IntoView {
                     </label>
                     <label>
                         "Email Verified"
-                        <input type="hidden" name="email_verified" value="false"/>
                         <input type="checkbox" name="email_verified" value="true"/>
                     </label>
                     <label>
