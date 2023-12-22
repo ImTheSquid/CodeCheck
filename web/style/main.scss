@@ -24,10 +24,10 @@ span.code {
 // Positioning is to be left to other elements
 .sidebar {
     height: 100%;
-    width: 15em;
+    // width: 15em;
     position: fixed;
     top: 0;
-    left: -15em;
+    // left: -15em;
     background-color: #333;
     overflow-x: hidden;
     transition: 0.5s;
