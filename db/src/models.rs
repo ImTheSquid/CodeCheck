@@ -46,6 +46,17 @@ pub enum VerificationStatus {
     Verified,
 }
 
+pub type TermId = ObjectId;
+
+#[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
+#[db(name = "term")]
+pub struct Term {
+    #[db(native_id_field)] 
+    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    pub id: Option<TermId>,
+    pub name: String,
+}
+
 pub type CourseId = ObjectId;
 pub type CourseSectionId = ObjectId;
 
@@ -66,7 +77,7 @@ pub struct Course {
     pub instructors: Vec<UserId>,
     pub graders: Vec<UserId>,
     pub sections: Vec<CourseSection>,
-    // TODO: Term string
+    pub term: TermId,
 }
 
 pub type AssignmentId = ObjectId;

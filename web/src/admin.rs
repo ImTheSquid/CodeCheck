@@ -4,6 +4,7 @@ use futures_util::TryStreamExt;
 use leptos::{*, html::Dialog};
 use leptos_meta::*;
 use leptos_router::*;
+use stylist::style;
 use std::str::FromStr;
 
 #[component]
@@ -121,7 +122,21 @@ pub fn Users() -> impl IntoView {
         }
     });
 
-    view! {
+    let styles = style!(
+        table {
+            border-collapse: collapse;
+            border: 2px solid rgb(200, 200, 200);
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        td, th {
+            padding: 10px;
+            border: 2px solid rgb(190, 190, 190);
+        }
+    );
+
+    styled::view! { styles,
         <h2>"User Management"</h2>
         <Transition fallback=|| view!{ <p>"Loading users..."</p> }>
             <table>
@@ -149,40 +164,50 @@ pub fn Users() -> impl IntoView {
             </table>
 
             <dialog node_ref=new_user_dialog>
-                <ActionForm action=new_user_action>
-                    <label>
-                        "Username"
-                        <input type="text" name="username" required/>
-                    </label>
-                    <label>
-                        "Name"
-                        <input type="text" name="name" required/>
-                    </label>
-                    <label>
-                        "Role"
-                        <select name="role">
-                            <option value="admin">"Admin"</option>
-                            <option value="instructor">"Instructor"</option>
-                            <option value="assistant" selected>"Assistant"</option>
-                        </select>
-                    </label>
-                    <label>
-                        "Email"
-                        <input type="email" name="email"/>
-                    </label>
-                    <label>
-                        "Email Verified"
-                        <input type="checkbox" name="email_verified" value="true"/>
-                    </label>
-                    <label>
-                        "Password"
-                        <input type="password" name="password" required/>
-                    </label>
-                    <button type="submit">"Submit"</button>
-                </ActionForm>
+                <NewUserForm new_user_action=new_user_action/>
                 <button on:click=move |_| new_user_dialog.get().unwrap().close()>"Cancel"</button>
             </dialog>
         </Transition>
+    }
+}
+
+// I only did this because Rust got fussy about the styling macro
+// The code looks a bit cleaner now too
+use server_fn::ServerFn;
+#[component]
+fn NewUserForm(new_user_action: Action<CreateUser, Result<<CreateUser as ServerFn<()>>::Output, ServerFnError>>) -> impl IntoView {
+    view! {
+        <ActionForm action=new_user_action>
+            <label>
+                "Username"
+                <input type="text" name="username" required/>
+            </label>
+            <label>
+                "Name"
+                <input type="text" name="name" required/>
+            </label>
+            <label>
+                "Role"
+                <select name="role">
+                    <option value="admin">"Admin"</option>
+                    <option value="instructor">"Instructor"</option>
+                    <option value="assistant" selected>"Assistant"</option>
+                </select>
+            </label>
+            <label>
+                "Email"
+                <input type="email" name="email"/>
+            </label>
+            <label>
+                "Email Verified"
+                <input type="checkbox" name="email_verified" value="true"/>
+            </label>
+            <label>
+                "Password"
+                <input type="password" name="password" required/>
+            </label>
+            <button type="submit">"Submit"</button>
+        </ActionForm>
     }
 }
 

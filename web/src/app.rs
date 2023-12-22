@@ -6,6 +6,7 @@ use crate::setup::Setup;
 use crate::login::{Login, LoggedIn};
 use crate::admin::Admin;
 use crate::admin;
+use crate::home::{sidebar::CourseSidebar, Home};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -33,6 +34,14 @@ pub fn App() -> impl IntoView {
                         </LoggedIn>
                     }>
                         <Route path="users" view=admin::Users/>
+                    </Route>
+                    <Route path="/home" view=CourseSidebar>
+                        <Route path=":course" view=Home>
+                            <Route path=":section" view=Home>
+                                <Route path=":assignment" view=Home/>
+                            </Route>
+                        </Route>
+                        <Route path="" view=|| view! { <p>"Select a course"</p> }/>
                     </Route>
                     <Route path="/*any" view=NotFound/>
                 </Routes>

@@ -4,6 +4,7 @@ pub mod app;
 pub mod setup;
 pub mod login;
 pub mod admin;
+pub mod home;
 
 use cfg_if::cfg_if;
 
