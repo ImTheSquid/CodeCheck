@@ -394,3 +394,85 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
         </dialog>
     }
 }
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TermInfo {
+    id: String,
+    name: String,
+    /// You can only delete terms that don't have any associated courses
+    can_delete: bool,
+}
+
+#[server(GetTerms)]
+async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
+    use leptos_actix::{extract, ResponseOptions};
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use db::models::{Term, Course};
+    use mongodb::bson::{doc, oid::ObjectId, from_document};
+    use crate::AuthedUser;
+
+    extract(move |data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
+        let stage_attach_num_associated = doc! {
+            "$lookup": {
+                "from": Course::COLLECTION,
+                "localField": "_id",
+                "foreignField": "term",
+                "as": "associated_courses",
+            }
+        };
+
+        let stage_set_can_delete = doc! {
+            "$setField": {
+                "can_delete": {
+                    "$cond": {
+                        "if": {
+                            "$gt": [
+                                {"$size": "$associated_courses"},
+                                0,
+                            ]
+                        }
+                    }
+                }
+            }
+        };
+
+        let terms = data.database.auto_collection::<Term>().aggregate(vec! [
+            doc! {
+                "$sort": {
+                    "_id": -1,
+                }, 
+            },
+            stage_attach_num_associated,
+            stage_set_can_delete,
+        ], None).await?.try_collect::<Vec<_>>().await?;
+
+        let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| {
+            TermInfo {
+                id: t.id.unwrap().to_hex(),
+                name: t.name,
+                can_delete: t.can_delete.unwrap(),
+            }
+        }).collect::<Vec<_>>();
+
+        Ok(terms)
+    }).await?
+}
+
+#[component]
+pub fn Courses() -> impl IntoView {
+    let terms = create_blocking_resource(|| (), |_| async move { get_terms().await });
+
+    let manage_terms_ref = create_node_ref::<Dialog>();
+
+    view! {
+        <div>
+            <h2>"Course and Term Configuration"</h2>
+            <button on:click=move |_| manage_terms_ref.get().unwrap().show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
+        </div>
+        <dialog node_ref=manage_terms_ref>
+            <h1>"Manage Terms"</h1>
+        </dialog>
+    }
+}

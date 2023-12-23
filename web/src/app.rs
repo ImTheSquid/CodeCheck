@@ -21,7 +21,6 @@ pub fn App() -> impl IntoView {
         // sets the document title
         <Title text="CodeCheck"/>
 
-        // content for this welcome page
         <Router>
             <main>
                 <Routes>
@@ -34,6 +33,7 @@ pub fn App() -> impl IntoView {
                         </LoggedIn>
                     }>
                         <Route path="users" view=admin::Users/>
+                        <Route path="courses" view=admin::Courses/>
                     </Route>
                     <Route path="/home" view=CourseSidebar>
                         <Route path=":course" view=Home>

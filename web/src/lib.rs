@@ -1,5 +1,6 @@
 #![feature(fs_try_exists)]
 #![feature(adt_const_params)]
+#![feature(iterator_try_collect)]
 pub mod app;
 pub mod setup;
 pub mod login;

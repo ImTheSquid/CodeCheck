@@ -18,7 +18,18 @@ pub fn OutletSidebar() -> impl IntoView {
 
 #[server(GetCourses)]
 async fn get_courses() -> Result<(), ServerFnError> {
-    todo!()
+    use leptos_actix::{extract, ResponseOptions};
+    use actix_web::HttpRequest;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use goldleaf::AutoCollection;
+    use db::models::User;
+    use mongodb::bson::doc;
+    use crate::AuthedUser;
+
+    extract(|data: Data<WebState>, _user: AuthedUser<{db::Role::Assistant}>| async move {
+        todo!()
+    }).await?
 }
 
 #[component]

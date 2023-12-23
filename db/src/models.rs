@@ -55,6 +55,8 @@ pub struct Term {
     #[serde(rename="_id", skip_serializing_if="Option::is_none")]
     pub id: Option<TermId>,
     pub name: String,
+    #[serde(default, skip_serializing)]
+    pub can_delete: Option<bool>,
 }
 
 pub type CourseId = ObjectId;
