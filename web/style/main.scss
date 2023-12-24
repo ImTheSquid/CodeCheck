@@ -52,3 +52,15 @@ span.code {
     transition: margin-left 0.5s;
     padding: 1em;
 }
+
+table.adminTable {
+    border-collapse: collapse;
+    border: 2px solid rgb(200, 200, 200);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.adminTable td, th {
+    padding: 10px;
+    border: 2px solid rgb(190, 190, 190);
+}

@@ -123,23 +123,13 @@ pub fn Users() -> impl IntoView {
     });
 
     let styles = style!(
-        table {
-            border-collapse: collapse;
-            border: 2px solid rgb(200, 200, 200);
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        td, th {
-            padding: 10px;
-            border: 2px solid rgb(190, 190, 190);
-        }
+        // Maybe add more later
     );
 
     styled::view! { styles,
         <h2>"User Management"</h2>
         <Transition fallback=|| view!{ <p>"Loading users..."</p> }>
-            <table>
+            <table class="adminTable">
                 <tr>
                     <th scope="col">"ID"</th>
                     <th scope="col">"Username"</th>
