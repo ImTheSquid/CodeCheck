@@ -25,9 +25,9 @@ pub fn App() -> impl IntoView {
             <main>
                 <Routes>
                     <Route path="" view=HomePage/>
-                    <Route path="/setup" view=Setup/>
-                    <Route path="/login" view=Login/>
-                    <Route path="/admin" view=|| view! {
+                    <Route path="setup" view=Setup/>
+                    <Route path="login" view=Login/>
+                    <Route path="admin" view=|| view! {
                         <LoggedIn>
                             <Admin/>
                         </LoggedIn>
@@ -35,7 +35,7 @@ pub fn App() -> impl IntoView {
                         <Route path="users" view=admin::Users/>
                         <Route path="courses" view=admin::Courses/>
                     </Route>
-                    <Route path="/home" view=CourseSidebar>
+                    <Route path="home" view=CourseSidebar>
                         <Route path=":course" view=Home>
                             <Route path=":section" view=Home>
                                 <Route path=":assignment" view=Home/>
@@ -43,7 +43,7 @@ pub fn App() -> impl IntoView {
                         </Route>
                         <Route path="" view=|| view! { <p>"Select a course"</p> }/>
                     </Route>
-                    <Route path="/*any" view=NotFound/>
+                    <Route path="*any" view=NotFound/>
                 </Routes>
             </main>
         </Router>

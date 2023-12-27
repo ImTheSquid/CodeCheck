@@ -61,7 +61,7 @@ pub fn LoggedIn(#[prop(optional)] required_role: Option<Role>, children: Childre
                     match li {
                         Ok(li) => {
                             provide_context(li);
-                            children.with_value(|c| c()).into_view()
+                            children().into_view()
                         },
                         Err(e) => {
                             view! {
@@ -76,6 +76,7 @@ pub fn LoggedIn(#[prop(optional)] required_role: Option<Role>, children: Childre
             }}
         </Transition>
     }
+    
 }
 
 cfg_if::cfg_if! {

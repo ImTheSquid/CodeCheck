@@ -27,6 +27,7 @@ if #[cfg(feature = "hydrate")] {
 }
 
 #[cfg(feature = "ssr")]
+#[derive(Debug)]
 pub struct AuthedUser<const R: db::Role> {
     pub id: db::UserId,
     pub token: String,

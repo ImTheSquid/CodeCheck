@@ -395,59 +395,62 @@ pub struct TermInfo {
 
 #[server(GetTerms)]
 async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
+    use leptos_actix::extract;
     use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::{AutoCollection, CollectionIdentity};
-    use db::models::{Term, Course};
-    use mongodb::bson::{doc, oid::ObjectId, from_document};
-    use crate::AuthedUser;
+    use mongodb::bson::{doc, from_document};
+    use goldleaf::{CollectionIdentity, AutoCollection};
+    use db::models::{Course, Term};
 
-    extract(move |data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
-        let stage_attach_num_associated = doc! {
-            "$lookup": {
-                "from": Course::COLLECTION,
-                "localField": "_id",
-                "foreignField": "term",
-                "as": "associated_courses",
-            }
-        };
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
 
-        let stage_set_can_delete = doc! {
-            "$setField": {
-                "can_delete": {
-                    "$cond": {
-                        "if": {
-                            "$gt": [
-                                {"$size": "$associated_courses"},
-                                0,
-                            ]
-                        }
-                    }
+    let stage_attach_num_associated = doc! {
+        "$lookup": {
+            "from": Course::COLLECTION,
+            "localField": "_id",
+            "foreignField": "term",
+            "as": "associated_courses",
+        }
+    };
+
+    let stage_set_can_delete = doc! {
+        "$set": {
+            "can_delete": {
+                "$cond": {
+                    "if": {
+                        "$gt": [
+                            {"$size": "$associated_courses"},
+                            0,
+                        ]
+                    },
+                    "then": true,
+                    "else": false,
                 }
             }
-        };
+        }
+    };
 
-        let terms = data.database.auto_collection::<Term>().aggregate(vec! [
-            doc! {
-                "$sort": {
-                    "_id": -1,
-                }, 
-            },
-            stage_attach_num_associated,
-            stage_set_can_delete,
-        ], None).await?.try_collect::<Vec<_>>().await?;
+    let stage_sort_descending = doc! {
+        "$sort": {
+            "_id": -1
+        }
+    };
 
-        let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| {
-            TermInfo {
-                id: t.id.unwrap().to_hex(),
-                name: t.name,
-                can_delete: t.can_delete.unwrap(),
-            }
-        }).collect::<Vec<_>>();
+    let terms = data.database.auto_collection::<Term>().aggregate(vec! [
+        stage_attach_num_associated,
+        stage_set_can_delete,
+        stage_sort_descending,
+    ], None).await?.try_collect::<Vec<_>>().await?;
 
-        Ok(terms)
-    }).await?
+    let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| {
+        TermInfo {
+            id: t.id.unwrap().to_hex(),
+            name: t.name,
+            can_delete: t.can_delete.unwrap(),
+        }
+    }).collect::<Vec<_>>();
+
+    Ok(terms)
 }
 
 #[component]
