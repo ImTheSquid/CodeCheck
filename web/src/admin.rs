@@ -4,7 +4,7 @@ use futures_util::TryStreamExt;
 use leptos::{*, html::Dialog};
 use leptos_meta::*;
 use leptos_router::*;
-use stylist::style;
+use styled::style;
 use std::str::FromStr;
 
 #[component]
@@ -385,7 +385,7 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct TermInfo {
     id: String,
     name: String,
@@ -423,8 +423,8 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
                             0,
                         ]
                     },
-                    "then": true,
-                    "else": false,
+                    "then": false,
+                    "else": true,
                 }
             }
         }
@@ -453,19 +453,137 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
     Ok(terms)
 }
 
+#[server(CreateTerm)]
+async fn create_term(name: String) -> Result<(), ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use goldleaf::AutoCollection;
+    use db::models::Term;
+
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+
+    data.database.auto_collection::<Term>().insert_one(Term {
+        id: None,
+        name,
+        can_delete: None,
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(DeleteTerm)]
+async fn delete_term(id: String) -> Result<(), ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use goldleaf::AutoCollection;
+    use db::models::{Term, Course};
+    use mongodb::bson::{oid::ObjectId, doc};
+
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+
+    let id = ObjectId::from_str(&id).expect("id to be valid");
+
+    let num_associated = data.database.auto_collection::<Course>().count_documents(doc! {
+        "term": id
+    }, None).await?;
+
+    if num_associated > 0 {
+        return Err(ServerFnError::ServerError("Cannot delete term with associated courses".to_string()));
+    }
+
+    data.database.auto_collection::<Term>().delete_one(doc! {
+        "_id": id
+    }, None).await?;
+
+    Ok(())
+}
+
 #[component]
 pub fn Courses() -> impl IntoView {
     let terms = create_blocking_resource(|| (), |_| async move { get_terms().await });
 
     let manage_terms_ref = create_node_ref::<Dialog>();
 
-    view! {
+    let (new_term_name, set_new_term_name) = create_signal("".to_string());
+
+    let styles = style!(
+        .termActions {
+            display: inline-block;
+        }
+    );
+
+    let add_term = create_server_action::<CreateTerm>();
+    let delete_term = create_server_action::<DeleteTerm>();
+
+    create_effect(move |prev| {
+        let (add_prev, delete_prev) = prev.unwrap_or((0_usize, 0_usize));
+        let add_new = add_term.version()();
+        let delete_new = delete_term.version()();
+        if add_prev != add_new || delete_prev != delete_new {
+            set_new_term_name(String::new());
+            terms.refetch();
+            (add_new, delete_new)
+        } else {
+            (add_prev, delete_prev)
+        }
+    });
+
+    styled::view! { styles,
         <div>
             <h2>"Course and Term Configuration"</h2>
             <button on:click=move |_| manage_terms_ref.get().unwrap().show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
         </div>
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>
+            <div class="termActions">
+                <input 
+                    type="text" 
+                    placeholder="New Term Name" 
+                    prop:value=new_term_name 
+                    on:input=move |ev| set_new_term_name(event_target_value(&ev))
+                    on:keypress=move |ev| {
+                        if ev.key() == "Enter" && !new_term_name().is_empty() {
+                            add_term.dispatch(CreateTerm { name: new_term_name() });
+                        }
+                    }
+                />
+                <button 
+                    disabled=move || new_term_name.with(|ntn| ntn.is_empty()) 
+                    on:click=move |_| add_term.dispatch(CreateTerm { name: new_term_name() })
+                >"Add Term"</button>
+            </div>
+            <p>"Terms may only be deleted if there are no courses associated with it."</p>
+            <table class="adminTable">
+                <tr>
+                    <th scope="col">"ID"</th>
+                    <th scope="col">"Name"</th>
+                </tr>
+                <Transition fallback=||()>
+                    {move || terms.get().map(|terms|
+                                             view! {
+                    <For
+                        each=move || terms.clone().expect("terms to not have failed")
+                        key=|term| term.id.clone()
+                        children=move |term| {
+                            let term_id = term.id.clone();
+
+                            view! {
+                                <tr>
+                                    <td>{term.id}</td>
+                                    <td>{term.name}</td>
+                                    <td><button 
+                                        disabled=move || !term.can_delete
+                                        on:click=move |_| delete_term.dispatch(DeleteTerm { id: term_id.clone() })
+                                    >"Delete"</button></td>
+                                </tr>
+                            }
+                        }
+                    />})}
+                </Transition>
+            </table>
+            <button on:click=move |_| manage_terms_ref.get().unwrap().close()>"Close"</button>
         </dialog>
     }
 }
