@@ -1,11 +1,12 @@
 use auth::ValidatedUser;
 use db::Role;
-use futures_util::TryStreamExt;
+use futures_util::{TryStreamExt, StreamExt};
 use leptos::{*, html::Dialog};
 use leptos_meta::*;
 use leptos_router::*;
 use styled::style;
 use std::str::FromStr;
+use crate::app::UserSearchBox;
 
 #[component]
 pub fn Admin() -> impl IntoView {
@@ -165,6 +166,8 @@ pub fn Users() -> impl IntoView {
 // I only did this because Rust got fussy about the styling macro
 // The code looks a bit cleaner now too
 use server_fn::ServerFn;
+
+use crate::HumanReadableUser;
 #[component]
 fn NewUserForm(new_user_action: Action<CreateUser, Result<<CreateUser as ServerFn<()>>::Output, ServerFnError>>) -> impl IntoView {
     view! {
@@ -501,9 +504,71 @@ async fn delete_term(id: String) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct BaseCourseInfo {
+    id: String,
+    name: String,
+    owner: HumanReadableUser,
+}
+
 #[server(GetCourses)]
-async fn get_courses() -> Result<(), ServerFnError> {
-    todo!()
+async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use goldleaf::{CollectionIdentity, AutoCollection};
+    use db::models::{User, Course};
+    use mongodb::bson::{oid::ObjectId, doc, from_document};
+
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+
+    let stage_match_term_id = doc! {
+        "$match": {
+            "term": term_id,
+        }
+    };
+
+    let stage_lookup_owner = doc! {
+        "$lookup": {
+            "from": User::COLLECTION,
+            "foreignField": "_id",
+            "localField": "owner",
+            "as": "owner_doc",
+        }
+    };
+
+    let stage_attach_human_readable_owner = doc! {
+        "$set": {
+            "human_owner": {
+                "name": "$owner_doc[0].name",
+                "username": "$owner_doc[0].username",
+            }
+        }
+    };
+
+    let stage_sort_name_ascending = doc! {
+        "$sort": {
+            "name": 1,
+        }
+    };
+
+    let courses = data.database.auto_collection::<Course>().aggregate(vec![
+        stage_match_term_id,
+        stage_lookup_owner,
+        stage_attach_human_readable_owner,
+        stage_sort_name_ascending,
+    ], None).await?.try_collect::<Vec<_>>().await?;
+
+    let courses = courses.into_iter().map(from_document).try_collect::<Vec<Course>>()?.into_iter().map(|c| BaseCourseInfo {
+        id: c.id.unwrap().to_hex(),
+        name: c.name,
+        owner: {
+            let human_owner = c.human_owner.unwrap();
+            HumanReadableUser { id: c.owner.to_hex(), name: human_owner.name, username: human_owner.username }
+        },
+    }).collect();
+
+    Ok(courses)
 }
 
 #[component]
@@ -537,6 +602,8 @@ pub fn Courses() -> impl IntoView {
         }
     });
 
+    let (new_course_owner, set_new_course_owner) = create_signal(None);
+
     styled::view! { styles,
         <div>
             <h2>"Course and Term Configuration"</h2>
@@ -545,6 +612,7 @@ pub fn Courses() -> impl IntoView {
         </div>
         <dialog node_ref=create_course_ref>
             <h1>"Create Course"</h1>
+            <UserSearchBox selected_user_id=set_new_course_owner/>
         </dialog>
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>

@@ -105,11 +105,14 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
     use crate::server::WebState;
     use goldleaf::AutoCollection;
     use db::models::User;
-    use mongodb::bson::doc;
+    use mongodb::bson::{from_document, doc};
 
     let data = extract!(Data<WebState>);
 
-    let found_users = data.database.auto_collection::<User>().find(doc! {
+    let query = query.to_lowercase();
+
+    let found_users = data.database.auto_collection::<User>().aggregate(vec![doc! {
+        "$match": { "$expr": {
         "$or": [
             {
                 "$ne": [
@@ -124,9 +127,9 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
                 ]
             }
         ]
-    }, None).await?;
+    }}}], None).await?.try_collect::<Vec<_>>().await?;
 
-    let found_users = found_users.try_collect::<Vec<_>>().await?.into_iter().map(|user| HumanReadableUser {
+    let found_users = found_users.into_iter().map(from_document).try_collect::<Vec<User>>()?.into_iter().map(|user| HumanReadableUser {
         id: user.id.unwrap().to_hex(),
         username: user.username,
         name: user.name,
@@ -136,20 +139,28 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
 }
 
 #[component]
-pub fn UserSearchBox(selected_user_id: WriteSignal<String>) -> impl IntoView {
+pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>) -> impl IntoView {
     let (query, set_query) = create_signal(String::new());
     let found_users = create_resource(query, |query| async move {
         lookup_users(query).await
     });
     let identifier = Alphanumeric.sample_string(&mut rand::thread_rng(), 8);
     let identifier_clone = identifier.clone();
+    // Tracks when the user backspaces without needing a ReadSignal from the parent
+    let (has_valid, set_has_valid) = create_signal(false);
 
     view! {
         <input type="text" placeholder="Search Users..." list=move || format!("user-search-{identifier}") prop:value=query on:input=move |ev| {
-            selected_user_id(event_target_value(&ev));
             if let Some(Ok(users_list)) = found_users() {
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
                     set_query(format!("{} ({})", user.name, user.username));
+
+                    selected_user_id(Some(event_target_value(&ev)));
+                    set_has_valid(true);
+                } else if has_valid() {
+                    selected_user_id(None);
+                    set_query(String::new());
+                    set_has_valid(false);
                 }
             }
         }/>

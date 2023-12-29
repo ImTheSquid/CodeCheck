@@ -68,6 +68,12 @@ pub struct CourseSection {
     pub name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HumanReadableWithoutId {
+    pub name: String,
+    pub username: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
 #[db(name = "course")]
 pub struct Course {
@@ -80,6 +86,7 @@ pub struct Course {
     pub graders: Vec<UserId>,
     pub sections: Vec<CourseSection>,
     pub term: TermId,
+    pub human_owner: Option<HumanReadableWithoutId>,
 }
 
 pub type AssignmentId = ObjectId;
