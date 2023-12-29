@@ -26,6 +26,13 @@ if #[cfg(feature = "hydrate")] {
 }
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct HumanReadableUser {
+    pub id: String,
+    pub name: String,
+    pub username: String,
+}
+
 #[cfg(feature = "ssr")]
 #[derive(Debug)]
 pub struct AuthedUser<const R: db::Role> {

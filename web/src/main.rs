@@ -62,7 +62,6 @@ async fn logout(
     use actix_web::cookie::Cookie;
     use actix_web::cookie::time::OffsetDateTime;
     use actix_web::http::header::HeaderValue;
-    use actix_web::Responder;
     match req.cookie("session") {
         None => {},
         Some(cookie) => {
@@ -75,7 +74,7 @@ async fn logout(
     // response.insert_header(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
 
     let mut res = actix_web::HttpResponse::SeeOther().finish();
-    res.headers_mut().insert(actix_web::http::header::LOCATION, "/".parse().unwrap());
+    res.headers_mut().insert(actix_web::http::header::LOCATION, "/?logout".parse().unwrap());
     res.headers_mut().insert(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
     res
 }

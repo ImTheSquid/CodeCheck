@@ -11,6 +11,7 @@ use std::str::FromStr;
 pub fn Admin() -> impl IntoView {
     view! {
         <h1>"CodeCheck Admin Interface"</h1>
+        <a href="/logout" rel="external">"Logout"</a>
         <Outlet/>
     }
 }
@@ -500,16 +501,22 @@ async fn delete_term(id: String) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[server(GetCourses)]
+async fn get_courses() -> Result<(), ServerFnError> {
+    todo!()
+}
+
 #[component]
 pub fn Courses() -> impl IntoView {
     let terms = create_blocking_resource(|| (), |_| async move { get_terms().await });
 
     let manage_terms_ref = create_node_ref::<Dialog>();
+    let create_course_ref = create_node_ref::<Dialog>();
 
     let (new_term_name, set_new_term_name) = create_signal("".to_string());
 
     let styles = style!(
-        .termActions {
+        .term-actions {
             display: inline-block;
         }
     );
@@ -534,10 +541,14 @@ pub fn Courses() -> impl IntoView {
         <div>
             <h2>"Course and Term Configuration"</h2>
             <button on:click=move |_| manage_terms_ref.get().unwrap().show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
+            <button on:click=move |_| create_course_ref.get().unwrap().show_modal().expect("Failed to show course modal!")>"Create Course..."</button>
         </div>
+        <dialog node_ref=create_course_ref>
+            <h1>"Create Course"</h1>
+        </dialog>
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>
-            <div class="termActions">
+            <div class="term-actions">
                 <input 
                     type="text" 
                     placeholder="New Term Name" 
@@ -571,7 +582,7 @@ pub fn Courses() -> impl IntoView {
 
                             view! {
                                 <tr>
-                                    <td>{term.id}</td>
+                                    <th scope="row">{term.id}</th>
                                     <td>{term.name}</td>
                                     <td><button 
                                         disabled=move || !term.can_delete

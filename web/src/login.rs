@@ -43,10 +43,10 @@ async fn validate_login(required_role: Role) -> Result<ValidatedUser, ServerFnEr
 /// Requires the user to be logged in to see the inner view, otherwise
 /// redirects user to log in page.
 #[component]
-pub fn LoggedIn(#[prop(optional)] required_role: Option<Role>, children: ChildrenFn) -> impl IntoView {
+pub fn LoggedIn(#[prop(optional)] minimum_role: Option<Role>, children: ChildrenFn) -> impl IntoView {
     // Default to requiring Admin rights to see a view, makes sure I don't
     // mess up and expose something I shouldn't through negligence
-    let required_role = required_role.unwrap_or(Role::Admin);
+    let required_role = minimum_role.unwrap_or(Role::Admin);
 
     let logged_in = create_blocking_resource(move || required_role, |role| async move {  
         validate_login(role).await
