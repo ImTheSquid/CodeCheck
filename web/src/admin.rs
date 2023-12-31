@@ -6,7 +6,7 @@ use leptos_meta::*;
 use leptos_router::*;
 use styled::style;
 use std::str::FromStr;
-use crate::app::UserSearchBox;
+use crate::app::{UserSearchBox, TermSelector};
 
 #[component]
 pub fn Admin() -> impl IntoView {
@@ -602,7 +602,9 @@ pub fn Courses() -> impl IntoView {
         }
     });
 
+    let (new_course_name, set_new_course_name) = create_signal(String::new());
     let (new_course_owner, set_new_course_owner) = create_signal(None);
+    let (new_course_term, set_new_course_term) = create_signal(None);
 
     styled::view! { styles,
         <div>
@@ -612,7 +614,16 @@ pub fn Courses() -> impl IntoView {
         </div>
         <dialog node_ref=create_course_ref>
             <h1>"Create Course"</h1>
-            <UserSearchBox selected_user_id=set_new_course_owner/>
+            <input
+                type="text"
+                placeholder="New Course Name"
+                prop:value=new_course_name
+                on:input=move |ev| set_new_course_name(event_target_value(&ev))
+            />
+            <UserSearchBox selected_user_id=set_new_course_owner placeholder="Search for Course Owner...".to_string()/>
+            <TermSelector selected_term_id=set_new_course_term/>
+            <button on:click=move |_| create_course_ref.get().unwrap().close()>"Cancel"</button>
+            <button disabled=move || new_course_name.with(|name| name.is_empty()) || new_course_owner.with(|owner| owner.is_none())>"Create"</button>
         </dialog>
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>

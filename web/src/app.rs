@@ -139,7 +139,7 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
 }
 
 #[component]
-pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>) -> impl IntoView {
+pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optional)] placeholder: String) -> impl IntoView {
     let (query, set_query) = create_signal(String::new());
     let found_users = create_resource(query, |query| async move {
         lookup_users(query).await
@@ -148,9 +148,10 @@ pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>) -> impl Into
     let identifier_clone = identifier.clone();
     // Tracks when the user backspaces without needing a ReadSignal from the parent
     let (has_valid, set_has_valid) = create_signal(false);
+    let placeholder = if placeholder.is_empty() { "Search Users...".to_string() } else { placeholder };
 
     view! {
-        <input type="text" placeholder="Search Users..." list=move || format!("user-search-{identifier}") prop:value=query on:input=move |ev| {
+        <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") prop:value=query on:input=move |ev| {
             if let Some(Ok(users_list)) = found_users() {
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
                     set_query(format!("{} ({})", user.name, user.username));
@@ -183,5 +184,76 @@ pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>) -> impl Into
                 }
             </Transition>
         </datalist>
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct TermInfo {
+    id: String,
+    name: String,
+}
+
+#[server(GetTerms)]
+async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::server::WebState;
+    use mongodb::bson::{doc, from_document};
+    use goldleaf::AutoCollection;
+    use db::models::Term;
+
+    let data = extract!(Data<WebState>);
+
+    let stage_sort_by_name = doc! {
+        "$sort": {
+            "name": 1
+        }
+    };
+
+    let terms = data.database.auto_collection::<Term>().aggregate(vec![
+        stage_sort_by_name,
+    ], None).await?.try_collect::<Vec<_>>().await?;
+
+    let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| TermInfo {
+        id: t.id.unwrap().to_hex(),
+        name: t.name,
+    }).collect();
+    
+    Ok(terms)
+}
+
+#[component]
+pub fn TermSelector(selected_term_id: WriteSignal<Option<String>>) -> impl IntoView {
+    let terms = create_blocking_resource(|| (), |()| async move {
+        get_terms().await
+    });
+
+    view! {
+        <select on:input=move |ev| {
+            if let Some(Ok(terms)) = terms.get() {
+                if let Some(term) = terms.iter().find(|t| t.id == event_target_value(&ev)) {
+                    selected_term_id(Some(term.id.clone()));
+                }
+            }
+        }>
+            <option selected disabled>"Term..."</option>
+            <Transition>
+                {move ||
+                    terms.get().map(|terms| {
+                        view! {
+                            <For
+                                each=move || terms.clone().unwrap()
+                                key=|term| term.id.clone()
+                                children=move |term| {
+                                    view! {
+                                        <option value={term.id}>{term.name}</option>
+                                    }
+                                }
+                            />
+                        }
+                    })             
+                }
+            </Transition>
+        </select>
     }
 }
