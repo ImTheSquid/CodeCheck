@@ -89,7 +89,8 @@ impl Codesight {
         None
     }*/
 
-    pub fn greedy_string_tiling(&self, sig1: &Signature, sig2: &Signature, threshold: i32) -> Match {
+    pub fn greedy_string_tiling(&self, sig1: &Signature, sig2: &Signature, threshold: i32) -> (Match, Vec<[i32; 2]>) {
+        let mut common_tokens = Vec::new();
         let a = sig1.get_token_data();
         let b = sig2.get_token_data();
         let len_a = a.len();
@@ -100,8 +101,8 @@ impl Codesight {
         let a = sig1.get_token_data();
         let b = sig2.get_token_data();
 
-        for a_idx in 0..len_a {
-            for b_idx in 0..len_b {
+        for mut a_idx in 0..len_a {
+            for mut b_idx in 0..len_b {
                 let mut j = 0;
                 if a_idx == b_idx {
                     j = 1;
@@ -111,11 +112,15 @@ impl Codesight {
                     && a[a_idx + j].get_token().eq(b[b_idx + j].get_token())
                     && !a[a_idx + j].get_mark()
                     && !b[b_idx + j].get_mark()
-                {
+                {   
                     j += 1;
                 }
                 if j > 0 && j >= max_match as usize {
                     matches.add(a_idx as i32, b_idx as i32, j as i32);
+                    let pair = [a[a_idx].get_line(), b[b_idx].get_line()];
+                    if (!common_tokens.contains(&pair)) {
+                        common_tokens.push(pair);
+                    }
                 }
             }
         }
@@ -124,8 +129,7 @@ impl Codesight {
             matches.sort(3);
             matches.mark();
         }
-
-        matches
+        (matches, common_tokens)
     }
 
     pub fn get_percent_match(&self, match_data: &Match) -> f32 {
@@ -157,7 +161,7 @@ impl Codesight {
                 if i == j {
                     table[i][j] = -1.0;
                 } else {
-                    let result = self.greedy_string_tiling(&self.signatures[i], &self.signatures[j], threshold);
+                    let (result, string) = self.greedy_string_tiling(&self.signatures[i], &self.signatures[j], threshold);
                     table[i][j] = self.round(self.get_percent_match(&result), 2);
                     table[j][i] = table[i][j];
                 }

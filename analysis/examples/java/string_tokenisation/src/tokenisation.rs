@@ -21,8 +21,12 @@ pub struct AssociatedStruct<'a, Ident, T> {
     pub inner: T,
 }
 
-fn tokenisation<Ident: Hash + Clone + Send + Sync + 'static, S: AsRef<str>>(sources: &[AssociatedStruct<'_, Ident, S>], progress: Option<mpsc::Sender<usize>>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+// This function returns a matrix of similarity scores and a matrix of common lines as a tuple
 
+fn tokenisation<Ident: Hash + Clone + Send + Sync + 'static, S: AsRef<str>>(sources: &[AssociatedStruct<'_, Ident, S>], progress: Option<mpsc::Sender<usize>>) -> (Vec<Vec<f32>>, Vec<Vec<Vec<[i32; 2]>>>) {
+
+    
+    let mut files: Vec<File> = Vec::new();
     let mut texts: Vec<String> = Vec::new();
     let mut len = 0;
     for source in sources {
@@ -37,14 +41,15 @@ fn tokenisation<Ident: Hash + Clone + Send + Sync + 'static, S: AsRef<str>>(sour
         signatures.push(codesight.get_signature(i).unwrap());
     }
     let mut matrix: Vec<Vec<f32>> = vec![vec![0.0; len]; len];
-
+    let mut common_lines: Vec<Vec<Vec<[i32; 2]>>> = vec![vec![vec![]; len]; len];
+    let mut common: Vec<[i32; 2]> = vec![[0; 2]; 0];
 
     for i in 0..len {
         for j in 0..len {
             if i != j {
-                let match1 = codesight.greedy_string_tiling(&signatures[i], &signatures[j], 30);
+                let (match1, common) = codesight.greedy_string_tiling(&signatures[i], &signatures[j], 30);
                 let match_percent = codesight.get_percent_match(&match1) / 100.00;
-                
+
                 // Report progress if a sender is provided
                 if let Some(sender) = progress.as_ref() {
                     sender.send((i)).unwrap();
@@ -53,11 +58,12 @@ fn tokenisation<Ident: Hash + Clone + Send + Sync + 'static, S: AsRef<str>>(sour
             }
             if i == j {
                 matrix[i][j] = 1.0;
-            }  
+            }
+            common_lines[i][j] = common.clone();  
         }
     }
 
 
-    Ok(matrix)
+    return (matrix, common_lines);
 
 }

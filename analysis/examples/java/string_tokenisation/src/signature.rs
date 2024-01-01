@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::{PathBuf, Path};
 use std::io::{BufRead, BufReader};
 use std::collections::VecDeque;
-
+use regex::Regex;
 use crate::token::Token;
 
 pub struct Signature {
@@ -11,6 +11,8 @@ pub struct Signature {
     lexical_stream: String,
     tokens: Vec<Token>,
 }
+
+static mut IN_MLC: bool   = false;
 
 impl Signature {
     pub fn new(text: String) -> Self {
@@ -23,6 +25,8 @@ impl Signature {
 
         //let reader = BufReader::new(&signature.file);
         let mut line_counter = 0;
+
+        //signature.text = signature.remove_comments_string(signature.text.to_string());
 
         for line in signature.text.lines() {
             line_counter += 1;
@@ -50,12 +54,63 @@ impl Signature {
     }
 
     pub fn trim_comments(&self, line: &str) -> String {
+        if (line.contains("/*")) {
+            unsafe {
+                IN_MLC = true;
+            }
+        }
+        if (line.contains("*/")) {
+            unsafe {
+                IN_MLC = false;
+            }
+            return String::new();
+        }
+
+        if (unsafe { IN_MLC }) {
+            return String::new();
+        }
+
         if line.len() > 1 && line.starts_with("//") {
             String::new()
         } else {
             line.to_string()
         }
     }
+
+    fn remove_comments_string(&self, mut input: String) -> String {
+        // https://stackoverflow.com/questions/54586730/how-to-remove-comments-denoted-by-and-in-a-string
+        if input.contains("/*") && input.contains("*/") {
+            let first_occurrence_open = input.find("/*").unwrap();
+            let first_occurrence_trailing = input.find("*/").unwrap();
+    
+            input = Self::replace_at(first_occurrence_open, first_occurrence_trailing, input);
+    
+            if input.contains("/*") && input.contains("*/") {
+                input = self.remove_comments_string(input);
+            } else {
+                return input;
+            }
+        }
+    
+        input
+    }
+    
+    fn replace_at(mut start_index_incl: usize, mut end_index_incl: usize, data: String) -> String {
+        // -2 because space and \, +2 because /\\*
+        if (start_index_incl < 2) {
+            start_index_incl = 2;
+        }
+        if (end_index_incl + 2 >= data.len()) {
+            end_index_incl = data.len() - 3;
+        }
+        let replaced = format!(
+            "{}{}",
+            &data[..start_index_incl - 2],
+            &data[end_index_incl + 2..]
+        );
+        replaced
+    }
+   
 
     pub fn separate_words(&self, line: &str) -> VecDeque<String> {
         let mut words = VecDeque::new();
