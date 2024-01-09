@@ -1,11 +1,11 @@
 #![feature(fs_try_exists)]
 #![feature(adt_const_params)]
 #![feature(iterator_try_collect)]
-pub mod app;
-pub mod setup;
-pub mod login;
 pub mod admin;
+pub mod app;
 pub mod home;
+pub mod login;
+pub mod setup;
 
 use cfg_if::cfg_if;
 
@@ -45,16 +45,23 @@ impl<const R: db::Role> actix_web::FromRequest for AuthedUser<R> {
     type Error = auth::AuthError;
     type Future = futures_util::future::LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    fn from_request(req: &actix_web::HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        _payload: &mut actix_web::dev::Payload,
+    ) -> Self::Future {
         let cookie = match req.cookie("session") {
             None => return Box::pin(async move { Err(auth::AuthError::InvalidSession) }),
             Some(c) => c,
         };
 
-        let data = req.app_data::<actix_web::web::Data<server::WebState>>().unwrap().clone(); 
+        let data = req
+            .app_data::<actix_web::web::Data<server::WebState>>()
+            .unwrap()
+            .clone();
 
         Box::pin(async move {
-            let validation_result = match auth::validate_token(&data.database, cookie.value()).await {
+            let validation_result = match auth::validate_token(&data.database, cookie.value()).await
+            {
                 Ok(validated_user) => validated_user,
                 Err(e) => return Err(e),
             };
@@ -67,11 +74,10 @@ impl<const R: db::Role> actix_web::FromRequest for AuthedUser<R> {
     }
 }
 
-
 #[cfg(feature = "ssr")]
 pub mod server {
-    use std::{sync::RwLock, env};
     use mongodb::Database;
+    use std::{env, sync::RwLock};
 
     const CONFIG_DIRECTORY: &str = "/etc/codecheck";
     const CONFIG_FILE_NAME: &str = "config.toml";
@@ -86,14 +92,19 @@ pub mod server {
         pub async fn new() -> Result<Self, anyhow::Error> {
             Ok(Self {
                 config: RwLock::new(Config::read()?),
-                database: db::connect(&env::var("CODECHECK_MONGO_URI").expect("`CODECHECK_MONGO_URI` variable required!"), "codecheck").await?, 
+                database: db::connect(
+                    &env::var("CODECHECK_MONGO_URI")
+                        .expect("`CODECHECK_MONGO_URI` variable required!"),
+                    "codecheck",
+                )
+                .await?,
             })
         }
     }
 
-    use std::{path::Path, fs};
+    use std::{fs, path::Path};
 
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Deserialize, Serialize, Default)]
     pub struct Config {
@@ -110,7 +121,7 @@ pub mod server {
                 fs::write(&config_path, toml::to_string(&Config::default())?)?;
                 return Ok(Config::default());
             }
-            
+
             Ok(toml::from_str(&fs::read_to_string(&config_path)?)?)
         }
 

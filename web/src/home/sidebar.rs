@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use futures_util::TryStreamExt;
-use leptos::{*, html::Dialog};
+use leptos::{html::Dialog, *};
 use leptos_meta::*;
 use leptos_router::*;
 use stylist::style;
@@ -29,44 +29,45 @@ pub struct CourseInfo {
 }
 
 #[server(GetCourses)]
-async fn get_courses(try_get_all: String, term_id: String) -> Result<Vec<CourseInfo>, ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
+async fn get_courses(
+    try_get_all: String,
+    term_id: String,
+) -> Result<Vec<CourseInfo>, ServerFnError> {
     use crate::server::WebState;
-    use goldleaf::{CollectionIdentity, AutoCollection};
-    use db::models::{Course, User};
-    use mongodb::bson::{doc, from_document, oid::ObjectId};
     use crate::AuthedUser;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
+    use db::models::{Course, User};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::{extract, ResponseOptions};
+    use mongodb::bson::{doc, from_document, oid::ObjectId};
 
     let term_id = ObjectId::from_str(&term_id)?;
-    
+
     let data = extract!(Data<WebState>);
-    
+
     let mut aggregation = if bool::from_str(&try_get_all)? {
-        let _user = extract!(AuthedUser<{db::Role::Admin}>);
+        let _user = extract!(AuthedUser<{ db::Role::Admin }>);
 
         Vec::new()
     } else {
-        let user = extract!(AuthedUser<{db::Role::Instructor}>);
+        let user = extract!(AuthedUser<{ db::Role::Instructor }>);
 
-        vec![
-            doc! {
-                "$match": {
-                    "$or": [
-                        {
-                            "owner": user.id,
-                        },
-                        {
-                            "instructors": user.id,
-                        },
-                        {
-                            "graders": user.id,
-                        },
-                    ]
-                }
+        vec![doc! {
+            "$match": {
+                "$or": [
+                    {
+                        "owner": user.id,
+                    },
+                    {
+                        "instructors": user.id,
+                    },
+                    {
+                        "graders": user.id,
+                    },
+                ]
             }
-        ]
+        }]
     };
 
     aggregation.append(&mut vec![
@@ -106,37 +107,60 @@ async fn get_courses(try_get_all: String, term_id: String) -> Result<Vec<CourseI
             "$sort": {
                 "name": 1,
             }
-        }
+        },
     ]);
 
-    let courses = data.database.auto_collection::<Course>().aggregate(aggregation, None).await?.try_collect::<Vec<_>>().await?;
-    
-    let courses = courses.into_iter().map(from_document).try_collect::<Vec<Course>>()?.into_iter().map(|c| CourseInfo {
-        id: c.id.unwrap().to_hex(),
-        name: c.name,
-        owner: {
-            let human_owner = c.human_owner.unwrap();
-            HumanReadableUser { id: c.owner.to_hex(), name: human_owner.name, username: human_owner.username }
-        },
-    }).collect();
+    let courses = data
+        .database
+        .auto_collection::<Course>()
+        .aggregate(aggregation, None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let courses = courses
+        .into_iter()
+        .map(from_document)
+        .try_collect::<Vec<Course>>()?
+        .into_iter()
+        .map(|c| CourseInfo {
+            id: c.id.unwrap().to_hex(),
+            name: c.name,
+            owner: {
+                let human_owner = c.human_owner.unwrap();
+                HumanReadableUser {
+                    id: c.owner.to_hex(),
+                    name: human_owner.name,
+                    username: human_owner.username,
+                }
+            },
+        })
+        .collect();
 
     Ok(courses)
 }
 
 #[component]
-pub fn CourseSidebar(try_get_all: bool, #[prop(into)] term_id: Signal<Option<String>>, #[prop(optional)] refresh: Option<Trigger>) -> impl IntoView {
-    let courses = create_blocking_resource(move || {
-        if let Some(refresh) = refresh {
-            refresh();
-        }
-        term_id()
-    }, move |term_id| async move {
-        if let Some(term_id) = term_id {
-            Some(get_courses(try_get_all.to_string(), term_id).await)
-        } else {
-            None
-        }
-    });
+pub fn CourseSidebar(
+    try_get_all: bool,
+    #[prop(into)] term_id: Signal<Option<String>>,
+    #[prop(optional)] refresh: Option<Trigger>,
+) -> impl IntoView {
+    let courses = create_blocking_resource(
+        move || {
+            if let Some(refresh) = refresh {
+                refresh();
+            }
+            term_id()
+        },
+        move |term_id| async move {
+            if let Some(term_id) = term_id {
+                Some(get_courses(try_get_all.to_string(), term_id).await)
+            } else {
+                None
+            }
+        },
+    );
 
     view! {
         <div class="sidebar-container">
@@ -144,7 +168,7 @@ pub fn CourseSidebar(try_get_all: bool, #[prop(into)] term_id: Signal<Option<Str
                 <Transition fallback=|| view! { <p>"No courses found."</p> }>
                     {move || courses().map(|courses| {
                         match courses {
-                            Some(courses) => 
+                            Some(courses) =>
                         view! {
                             <For
                                 each=move || courses.clone().unwrap()
@@ -174,7 +198,7 @@ fn CourseLink(info: CourseInfo) -> impl IntoView {
         div {
             display: block;
             text-decoration: none;
-            
+
         }
     );
 

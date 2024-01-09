@@ -1,9 +1,9 @@
+use crate::*;
 use bson::serde_helpers::chrono_datetime_as_bson_datetime;
+use chrono::{DateTime, Utc};
 use goldleaf::CollectionIdentity;
 use mongodb::bson::oid::ObjectId;
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use crate::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
@@ -18,7 +18,7 @@ pub struct Session {
 #[db(name = "user")]
 pub struct User {
     #[db(native_id_field)]
-    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<UserId>,
     #[db(indexing(index = 1, unique))]
     pub username: String,
@@ -51,8 +51,8 @@ pub type TermId = ObjectId;
 #[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
 #[db(name = "term")]
 pub struct Term {
-    #[db(native_id_field)] 
-    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    #[db(native_id_field)]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<TermId>,
     pub name: String,
     #[serde(default, skip_serializing)]
@@ -78,7 +78,7 @@ pub struct HumanReadableWithoutId {
 #[db(name = "course")]
 pub struct Course {
     #[db(native_id_field)]
-    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<CourseId>,
     pub name: String,
     pub owner: UserId,
@@ -95,7 +95,7 @@ pub type AssignmentId = ObjectId;
 #[db(name = "assignment")]
 pub struct Assignment {
     #[db(native_id_field)]
-    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<AssignmentId>,
     pub name: String,
     pub course: CourseSectionId,
@@ -134,7 +134,7 @@ pub type SubmissionId = ObjectId;
 #[db(name = "submission")]
 pub struct Submission {
     #[db(native_id_field)]
-    #[serde(rename="_id", skip_serializing_if="Option::is_none")]
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<SubmissionId>,
     pub assignment: AssignmentId,
     pub author: String,

@@ -10,7 +10,10 @@ pub mod models;
 
 #[cfg(feature = "server")]
 pub async fn connect(uri: &str, name: &str) -> Result<mongodb::Database> {
-    use mongodb::{Database, Client, options::{ConnectionString, ClientOptions}};
+    use mongodb::{
+        options::{ClientOptions, ConnectionString},
+        Client, Database,
+    };
 
     use crate::models::User;
 
@@ -25,11 +28,20 @@ pub async fn connect(uri: &str, name: &str) -> Result<mongodb::Database> {
     // Course::create_indices(&database).await?;
     // Assignment::create_indices(&database).await?;
     // Submission::create_indices(&database).await?;
-    
+
     Ok(database)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Copy, core::marker::ConstParamTy)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    core::marker::ConstParamTy,
+)]
 pub enum Role {
     Admin,
     Instructor,
@@ -42,7 +54,8 @@ impl ToString for Role {
             Self::Admin => "Admin",
             Self::Instructor => "Instructor",
             Self::Assistant => "Assistant",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -61,21 +74,25 @@ impl FromStr for Role {
 impl PartialOrd for Role {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(match self {
-            Self::Admin => if *other == Self::Admin {
-                std::cmp::Ordering::Equal
-            } else {
-                std::cmp::Ordering::Greater
-            },
-            Self::Assistant => if *other == Self::Assistant {
-                std::cmp::Ordering::Equal
-            } else {
-                std::cmp::Ordering::Less
-            },
+            Self::Admin => {
+                if *other == Self::Admin {
+                    std::cmp::Ordering::Equal
+                } else {
+                    std::cmp::Ordering::Greater
+                }
+            }
+            Self::Assistant => {
+                if *other == Self::Assistant {
+                    std::cmp::Ordering::Equal
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }
             Self::Instructor => match *other {
                 Self::Admin => std::cmp::Ordering::Less,
                 Self::Assistant => std::cmp::Ordering::Greater,
                 Self::Instructor => std::cmp::Ordering::Equal,
-            }
+            },
         })
     }
 }

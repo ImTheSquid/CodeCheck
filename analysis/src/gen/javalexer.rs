@@ -4,281 +4,598 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 use antlr_rust::atn::ATN;
+use antlr_rust::atn_deserializer::ATNDeserializer;
 use antlr_rust::char_stream::CharStream;
+use antlr_rust::dfa::DFA;
+use antlr_rust::error_listener::ErrorListener;
 use antlr_rust::int_stream::IntStream;
 use antlr_rust::lexer::{BaseLexer, Lexer, LexerRecog};
-use antlr_rust::atn_deserializer::ATNDeserializer;
-use antlr_rust::dfa::DFA;
-use antlr_rust::lexer_atn_simulator::{LexerATNSimulator, ILexerATNSimulator};
-use antlr_rust::PredictionContextCache;
-use antlr_rust::recognizer::{Recognizer,Actions};
-use antlr_rust::error_listener::ErrorListener;
-use antlr_rust::TokenSource;
-use antlr_rust::token_factory::{TokenFactory,CommonTokenFactory,TokenAware};
+use antlr_rust::lexer_atn_simulator::{ILexerATNSimulator, LexerATNSimulator};
+use antlr_rust::parser_rule_context::{cast, BaseParserRuleContext, ParserRuleContext};
+use antlr_rust::recognizer::{Actions, Recognizer};
+use antlr_rust::rule_context::{BaseRuleContext, EmptyContext, EmptyCustomRuleContext};
 use antlr_rust::token::*;
-use antlr_rust::rule_context::{BaseRuleContext,EmptyCustomRuleContext,EmptyContext};
-use antlr_rust::parser_rule_context::{ParserRuleContext,BaseParserRuleContext,cast};
-use antlr_rust::vocabulary::{Vocabulary,VocabularyImpl};
+use antlr_rust::token_factory::{CommonTokenFactory, TokenAware, TokenFactory};
+use antlr_rust::vocabulary::{Vocabulary, VocabularyImpl};
+use antlr_rust::PredictionContextCache;
+use antlr_rust::TokenSource;
 
-use antlr_rust::{lazy_static,Tid,TidAble,TidExt};
+use antlr_rust::{lazy_static, Tid, TidAble, TidExt};
 
-use std::sync::Arc;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
+pub const ABSTRACT: isize = 1;
+pub const ASSERT: isize = 2;
+pub const BOOLEAN: isize = 3;
+pub const BREAK: isize = 4;
+pub const BYTE: isize = 5;
+pub const CASE: isize = 6;
+pub const CATCH: isize = 7;
+pub const CHAR: isize = 8;
+pub const CLASS: isize = 9;
+pub const CONST: isize = 10;
+pub const CONTINUE: isize = 11;
+pub const DEFAULT: isize = 12;
+pub const DO: isize = 13;
+pub const DOUBLE: isize = 14;
+pub const ELSE: isize = 15;
+pub const ENUM: isize = 16;
+pub const EXTENDS: isize = 17;
+pub const FINAL: isize = 18;
+pub const FINALLY: isize = 19;
+pub const FLOAT: isize = 20;
+pub const FOR: isize = 21;
+pub const IF: isize = 22;
+pub const GOTO: isize = 23;
+pub const IMPLEMENTS: isize = 24;
+pub const IMPORT: isize = 25;
+pub const INSTANCEOF: isize = 26;
+pub const INT: isize = 27;
+pub const INTERFACE: isize = 28;
+pub const LONG: isize = 29;
+pub const NATIVE: isize = 30;
+pub const NEW: isize = 31;
+pub const PACKAGE: isize = 32;
+pub const PRIVATE: isize = 33;
+pub const PROTECTED: isize = 34;
+pub const PUBLIC: isize = 35;
+pub const RETURN: isize = 36;
+pub const SHORT: isize = 37;
+pub const STATIC: isize = 38;
+pub const STRICTFP: isize = 39;
+pub const SUPER: isize = 40;
+pub const SWITCH: isize = 41;
+pub const SYNCHRONIZED: isize = 42;
+pub const THIS: isize = 43;
+pub const THROW: isize = 44;
+pub const THROWS: isize = 45;
+pub const TRANSIENT: isize = 46;
+pub const TRY: isize = 47;
+pub const VOID: isize = 48;
+pub const VOLATILE: isize = 49;
+pub const WHILE: isize = 50;
+pub const MODULE: isize = 51;
+pub const OPEN: isize = 52;
+pub const REQUIRES: isize = 53;
+pub const EXPORTS: isize = 54;
+pub const OPENS: isize = 55;
+pub const TO: isize = 56;
+pub const USES: isize = 57;
+pub const PROVIDES: isize = 58;
+pub const WITH: isize = 59;
+pub const TRANSITIVE: isize = 60;
+pub const VAR: isize = 61;
+pub const YIELD: isize = 62;
+pub const RECORD: isize = 63;
+pub const SEALED: isize = 64;
+pub const PERMITS: isize = 65;
+pub const NON_SEALED: isize = 66;
+pub const DECIMAL_LITERAL: isize = 67;
+pub const HEX_LITERAL: isize = 68;
+pub const OCT_LITERAL: isize = 69;
+pub const BINARY_LITERAL: isize = 70;
+pub const FLOAT_LITERAL: isize = 71;
+pub const HEX_FLOAT_LITERAL: isize = 72;
+pub const BOOL_LITERAL: isize = 73;
+pub const CHAR_LITERAL: isize = 74;
+pub const STRING_LITERAL: isize = 75;
+pub const TEXT_BLOCK: isize = 76;
+pub const NULL_LITERAL: isize = 77;
+pub const LPAREN: isize = 78;
+pub const RPAREN: isize = 79;
+pub const LBRACE: isize = 80;
+pub const RBRACE: isize = 81;
+pub const LBRACK: isize = 82;
+pub const RBRACK: isize = 83;
+pub const SEMI: isize = 84;
+pub const COMMA: isize = 85;
+pub const DOT: isize = 86;
+pub const ASSIGN: isize = 87;
+pub const GT: isize = 88;
+pub const LT: isize = 89;
+pub const BANG: isize = 90;
+pub const TILDE: isize = 91;
+pub const QUESTION: isize = 92;
+pub const COLON: isize = 93;
+pub const EQUAL: isize = 94;
+pub const LE: isize = 95;
+pub const GE: isize = 96;
+pub const NOTEQUAL: isize = 97;
+pub const AND: isize = 98;
+pub const OR: isize = 99;
+pub const INC: isize = 100;
+pub const DEC: isize = 101;
+pub const ADD: isize = 102;
+pub const SUB: isize = 103;
+pub const MUL: isize = 104;
+pub const DIV: isize = 105;
+pub const BITAND: isize = 106;
+pub const BITOR: isize = 107;
+pub const CARET: isize = 108;
+pub const MOD: isize = 109;
+pub const ADD_ASSIGN: isize = 110;
+pub const SUB_ASSIGN: isize = 111;
+pub const MUL_ASSIGN: isize = 112;
+pub const DIV_ASSIGN: isize = 113;
+pub const AND_ASSIGN: isize = 114;
+pub const OR_ASSIGN: isize = 115;
+pub const XOR_ASSIGN: isize = 116;
+pub const MOD_ASSIGN: isize = 117;
+pub const LSHIFT_ASSIGN: isize = 118;
+pub const RSHIFT_ASSIGN: isize = 119;
+pub const URSHIFT_ASSIGN: isize = 120;
+pub const ARROW: isize = 121;
+pub const COLONCOLON: isize = 122;
+pub const AT: isize = 123;
+pub const ELLIPSIS: isize = 124;
+pub const IDENTIFIER: isize = 125;
+pub const WS: isize = 126;
+pub const NEWLINE: isize = 127;
+pub const BLOCK_COMMENT: isize = 128;
+pub const LINE_COMMENT: isize = 129;
+pub const channelNames: [&'static str; 0 + 2] = ["DEFAULT_TOKEN_CHANNEL", "HIDDEN"];
 
-	pub const ABSTRACT:isize=1; 
-	pub const ASSERT:isize=2; 
-	pub const BOOLEAN:isize=3; 
-	pub const BREAK:isize=4; 
-	pub const BYTE:isize=5; 
-	pub const CASE:isize=6; 
-	pub const CATCH:isize=7; 
-	pub const CHAR:isize=8; 
-	pub const CLASS:isize=9; 
-	pub const CONST:isize=10; 
-	pub const CONTINUE:isize=11; 
-	pub const DEFAULT:isize=12; 
-	pub const DO:isize=13; 
-	pub const DOUBLE:isize=14; 
-	pub const ELSE:isize=15; 
-	pub const ENUM:isize=16; 
-	pub const EXTENDS:isize=17; 
-	pub const FINAL:isize=18; 
-	pub const FINALLY:isize=19; 
-	pub const FLOAT:isize=20; 
-	pub const FOR:isize=21; 
-	pub const IF:isize=22; 
-	pub const GOTO:isize=23; 
-	pub const IMPLEMENTS:isize=24; 
-	pub const IMPORT:isize=25; 
-	pub const INSTANCEOF:isize=26; 
-	pub const INT:isize=27; 
-	pub const INTERFACE:isize=28; 
-	pub const LONG:isize=29; 
-	pub const NATIVE:isize=30; 
-	pub const NEW:isize=31; 
-	pub const PACKAGE:isize=32; 
-	pub const PRIVATE:isize=33; 
-	pub const PROTECTED:isize=34; 
-	pub const PUBLIC:isize=35; 
-	pub const RETURN:isize=36; 
-	pub const SHORT:isize=37; 
-	pub const STATIC:isize=38; 
-	pub const STRICTFP:isize=39; 
-	pub const SUPER:isize=40; 
-	pub const SWITCH:isize=41; 
-	pub const SYNCHRONIZED:isize=42; 
-	pub const THIS:isize=43; 
-	pub const THROW:isize=44; 
-	pub const THROWS:isize=45; 
-	pub const TRANSIENT:isize=46; 
-	pub const TRY:isize=47; 
-	pub const VOID:isize=48; 
-	pub const VOLATILE:isize=49; 
-	pub const WHILE:isize=50; 
-	pub const MODULE:isize=51; 
-	pub const OPEN:isize=52; 
-	pub const REQUIRES:isize=53; 
-	pub const EXPORTS:isize=54; 
-	pub const OPENS:isize=55; 
-	pub const TO:isize=56; 
-	pub const USES:isize=57; 
-	pub const PROVIDES:isize=58; 
-	pub const WITH:isize=59; 
-	pub const TRANSITIVE:isize=60; 
-	pub const VAR:isize=61; 
-	pub const YIELD:isize=62; 
-	pub const RECORD:isize=63; 
-	pub const SEALED:isize=64; 
-	pub const PERMITS:isize=65; 
-	pub const NON_SEALED:isize=66; 
-	pub const DECIMAL_LITERAL:isize=67; 
-	pub const HEX_LITERAL:isize=68; 
-	pub const OCT_LITERAL:isize=69; 
-	pub const BINARY_LITERAL:isize=70; 
-	pub const FLOAT_LITERAL:isize=71; 
-	pub const HEX_FLOAT_LITERAL:isize=72; 
-	pub const BOOL_LITERAL:isize=73; 
-	pub const CHAR_LITERAL:isize=74; 
-	pub const STRING_LITERAL:isize=75; 
-	pub const TEXT_BLOCK:isize=76; 
-	pub const NULL_LITERAL:isize=77; 
-	pub const LPAREN:isize=78; 
-	pub const RPAREN:isize=79; 
-	pub const LBRACE:isize=80; 
-	pub const RBRACE:isize=81; 
-	pub const LBRACK:isize=82; 
-	pub const RBRACK:isize=83; 
-	pub const SEMI:isize=84; 
-	pub const COMMA:isize=85; 
-	pub const DOT:isize=86; 
-	pub const ASSIGN:isize=87; 
-	pub const GT:isize=88; 
-	pub const LT:isize=89; 
-	pub const BANG:isize=90; 
-	pub const TILDE:isize=91; 
-	pub const QUESTION:isize=92; 
-	pub const COLON:isize=93; 
-	pub const EQUAL:isize=94; 
-	pub const LE:isize=95; 
-	pub const GE:isize=96; 
-	pub const NOTEQUAL:isize=97; 
-	pub const AND:isize=98; 
-	pub const OR:isize=99; 
-	pub const INC:isize=100; 
-	pub const DEC:isize=101; 
-	pub const ADD:isize=102; 
-	pub const SUB:isize=103; 
-	pub const MUL:isize=104; 
-	pub const DIV:isize=105; 
-	pub const BITAND:isize=106; 
-	pub const BITOR:isize=107; 
-	pub const CARET:isize=108; 
-	pub const MOD:isize=109; 
-	pub const ADD_ASSIGN:isize=110; 
-	pub const SUB_ASSIGN:isize=111; 
-	pub const MUL_ASSIGN:isize=112; 
-	pub const DIV_ASSIGN:isize=113; 
-	pub const AND_ASSIGN:isize=114; 
-	pub const OR_ASSIGN:isize=115; 
-	pub const XOR_ASSIGN:isize=116; 
-	pub const MOD_ASSIGN:isize=117; 
-	pub const LSHIFT_ASSIGN:isize=118; 
-	pub const RSHIFT_ASSIGN:isize=119; 
-	pub const URSHIFT_ASSIGN:isize=120; 
-	pub const ARROW:isize=121; 
-	pub const COLONCOLON:isize=122; 
-	pub const AT:isize=123; 
-	pub const ELLIPSIS:isize=124; 
-	pub const IDENTIFIER:isize=125; 
-	pub const WS:isize=126; 
-	pub const NEWLINE:isize=127; 
-	pub const BLOCK_COMMENT:isize=128; 
-	pub const LINE_COMMENT:isize=129;
-	pub const channelNames: [&'static str;0+2] = [
-		"DEFAULT_TOKEN_CHANNEL", "HIDDEN"
-	];
+pub const modeNames: [&'static str; 1] = ["DEFAULT_MODE"];
 
-	pub const modeNames: [&'static str;1] = [
-		"DEFAULT_MODE"
-	];
+pub const ruleNames: [&'static str; 136] = [
+    "ABSTRACT",
+    "ASSERT",
+    "BOOLEAN",
+    "BREAK",
+    "BYTE",
+    "CASE",
+    "CATCH",
+    "CHAR",
+    "CLASS",
+    "CONST",
+    "CONTINUE",
+    "DEFAULT",
+    "DO",
+    "DOUBLE",
+    "ELSE",
+    "ENUM",
+    "EXTENDS",
+    "FINAL",
+    "FINALLY",
+    "FLOAT",
+    "FOR",
+    "IF",
+    "GOTO",
+    "IMPLEMENTS",
+    "IMPORT",
+    "INSTANCEOF",
+    "INT",
+    "INTERFACE",
+    "LONG",
+    "NATIVE",
+    "NEW",
+    "PACKAGE",
+    "PRIVATE",
+    "PROTECTED",
+    "PUBLIC",
+    "RETURN",
+    "SHORT",
+    "STATIC",
+    "STRICTFP",
+    "SUPER",
+    "SWITCH",
+    "SYNCHRONIZED",
+    "THIS",
+    "THROW",
+    "THROWS",
+    "TRANSIENT",
+    "TRY",
+    "VOID",
+    "VOLATILE",
+    "WHILE",
+    "MODULE",
+    "OPEN",
+    "REQUIRES",
+    "EXPORTS",
+    "OPENS",
+    "TO",
+    "USES",
+    "PROVIDES",
+    "WITH",
+    "TRANSITIVE",
+    "VAR",
+    "YIELD",
+    "RECORD",
+    "SEALED",
+    "PERMITS",
+    "NON_SEALED",
+    "DECIMAL_LITERAL",
+    "HEX_LITERAL",
+    "OCT_LITERAL",
+    "BINARY_LITERAL",
+    "FLOAT_LITERAL",
+    "HEX_FLOAT_LITERAL",
+    "BOOL_LITERAL",
+    "CHAR_LITERAL",
+    "STRING_LITERAL",
+    "TEXT_BLOCK",
+    "NULL_LITERAL",
+    "LPAREN",
+    "RPAREN",
+    "LBRACE",
+    "RBRACE",
+    "LBRACK",
+    "RBRACK",
+    "SEMI",
+    "COMMA",
+    "DOT",
+    "ASSIGN",
+    "GT",
+    "LT",
+    "BANG",
+    "TILDE",
+    "QUESTION",
+    "COLON",
+    "EQUAL",
+    "LE",
+    "GE",
+    "NOTEQUAL",
+    "AND",
+    "OR",
+    "INC",
+    "DEC",
+    "ADD",
+    "SUB",
+    "MUL",
+    "DIV",
+    "BITAND",
+    "BITOR",
+    "CARET",
+    "MOD",
+    "ADD_ASSIGN",
+    "SUB_ASSIGN",
+    "MUL_ASSIGN",
+    "DIV_ASSIGN",
+    "AND_ASSIGN",
+    "OR_ASSIGN",
+    "XOR_ASSIGN",
+    "MOD_ASSIGN",
+    "LSHIFT_ASSIGN",
+    "RSHIFT_ASSIGN",
+    "URSHIFT_ASSIGN",
+    "ARROW",
+    "COLONCOLON",
+    "AT",
+    "ELLIPSIS",
+    "IDENTIFIER",
+    "ExponentPart",
+    "EscapeSequence",
+    "HexDigits",
+    "HexDigit",
+    "Digits",
+    "LetterOrDigit",
+    "Letter",
+    "WS",
+    "NEWLINE",
+    "BLOCK_COMMENT",
+    "LINE_COMMENT",
+];
 
-	pub const ruleNames: [&'static str;136] = [
-		"ABSTRACT", "ASSERT", "BOOLEAN", "BREAK", "BYTE", "CASE", "CATCH", "CHAR", 
-		"CLASS", "CONST", "CONTINUE", "DEFAULT", "DO", "DOUBLE", "ELSE", "ENUM", 
-		"EXTENDS", "FINAL", "FINALLY", "FLOAT", "FOR", "IF", "GOTO", "IMPLEMENTS", 
-		"IMPORT", "INSTANCEOF", "INT", "INTERFACE", "LONG", "NATIVE", "NEW", "PACKAGE", 
-		"PRIVATE", "PROTECTED", "PUBLIC", "RETURN", "SHORT", "STATIC", "STRICTFP", 
-		"SUPER", "SWITCH", "SYNCHRONIZED", "THIS", "THROW", "THROWS", "TRANSIENT", 
-		"TRY", "VOID", "VOLATILE", "WHILE", "MODULE", "OPEN", "REQUIRES", "EXPORTS", 
-		"OPENS", "TO", "USES", "PROVIDES", "WITH", "TRANSITIVE", "VAR", "YIELD", 
-		"RECORD", "SEALED", "PERMITS", "NON_SEALED", "DECIMAL_LITERAL", "HEX_LITERAL", 
-		"OCT_LITERAL", "BINARY_LITERAL", "FLOAT_LITERAL", "HEX_FLOAT_LITERAL", 
-		"BOOL_LITERAL", "CHAR_LITERAL", "STRING_LITERAL", "TEXT_BLOCK", "NULL_LITERAL", 
-		"LPAREN", "RPAREN", "LBRACE", "RBRACE", "LBRACK", "RBRACK", "SEMI", "COMMA", 
-		"DOT", "ASSIGN", "GT", "LT", "BANG", "TILDE", "QUESTION", "COLON", "EQUAL", 
-		"LE", "GE", "NOTEQUAL", "AND", "OR", "INC", "DEC", "ADD", "SUB", "MUL", 
-		"DIV", "BITAND", "BITOR", "CARET", "MOD", "ADD_ASSIGN", "SUB_ASSIGN", 
-		"MUL_ASSIGN", "DIV_ASSIGN", "AND_ASSIGN", "OR_ASSIGN", "XOR_ASSIGN", "MOD_ASSIGN", 
-		"LSHIFT_ASSIGN", "RSHIFT_ASSIGN", "URSHIFT_ASSIGN", "ARROW", "COLONCOLON", 
-		"AT", "ELLIPSIS", "IDENTIFIER", "ExponentPart", "EscapeSequence", "HexDigits", 
-		"HexDigit", "Digits", "LetterOrDigit", "Letter", "WS", "NEWLINE", "BLOCK_COMMENT", 
-		"LINE_COMMENT"
-	];
+pub const _LITERAL_NAMES: [Option<&'static str>; 125] = [
+    None,
+    Some("'abstract'"),
+    Some("'assert'"),
+    Some("'boolean'"),
+    Some("'break'"),
+    Some("'byte'"),
+    Some("'case'"),
+    Some("'catch'"),
+    Some("'char'"),
+    Some("'class'"),
+    Some("'const'"),
+    Some("'continue'"),
+    Some("'default'"),
+    Some("'do'"),
+    Some("'double'"),
+    Some("'else'"),
+    Some("'enum'"),
+    Some("'extends'"),
+    Some("'final'"),
+    Some("'finally'"),
+    Some("'float'"),
+    Some("'for'"),
+    Some("'if'"),
+    Some("'goto'"),
+    Some("'implements'"),
+    Some("'import'"),
+    Some("'instanceof'"),
+    Some("'int'"),
+    Some("'interface'"),
+    Some("'long'"),
+    Some("'native'"),
+    Some("'new'"),
+    Some("'package'"),
+    Some("'private'"),
+    Some("'protected'"),
+    Some("'public'"),
+    Some("'return'"),
+    Some("'short'"),
+    Some("'static'"),
+    Some("'strictfp'"),
+    Some("'super'"),
+    Some("'switch'"),
+    Some("'synchronized'"),
+    Some("'this'"),
+    Some("'throw'"),
+    Some("'throws'"),
+    Some("'transient'"),
+    Some("'try'"),
+    Some("'void'"),
+    Some("'volatile'"),
+    Some("'while'"),
+    Some("'module'"),
+    Some("'open'"),
+    Some("'requires'"),
+    Some("'exports'"),
+    Some("'opens'"),
+    Some("'to'"),
+    Some("'uses'"),
+    Some("'provides'"),
+    Some("'with'"),
+    Some("'transitive'"),
+    Some("'var'"),
+    Some("'yield'"),
+    Some("'record'"),
+    Some("'sealed'"),
+    Some("'permits'"),
+    Some("'non-sealed'"),
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    Some("'null'"),
+    Some("'('"),
+    Some("')'"),
+    Some("'{'"),
+    Some("'}'"),
+    Some("'['"),
+    Some("']'"),
+    Some("';'"),
+    Some("','"),
+    Some("'.'"),
+    Some("'='"),
+    Some("'>'"),
+    Some("'<'"),
+    Some("'!'"),
+    Some("'~'"),
+    Some("'?'"),
+    Some("':'"),
+    Some("'=='"),
+    Some("'<='"),
+    Some("'>='"),
+    Some("'!='"),
+    Some("'&&'"),
+    Some("'||'"),
+    Some("'++'"),
+    Some("'--'"),
+    Some("'+'"),
+    Some("'-'"),
+    Some("'*'"),
+    Some("'/'"),
+    Some("'&'"),
+    Some("'|'"),
+    Some("'^'"),
+    Some("'%'"),
+    Some("'+='"),
+    Some("'-='"),
+    Some("'*='"),
+    Some("'/='"),
+    Some("'&='"),
+    Some("'|='"),
+    Some("'^='"),
+    Some("'%='"),
+    Some("'<<='"),
+    Some("'>>='"),
+    Some("'>>>='"),
+    Some("'->'"),
+    Some("'::'"),
+    Some("'@'"),
+    Some("'...'"),
+];
+pub const _SYMBOLIC_NAMES: [Option<&'static str>; 130] = [
+    None,
+    Some("ABSTRACT"),
+    Some("ASSERT"),
+    Some("BOOLEAN"),
+    Some("BREAK"),
+    Some("BYTE"),
+    Some("CASE"),
+    Some("CATCH"),
+    Some("CHAR"),
+    Some("CLASS"),
+    Some("CONST"),
+    Some("CONTINUE"),
+    Some("DEFAULT"),
+    Some("DO"),
+    Some("DOUBLE"),
+    Some("ELSE"),
+    Some("ENUM"),
+    Some("EXTENDS"),
+    Some("FINAL"),
+    Some("FINALLY"),
+    Some("FLOAT"),
+    Some("FOR"),
+    Some("IF"),
+    Some("GOTO"),
+    Some("IMPLEMENTS"),
+    Some("IMPORT"),
+    Some("INSTANCEOF"),
+    Some("INT"),
+    Some("INTERFACE"),
+    Some("LONG"),
+    Some("NATIVE"),
+    Some("NEW"),
+    Some("PACKAGE"),
+    Some("PRIVATE"),
+    Some("PROTECTED"),
+    Some("PUBLIC"),
+    Some("RETURN"),
+    Some("SHORT"),
+    Some("STATIC"),
+    Some("STRICTFP"),
+    Some("SUPER"),
+    Some("SWITCH"),
+    Some("SYNCHRONIZED"),
+    Some("THIS"),
+    Some("THROW"),
+    Some("THROWS"),
+    Some("TRANSIENT"),
+    Some("TRY"),
+    Some("VOID"),
+    Some("VOLATILE"),
+    Some("WHILE"),
+    Some("MODULE"),
+    Some("OPEN"),
+    Some("REQUIRES"),
+    Some("EXPORTS"),
+    Some("OPENS"),
+    Some("TO"),
+    Some("USES"),
+    Some("PROVIDES"),
+    Some("WITH"),
+    Some("TRANSITIVE"),
+    Some("VAR"),
+    Some("YIELD"),
+    Some("RECORD"),
+    Some("SEALED"),
+    Some("PERMITS"),
+    Some("NON_SEALED"),
+    Some("DECIMAL_LITERAL"),
+    Some("HEX_LITERAL"),
+    Some("OCT_LITERAL"),
+    Some("BINARY_LITERAL"),
+    Some("FLOAT_LITERAL"),
+    Some("HEX_FLOAT_LITERAL"),
+    Some("BOOL_LITERAL"),
+    Some("CHAR_LITERAL"),
+    Some("STRING_LITERAL"),
+    Some("TEXT_BLOCK"),
+    Some("NULL_LITERAL"),
+    Some("LPAREN"),
+    Some("RPAREN"),
+    Some("LBRACE"),
+    Some("RBRACE"),
+    Some("LBRACK"),
+    Some("RBRACK"),
+    Some("SEMI"),
+    Some("COMMA"),
+    Some("DOT"),
+    Some("ASSIGN"),
+    Some("GT"),
+    Some("LT"),
+    Some("BANG"),
+    Some("TILDE"),
+    Some("QUESTION"),
+    Some("COLON"),
+    Some("EQUAL"),
+    Some("LE"),
+    Some("GE"),
+    Some("NOTEQUAL"),
+    Some("AND"),
+    Some("OR"),
+    Some("INC"),
+    Some("DEC"),
+    Some("ADD"),
+    Some("SUB"),
+    Some("MUL"),
+    Some("DIV"),
+    Some("BITAND"),
+    Some("BITOR"),
+    Some("CARET"),
+    Some("MOD"),
+    Some("ADD_ASSIGN"),
+    Some("SUB_ASSIGN"),
+    Some("MUL_ASSIGN"),
+    Some("DIV_ASSIGN"),
+    Some("AND_ASSIGN"),
+    Some("OR_ASSIGN"),
+    Some("XOR_ASSIGN"),
+    Some("MOD_ASSIGN"),
+    Some("LSHIFT_ASSIGN"),
+    Some("RSHIFT_ASSIGN"),
+    Some("URSHIFT_ASSIGN"),
+    Some("ARROW"),
+    Some("COLONCOLON"),
+    Some("AT"),
+    Some("ELLIPSIS"),
+    Some("IDENTIFIER"),
+    Some("WS"),
+    Some("NEWLINE"),
+    Some("BLOCK_COMMENT"),
+    Some("LINE_COMMENT"),
+];
+lazy_static! {
+    static ref _shared_context_cache: Arc<PredictionContextCache> =
+        Arc::new(PredictionContextCache::new());
+    static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(
+        _LITERAL_NAMES.iter(),
+        _SYMBOLIC_NAMES.iter(),
+        None
+    ));
+}
 
-
-	pub const _LITERAL_NAMES: [Option<&'static str>;125] = [
-		None, Some("'abstract'"), Some("'assert'"), Some("'boolean'"), Some("'break'"), 
-		Some("'byte'"), Some("'case'"), Some("'catch'"), Some("'char'"), Some("'class'"), 
-		Some("'const'"), Some("'continue'"), Some("'default'"), Some("'do'"), 
-		Some("'double'"), Some("'else'"), Some("'enum'"), Some("'extends'"), Some("'final'"), 
-		Some("'finally'"), Some("'float'"), Some("'for'"), Some("'if'"), Some("'goto'"), 
-		Some("'implements'"), Some("'import'"), Some("'instanceof'"), Some("'int'"), 
-		Some("'interface'"), Some("'long'"), Some("'native'"), Some("'new'"), 
-		Some("'package'"), Some("'private'"), Some("'protected'"), Some("'public'"), 
-		Some("'return'"), Some("'short'"), Some("'static'"), Some("'strictfp'"), 
-		Some("'super'"), Some("'switch'"), Some("'synchronized'"), Some("'this'"), 
-		Some("'throw'"), Some("'throws'"), Some("'transient'"), Some("'try'"), 
-		Some("'void'"), Some("'volatile'"), Some("'while'"), Some("'module'"), 
-		Some("'open'"), Some("'requires'"), Some("'exports'"), Some("'opens'"), 
-		Some("'to'"), Some("'uses'"), Some("'provides'"), Some("'with'"), Some("'transitive'"), 
-		Some("'var'"), Some("'yield'"), Some("'record'"), Some("'sealed'"), Some("'permits'"), 
-		Some("'non-sealed'"), None, None, None, None, None, None, None, None, 
-		None, None, Some("'null'"), Some("'('"), Some("')'"), Some("'{'"), Some("'}'"), 
-		Some("'['"), Some("']'"), Some("';'"), Some("','"), Some("'.'"), Some("'='"), 
-		Some("'>'"), Some("'<'"), Some("'!'"), Some("'~'"), Some("'?'"), Some("':'"), 
-		Some("'=='"), Some("'<='"), Some("'>='"), Some("'!='"), Some("'&&'"), 
-		Some("'||'"), Some("'++'"), Some("'--'"), Some("'+'"), Some("'-'"), Some("'*'"), 
-		Some("'/'"), Some("'&'"), Some("'|'"), Some("'^'"), Some("'%'"), Some("'+='"), 
-		Some("'-='"), Some("'*='"), Some("'/='"), Some("'&='"), Some("'|='"), 
-		Some("'^='"), Some("'%='"), Some("'<<='"), Some("'>>='"), Some("'>>>='"), 
-		Some("'->'"), Some("'::'"), Some("'@'"), Some("'...'")
-	];
-	pub const _SYMBOLIC_NAMES: [Option<&'static str>;130]  = [
-		None, Some("ABSTRACT"), Some("ASSERT"), Some("BOOLEAN"), Some("BREAK"), 
-		Some("BYTE"), Some("CASE"), Some("CATCH"), Some("CHAR"), Some("CLASS"), 
-		Some("CONST"), Some("CONTINUE"), Some("DEFAULT"), Some("DO"), Some("DOUBLE"), 
-		Some("ELSE"), Some("ENUM"), Some("EXTENDS"), Some("FINAL"), Some("FINALLY"), 
-		Some("FLOAT"), Some("FOR"), Some("IF"), Some("GOTO"), Some("IMPLEMENTS"), 
-		Some("IMPORT"), Some("INSTANCEOF"), Some("INT"), Some("INTERFACE"), Some("LONG"), 
-		Some("NATIVE"), Some("NEW"), Some("PACKAGE"), Some("PRIVATE"), Some("PROTECTED"), 
-		Some("PUBLIC"), Some("RETURN"), Some("SHORT"), Some("STATIC"), Some("STRICTFP"), 
-		Some("SUPER"), Some("SWITCH"), Some("SYNCHRONIZED"), Some("THIS"), Some("THROW"), 
-		Some("THROWS"), Some("TRANSIENT"), Some("TRY"), Some("VOID"), Some("VOLATILE"), 
-		Some("WHILE"), Some("MODULE"), Some("OPEN"), Some("REQUIRES"), Some("EXPORTS"), 
-		Some("OPENS"), Some("TO"), Some("USES"), Some("PROVIDES"), Some("WITH"), 
-		Some("TRANSITIVE"), Some("VAR"), Some("YIELD"), Some("RECORD"), Some("SEALED"), 
-		Some("PERMITS"), Some("NON_SEALED"), Some("DECIMAL_LITERAL"), Some("HEX_LITERAL"), 
-		Some("OCT_LITERAL"), Some("BINARY_LITERAL"), Some("FLOAT_LITERAL"), Some("HEX_FLOAT_LITERAL"), 
-		Some("BOOL_LITERAL"), Some("CHAR_LITERAL"), Some("STRING_LITERAL"), Some("TEXT_BLOCK"), 
-		Some("NULL_LITERAL"), Some("LPAREN"), Some("RPAREN"), Some("LBRACE"), 
-		Some("RBRACE"), Some("LBRACK"), Some("RBRACK"), Some("SEMI"), Some("COMMA"), 
-		Some("DOT"), Some("ASSIGN"), Some("GT"), Some("LT"), Some("BANG"), Some("TILDE"), 
-		Some("QUESTION"), Some("COLON"), Some("EQUAL"), Some("LE"), Some("GE"), 
-		Some("NOTEQUAL"), Some("AND"), Some("OR"), Some("INC"), Some("DEC"), Some("ADD"), 
-		Some("SUB"), Some("MUL"), Some("DIV"), Some("BITAND"), Some("BITOR"), 
-		Some("CARET"), Some("MOD"), Some("ADD_ASSIGN"), Some("SUB_ASSIGN"), Some("MUL_ASSIGN"), 
-		Some("DIV_ASSIGN"), Some("AND_ASSIGN"), Some("OR_ASSIGN"), Some("XOR_ASSIGN"), 
-		Some("MOD_ASSIGN"), Some("LSHIFT_ASSIGN"), Some("RSHIFT_ASSIGN"), Some("URSHIFT_ASSIGN"), 
-		Some("ARROW"), Some("COLONCOLON"), Some("AT"), Some("ELLIPSIS"), Some("IDENTIFIER"), 
-		Some("WS"), Some("NEWLINE"), Some("BLOCK_COMMENT"), Some("LINE_COMMENT")
-	];
-	lazy_static!{
-	    static ref _shared_context_cache: Arc<PredictionContextCache> = Arc::new(PredictionContextCache::new());
-		static ref VOCABULARY: Box<dyn Vocabulary> = Box::new(VocabularyImpl::new(_LITERAL_NAMES.iter(), _SYMBOLIC_NAMES.iter(), None));
-	}
-
-
-pub type LexerContext<'input> = BaseRuleContext<'input,EmptyCustomRuleContext<'input,LocalTokenFactory<'input> >>;
+pub type LexerContext<'input> =
+    BaseRuleContext<'input, EmptyCustomRuleContext<'input, LocalTokenFactory<'input>>>;
 pub type LocalTokenFactory<'input> = CommonTokenFactory;
 
-type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a> >::From;
+type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
 
-pub struct JavaLexer<'input, Input:CharStream<From<'input> >> {
-	base: BaseLexer<'input,JavaLexerActions,Input,LocalTokenFactory<'input>>,
+pub struct JavaLexer<'input, Input: CharStream<From<'input>>> {
+    base: BaseLexer<'input, JavaLexerActions, Input, LocalTokenFactory<'input>>,
 }
 
 antlr_rust::tid! { impl<'input,Input> TidAble<'input> for JavaLexer<'input,Input> where Input:CharStream<From<'input> > }
 
-impl<'input, Input:CharStream<From<'input> >> Deref for JavaLexer<'input,Input>{
-	type Target = BaseLexer<'input,JavaLexerActions,Input,LocalTokenFactory<'input>>;
+impl<'input, Input: CharStream<From<'input>>> Deref for JavaLexer<'input, Input> {
+    type Target = BaseLexer<'input, JavaLexerActions, Input, LocalTokenFactory<'input>>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.base
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> DerefMut for JavaLexer<'input,Input>{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.base
-	}
+impl<'input, Input: CharStream<From<'input>>> DerefMut for JavaLexer<'input, Input> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
 }
 
-
-impl<'input, Input:CharStream<From<'input> >> JavaLexer<'input,Input>{
+impl<'input, Input: CharStream<From<'input>>> JavaLexer<'input, Input> {
     fn get_rule_names(&self) -> &'static [&'static str] {
         &ruleNames
     }
@@ -294,50 +611,55 @@ impl<'input, Input:CharStream<From<'input> >> JavaLexer<'input,Input>{
         "JavaLexer.g4"
     }
 
-	pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
-		antlr_rust::recognizer::check_version("0","3");
-    	Self {
-			base: BaseLexer::new_base_lexer(
-				input,
-				LexerATNSimulator::new_lexer_atnsimulator(
-					_ATN.clone(),
-					_decision_to_DFA.clone(),
-					_shared_context_cache.clone(),
-				),
-				JavaLexerActions{},
-				tf
-			)
-	    }
-	}
+    pub fn new_with_token_factory(input: Input, tf: &'input LocalTokenFactory<'input>) -> Self {
+        antlr_rust::recognizer::check_version("0", "3");
+        Self {
+            base: BaseLexer::new_base_lexer(
+                input,
+                LexerATNSimulator::new_lexer_atnsimulator(
+                    _ATN.clone(),
+                    _decision_to_DFA.clone(),
+                    _shared_context_cache.clone(),
+                ),
+                JavaLexerActions {},
+                tf,
+            ),
+        }
+    }
 }
 
-impl<'input, Input:CharStream<From<'input> >> JavaLexer<'input,Input> where &'input LocalTokenFactory<'input>:Default{
-	pub fn new(input: Input) -> Self{
-		JavaLexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
-	}
+impl<'input, Input: CharStream<From<'input>>> JavaLexer<'input, Input>
+where
+    &'input LocalTokenFactory<'input>: Default,
+{
+    pub fn new(input: Input) -> Self {
+        JavaLexer::new_with_token_factory(input, <&LocalTokenFactory<'input> as Default>::default())
+    }
 }
 
-pub struct JavaLexerActions {
+pub struct JavaLexerActions {}
+
+impl JavaLexerActions {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    Actions<'input, BaseLexer<'input, JavaLexerActions, Input, LocalTokenFactory<'input>>>
+    for JavaLexerActions
+{
 }
 
-impl JavaLexerActions{
+impl<'input, Input: CharStream<From<'input>>> JavaLexer<'input, Input> {}
+
+impl<'input, Input: CharStream<From<'input>>>
+    LexerRecog<'input, BaseLexer<'input, JavaLexerActions, Input, LocalTokenFactory<'input>>>
+    for JavaLexerActions
+{
+}
+impl<'input> TokenAware<'input> for JavaLexerActions {
+    type TF = LocalTokenFactory<'input>;
 }
 
-impl<'input, Input:CharStream<From<'input> >> Actions<'input,BaseLexer<'input,JavaLexerActions,Input,LocalTokenFactory<'input>>> for JavaLexerActions{
-	}
-
-	impl<'input, Input:CharStream<From<'input> >> JavaLexer<'input,Input>{
-
-}
-
-impl<'input, Input:CharStream<From<'input> >> LexerRecog<'input,BaseLexer<'input,JavaLexerActions,Input,LocalTokenFactory<'input>>> for JavaLexerActions{
-}
-impl<'input> TokenAware<'input> for JavaLexerActions{
-	type TF = LocalTokenFactory<'input>;
-}
-
-impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for JavaLexer<'input,Input>{
-	type TF = LocalTokenFactory<'input>;
+impl<'input, Input: CharStream<From<'input>>> TokenSource<'input> for JavaLexer<'input, Input> {
+    type TF = LocalTokenFactory<'input>;
 
     fn next_token(&mut self) -> <Self::TF as TokenFactory<'input>>::Tok {
         self.base.next_token()
@@ -355,38 +677,30 @@ impl<'input, Input:CharStream<From<'input> >> TokenSource<'input> for JavaLexer<
         self.base.get_input_stream()
     }
 
-	fn get_source_name(&self) -> String {
-		self.base.get_source_name()
-	}
+    fn get_source_name(&self) -> String {
+        self.base.get_source_name()
+    }
 
     fn get_token_factory(&self) -> &'input Self::TF {
         self.base.get_token_factory()
     }
 }
 
+lazy_static! {
+    static ref _ATN: Arc<ATN> =
+        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
+    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
+        let mut dfa = Vec::new();
+        let size = _ATN.decision_to_state.len();
+        for i in 0..size {
+            dfa.push(DFA::new(_ATN.clone(), _ATN.get_decision_state(i), i as isize).into())
+        }
+        Arc::new(dfa)
+    };
+}
 
-
-	lazy_static! {
-	    static ref _ATN: Arc<ATN> =
-	        Arc::new(ATNDeserializer::new(None).deserialize(_serializedATN.chars()));
-	    static ref _decision_to_DFA: Arc<Vec<antlr_rust::RwLock<DFA>>> = {
-	        let mut dfa = Vec::new();
-	        let size = _ATN.decision_to_state.len();
-	        for i in 0..size {
-	            dfa.push(DFA::new(
-	                _ATN.clone(),
-	                _ATN.get_decision_state(i),
-	                i as isize,
-	            ).into())
-	        }
-	        Arc::new(dfa)
-	    };
-	}
-
-
-
-	const _serializedATN:&'static str =
-		"\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
+const _serializedATN: &'static str =
+    "\x03\u{608b}\u{a72a}\u{8133}\u{b9ed}\u{417c}\u{3be7}\u{7786}\u{5964}\x02\
 		\u{83}\u{473}\x08\x01\x04\x02\x09\x02\x04\x03\x09\x03\x04\x04\x09\x04\x04\
 		\x05\x09\x05\x04\x06\x09\x06\x04\x07\x09\x07\x04\x08\x09\x08\x04\x09\x09\
 		\x09\x04\x0a\x09\x0a\x04\x0b\x09\x0b\x04\x0c\x09\x0c\x04\x0d\x09\x0d\x04\

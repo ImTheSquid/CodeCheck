@@ -1,4 +1,4 @@
-use leptos::{*, html::Dialog};
+use leptos::{html::Dialog, *};
 use leptos_meta::*;
 use leptos_router::*;
 use styled::style;

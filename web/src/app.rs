@@ -1,14 +1,14 @@
 use futures_util::{StreamExt, TryStreamExt};
-use leptos::{*, logging::*};
+use leptos::{logging::*, *};
 use leptos_meta::*;
 use leptos_router::*;
 use rand::distributions::{Alphanumeric, DistString};
 
-use crate::setup::Setup;
-use crate::login::{Login, LoggedIn};
 use crate::admin::Admin;
-use crate::{admin, HumanReadableUser};
 use crate::home::{sidebar::CourseSidebar, Home};
+use crate::login::{LoggedIn, Login};
+use crate::setup::Setup;
+use crate::{admin, HumanReadableUser};
 
 pub type ServerAction<T> = Action<T, Result<<T as server_fn::ServerFn<()>>::Output, ServerFnError>>;
 
@@ -110,55 +110,76 @@ fn NotFound() -> impl IntoView {
 
 #[server(LookupUsers)]
 async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::AutoCollection;
+    use actix_web::web::Data;
     use db::models::User;
-    use mongodb::bson::{from_document, doc};
+    use goldleaf::AutoCollection;
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, from_document};
 
     let data = extract!(Data<WebState>);
 
     let query = query.to_lowercase();
 
-    let found_users = data.database.auto_collection::<User>().aggregate(vec![doc! {
-        "$match": { "$expr": {
-        "$or": [
-            {
-                "$ne": [
-                    {"indexOfCP": [{"$toLower": "$username"}, &query]},
-                    -1
+    let found_users = data
+        .database
+        .auto_collection::<User>()
+        .aggregate(
+            vec![doc! {
+                "$match": { "$expr": {
+                "$or": [
+                    {
+                        "$ne": [
+                            {"indexOfCP": [{"$toLower": "$username"}, &query]},
+                            -1
+                        ]
+                    },
+                    {
+                        "$ne": [
+                            {"indexOfCP": [{"$toLower": "$name"}, &query]},
+                            -1
+                        ]
+                    }
                 ]
-            },
-            {
-                "$ne": [
-                    {"indexOfCP": [{"$toLower": "$name"}, &query]},
-                    -1
-                ]
-            }
-        ]
-    }}}], None).await?.try_collect::<Vec<_>>().await?;
+            }}}],
+            None,
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-    let found_users = found_users.into_iter().map(from_document).try_collect::<Vec<User>>()?.into_iter().map(|user| HumanReadableUser {
-        id: user.id.unwrap().to_hex(),
-        username: user.username,
-        name: user.name,
-    }).collect();
+    let found_users = found_users
+        .into_iter()
+        .map(from_document)
+        .try_collect::<Vec<User>>()?
+        .into_iter()
+        .map(|user| HumanReadableUser {
+            id: user.id.unwrap().to_hex(),
+            username: user.username,
+            name: user.name,
+        })
+        .collect();
 
     Ok(found_users)
 }
 
 #[component]
-pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optional, into)] placeholder: String, #[prop(optional, into)] name: String) -> impl IntoView {
+pub fn UserSearchBox(
+    selected_user_id: WriteSignal<Option<String>>,
+    #[prop(optional, into)] placeholder: String,
+    #[prop(optional, into)] name: String,
+) -> impl IntoView {
     let (query, set_query) = create_signal(String::new());
-    let found_users = create_resource(query, |query| async move {
-        lookup_users(query).await
-    });
+    let found_users = create_resource(query, |query| async move { lookup_users(query).await });
     let identifier = Alphanumeric.sample_string(&mut rand::thread_rng(), 8);
     let identifier_clone = identifier.clone();
     // Tracks when the user backspaces without needing a ReadSignal from the parent
     let (has_valid, set_has_valid) = create_signal(false);
-    let placeholder = if placeholder.is_empty() { "Search Users...".to_string() } else { placeholder };
+    let placeholder = if placeholder.is_empty() {
+        "Search Users...".to_string()
+    } else {
+        placeholder
+    };
 
     view! {
         <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") name=name prop:value=query on:input=move |ev| {
@@ -177,7 +198,7 @@ pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optio
         }/>
         <datalist id=move || format!("user-search-{identifier_clone}")>
             <Transition fallback=|| ()>
-                {move || 
+                {move ||
                     found_users().map(|found_users| {
                         view! {
                             <For
@@ -205,12 +226,12 @@ pub struct TermInfo {
 
 #[server(GetTerms)]
 async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use mongodb::bson::{doc, from_document};
-    use goldleaf::AutoCollection;
+    use actix_web::web::Data;
     use db::models::Term;
+    use goldleaf::AutoCollection;
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, from_document};
 
     let data = extract!(Data<WebState>);
 
@@ -220,23 +241,34 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
         }
     };
 
-    let terms = data.database.auto_collection::<Term>().aggregate(vec![
-        stage_sort_by_name,
-    ], None).await?.try_collect::<Vec<_>>().await?;
+    let terms = data
+        .database
+        .auto_collection::<Term>()
+        .aggregate(vec![stage_sort_by_name], None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-    let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| TermInfo {
-        id: t.id.unwrap().to_hex(),
-        name: t.name,
-    }).collect();
-    
+    let terms = terms
+        .into_iter()
+        .map(from_document)
+        .try_collect::<Vec<Term>>()?
+        .into_iter()
+        .map(|t| TermInfo {
+            id: t.id.unwrap().to_hex(),
+            name: t.name,
+        })
+        .collect();
+
     Ok(terms)
 }
 
 #[component]
-pub fn TermSelector(selected_term_id: RwSignal<Option<String>>, #[prop(optional, into)] name: String) -> impl IntoView {
-    let terms = create_blocking_resource(|| (), |()| async move {
-        get_terms().await
-    });
+pub fn TermSelector(
+    selected_term_id: RwSignal<Option<String>>,
+    #[prop(optional, into)] name: String,
+) -> impl IntoView {
+    let terms = create_blocking_resource(|| (), |()| async move { get_terms().await });
 
     let (selected_term_id, set_selected_term_id) = selected_term_id.split();
 
@@ -276,7 +308,7 @@ pub fn TermSelector(selected_term_id: RwSignal<Option<String>>, #[prop(optional,
                     terms().map(|terms| {
                         let terms = store_value(terms);
                         let has_terms = !terms().as_ref().unwrap().is_empty();
-                        
+
                         view! {
                             <Show
                                 when=move || has_terms
@@ -293,7 +325,7 @@ pub fn TermSelector(selected_term_id: RwSignal<Option<String>>, #[prop(optional,
                             />
                             </Show>
                         }
-                    })             
+                    })
                 }
             </Transition>
         </select>

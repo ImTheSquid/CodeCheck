@@ -1,12 +1,12 @@
-use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
-use syntree::{Tree, Empty};
+use antlr_rust::InputStream;
+use syntree::{Empty, Tree};
 
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
 use crate::gen::cvisitor::CVisitorCompat;
-use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result};
+use crate::{visitor_result, SyntaxTree, TreeParseError, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -94,24 +94,38 @@ mod tests {
         CTree::try_from("".to_owned()).unwrap();
     }
 
-    test_parse!(main_fn, CTree, r"int main(int argc, char **argv) {
+    test_parse!(
+        main_fn,
+        CTree,
+        r"int main(int argc, char **argv) {
     return 0;
 }
-");
+"
+    );
 
-    test_parse!(single_var, CTree, r"int main(int argc, char **argv) {
+    test_parse!(
+        single_var,
+        CTree,
+        r"int main(int argc, char **argv) {
     int var = 3 + 4 / 2;
     return var;
-}");
+}"
+    );
 
-    test_parse!(function_call, CTree,
-r"int main(int argc, char **argv) {
+    test_parse!(
+        function_call,
+        CTree,
+        r"int main(int argc, char **argv) {
     function();
     return 0;
 }
-");
+"
+    );
 
-    test_parse!(multiple_function_decls, CTree, r"int sum(int a, int b) {
+    test_parse!(
+        multiple_function_decls,
+        CTree,
+        r"int sum(int a, int b) {
     return a + b;
 }
 
@@ -119,15 +133,23 @@ int main(int argc, char **argv) {
     int var = 3 + 4 / 2;
     return sum(var, 3);
 }
-");
+"
+    );
 
-    test_parse!(function_call_args, CTree, r#"int main(int argc, char **argv) {
+    test_parse!(
+        function_call_args,
+        CTree,
+        r#"int main(int argc, char **argv) {
     int a = 3;
     function(3, 45, "abcd", &a);
     return 0;
-}"#);
+}"#
+    );
 
-    test_parse!(simple, CTree, r#"##include <stdio.h>
+    test_parse!(
+        simple,
+        CTree,
+        r#"##include <stdio.h>
 
 int
 main(int argc, char **argv) {
@@ -135,9 +157,13 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
-"#);
+"#
+    );
 
-    test_parse!(simple_macro_expanded, CTree, r#"# 1 "test.c"
+    test_parse!(
+        simple_macro_expanded,
+        CTree,
+        r#"# 1 "test.c"
 # 1 "<built-in>" 1
 # 1 "<built-in>" 3
 # 418 "<built-in>" 3
@@ -698,5 +724,6 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
-"#);
+"#
+    );
 }

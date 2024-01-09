@@ -1,56 +1,64 @@
 use auth::ValidatedUser;
-use leptos::{*, IntoView, component};
 use db::Role;
 use leptos::*;
+use leptos::{component, IntoView, *};
 use leptos_meta::*;
 use leptos_router::*;
 
 #[server(ValidateLogin)]
 async fn validate_login(required_role: Role) -> Result<ValidatedUser, ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
     use crate::server::WebState;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
+    use leptos_actix::{extract, ResponseOptions};
 
     let response = expect_context::<ResponseOptions>();
- 
+
     extract(move |data: Data<WebState>, req: HttpRequest| async move {
         let cookie = match req.cookie("session") {
             None => {
                 leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
                 return Err(ServerFnError::ServerError("No cookie present!".to_string()));
-            },
+            }
             Some(cookie) => cookie,
         };
 
-        let res = match auth::validate_token(&data.database, cookie.value()).await.map_err(|e| ServerFnError::ServerError(e.to_string())) {
+        let res = match auth::validate_token(&data.database, cookie.value())
+            .await
+            .map_err(|e| ServerFnError::ServerError(e.to_string()))
+        {
             Err(e) => {
                 leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
                 return Err(ServerFnError::ServerError(e.to_string()));
-            },
+            }
             Ok(res) => res,
         };
-        
+
         if res.role < required_role {
             response.set_status(actix_web::http::StatusCode::FORBIDDEN);
             return Err(ServerFnError::ServerError("Forbidden".to_string()));
         }
 
         Ok(res)
-    }).await?
+    })
+    .await?
 }
 
 /// Requires the user to be logged in to see the inner view, otherwise
 /// redirects user to log in page.
 #[component]
-pub fn LoggedIn(#[prop(optional)] minimum_role: Option<Role>, children: ChildrenFn) -> impl IntoView {
+pub fn LoggedIn(
+    #[prop(optional)] minimum_role: Option<Role>,
+    children: ChildrenFn,
+) -> impl IntoView {
     // Default to requiring Admin rights to see a view, makes sure I don't
     // mess up and expose something I shouldn't through negligence
     let required_role = minimum_role.unwrap_or(Role::Admin);
 
-    let logged_in = create_blocking_resource(move || required_role, |role| async move {  
-        validate_login(role).await
-    });
+    let logged_in = create_blocking_resource(
+        move || required_role,
+        |role| async move { validate_login(role).await },
+    );
 
     let children = store_value(children);
 
@@ -72,11 +80,10 @@ pub fn LoggedIn(#[prop(optional)] minimum_role: Option<Role>, children: Children
                 } else {
                     ().into_view()
                 }
-                
+
             }}
         </Transition>
     }
-    
 }
 
 cfg_if::cfg_if! {
@@ -89,7 +96,7 @@ cfg_if::cfg_if! {
             use actix_web::http::header::HeaderValue;
             use crate::server::WebState;
             use actix_web::HttpRequest;
-            
+
             let response = expect_context::<ResponseOptions>();
 
             extract(|data: Data<WebState>| async move {
@@ -110,7 +117,7 @@ cfg_if::cfg_if! {
             struct LoginQuery {
                 next: Option<String>
             }
-            
+
             let next = use_query::<LoginQuery>().get().unwrap().next.unwrap_or("/".to_string());
 
             view! {

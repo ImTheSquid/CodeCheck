@@ -1,12 +1,15 @@
+use crate::{
+    app::{ServerAction, TermSelector, UserSearchBox},
+    home::sidebar::CourseSidebar,
+};
 use auth::ValidatedUser;
 use db::Role;
-use futures_util::{TryStreamExt, StreamExt};
-use leptos::{*, html::Dialog};
+use futures_util::{StreamExt, TryStreamExt};
+use leptos::{html::Dialog, *};
 use leptos_meta::*;
 use leptos_router::*;
-use styled::style;
 use std::str::FromStr;
-use crate::{app::{UserSearchBox, TermSelector, ServerAction}, home::sidebar::CourseSidebar};
+use styled::style;
 
 #[component]
 pub fn Admin() -> impl IntoView {
@@ -29,85 +32,115 @@ pub struct DisplayUser {
 
 #[server(GetAllUsers)]
 async fn get_all_users() -> Result<Vec<DisplayUser>, ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::AutoCollection;
-    use db::models::User;
-    use mongodb::bson::doc;
     use crate::AuthedUser;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
+    use db::models::User;
+    use goldleaf::AutoCollection;
+    use leptos_actix::{extract, ResponseOptions};
+    use mongodb::bson::doc;
 
-    extract(|data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
-        let all_users = data.database.auto_collection::<User>().find(doc!{}, None).await?.try_collect::<Vec<_>>().await?;
+    extract(
+        |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
+            let all_users = data
+                .database
+                .auto_collection::<User>()
+                .find(doc! {}, None)
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?;
 
-        let all_users = all_users.into_iter().map(|u| DisplayUser {
-            id: u.id.unwrap().to_hex(),
-            username: u.username,
-            name: u.name,
-            role: u.role,
-            email: u.email.as_ref().map(|vr| vr.resource.to_owned()),
-            email_verified: u.email.is_some_and(|vr| matches!(vr.status, db::models::VerificationStatus::Verified)),
-        }).collect();
-        
-        Ok(all_users)
-    }).await?
+            let all_users = all_users
+                .into_iter()
+                .map(|u| DisplayUser {
+                    id: u.id.unwrap().to_hex(),
+                    username: u.username,
+                    name: u.name,
+                    role: u.role,
+                    email: u.email.as_ref().map(|vr| vr.resource.to_owned()),
+                    email_verified: u.email.is_some_and(|vr| {
+                        matches!(vr.status, db::models::VerificationStatus::Verified)
+                    }),
+                })
+                .collect();
+
+            Ok(all_users)
+        },
+    )
+    .await?
 }
 
 #[server(CreateUser)]
-async fn create_user(username: String, name: String, role: String, email: String, email_verified: Option<bool>, password: String) -> Result<(), ServerFnError> {
+async fn create_user(
+    username: String,
+    name: String,
+    role: String,
+    email: String,
+    email_verified: Option<bool>,
+    password: String,
+) -> Result<(), ServerFnError> {
     let role = db::Role::from_str(&role).unwrap();
-    let email = if email.is_empty() {
-        None
-    } else {
-        Some(email)
-    };
+    let email = if email.is_empty() { None } else { Some(email) };
     let email_verified = email_verified.unwrap_or_default();
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::{AutoCollection, CollectionIdentity};
-    use db::models::{User, VerifiedResource, VerificationStatus};
-    use mongodb::bson::{doc, oid::ObjectId};
     use crate::AuthedUser;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
     #[cfg(feature = "basic_auth")]
-    use argon2::{PasswordHasher, password_hash::rand_core::OsRng};
+    use argon2::{password_hash::rand_core::OsRng, PasswordHasher};
+    use db::models::{User, VerificationStatus, VerifiedResource};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::{extract, ResponseOptions};
+    use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(move |data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
-        let email = email.map(|e| VerifiedResource {
-            resource: e,
-            status: if email_verified {
-                VerificationStatus::Verified
-            } else {
-                // todo: send verification email
-                todo!()
-            }
-        });
+    extract(
+        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
+            let email = email.map(|e| VerifiedResource {
+                resource: e,
+                status: if email_verified {
+                    VerificationStatus::Verified
+                } else {
+                    // todo: send verification email
+                    todo!()
+                },
+            });
 
-        #[cfg(feature = "basic_auth")]
-        data.database.auto_collection::<User>().insert_one(User {
-            id: None,
-            username,
-            name,
-            role,
-            sessions: vec![],
-            email,
-            password: argon2::Argon2::default().hash_password(password.as_bytes(), &argon2::password_hash::SaltString::generate(&mut OsRng)).map_err(|e| ServerFnError::ServerError(e.to_string()))?.to_string(),
-        }, None).await?;
+            #[cfg(feature = "basic_auth")]
+            data.database
+                .auto_collection::<User>()
+                .insert_one(
+                    User {
+                        id: None,
+                        username,
+                        name,
+                        role,
+                        sessions: vec![],
+                        email,
+                        password: argon2::Argon2::default()
+                            .hash_password(
+                                password.as_bytes(),
+                                &argon2::password_hash::SaltString::generate(&mut OsRng),
+                            )
+                            .map_err(|e| ServerFnError::ServerError(e.to_string()))?
+                            .to_string(),
+                    },
+                    None,
+                )
+                .await?;
 
-        #[cfg(not(feature = "basic_auth"))]
-        panic!();
+            #[cfg(not(feature = "basic_auth"))]
+            panic!();
 
-        Ok(())
-    }).await?
+            Ok(())
+        },
+    )
+    .await?
 }
 
 #[component]
 pub fn Users() -> impl IntoView {
-    let users_res = create_blocking_resource(|| (), |_| async move {
-        get_all_users().await
-    });
+    let users_res = create_blocking_resource(|| (), |_| async move { get_all_users().await });
 
     let new_user_dialog = create_node_ref::<Dialog>();
     let new_user_action = create_server_action::<CreateUser>();
@@ -147,7 +180,7 @@ pub fn Users() -> impl IntoView {
                         view! {
                             <For each=move|| users.clone().expect("Failed to load users") key=move |user| user.id.clone() children=move |user: DisplayUser| {
                                 view! {
-                                    <UserListRowItem user=user refresh=move |()| users_res.refetch()/> 
+                                    <UserListRowItem user=user refresh=move |()| users_res.refetch()/>
                                 }
                             }/>
                         }
@@ -206,61 +239,80 @@ fn NewUserForm(new_user_action: ServerAction<CreateUser>) -> impl IntoView {
 
 #[server(DeleteUser)]
 async fn delete_user(user_id: String) -> Result<(), ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::AutoCollection;
-    use db::models::User;
-    use mongodb::bson::{doc, oid::ObjectId};
     use crate::AuthedUser;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
+    use db::models::User;
+    use goldleaf::AutoCollection;
+    use leptos_actix::{extract, ResponseOptions};
+    use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(move |data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
-        let user_id = ObjectId::from_str(&user_id).unwrap();
-        let res = data.database.auto_collection::<User>().delete_one(doc! { "_id": user_id }, None).await?;
-        if res.deleted_count != 1 {
-            Err(ServerFnError::ServerError("Invalid user".to_string()))
-        } else {
-            Ok(())
-        }
-    }).await?
+    extract(
+        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
+            let user_id = ObjectId::from_str(&user_id).unwrap();
+            let res = data
+                .database
+                .auto_collection::<User>()
+                .delete_one(doc! { "_id": user_id }, None)
+                .await?;
+            if res.deleted_count != 1 {
+                Err(ServerFnError::ServerError("Invalid user".to_string()))
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .await?
 }
 
 #[server(UpdateUser)]
 async fn update_user(user: DisplayUser) -> Result<(), ServerFnError> {
-    use leptos_actix::{extract, ResponseOptions};
-    use actix_web::HttpRequest;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::{AutoCollection, CollectionIdentity};
-    use db::models::{User, VerifiedResource, VerificationStatus};
-    use mongodb::bson::{doc, oid::ObjectId};
     use crate::AuthedUser;
+    use actix_web::web::Data;
+    use actix_web::HttpRequest;
+    use db::models::{User, VerificationStatus, VerifiedResource};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::{extract, ResponseOptions};
+    use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(move |data: Data<WebState>, _user: AuthedUser<{db::Role::Admin}>| async move {
-        let email = user.email.map(|e| VerifiedResource {
-            resource: e,
-            status: if user.email_verified {
-                VerificationStatus::Verified
-            } else {
-                // todo: send verification email
-                todo!()
-            }
-        });
+    extract(
+        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
+            let email = user.email.map(|e| VerifiedResource {
+                resource: e,
+                status: if user.email_verified {
+                    VerificationStatus::Verified
+                } else {
+                    // todo: send verification email
+                    todo!()
+                },
+            });
 
-        let user_id = ObjectId::parse_str(user.id).unwrap();
+            let user_id = ObjectId::parse_str(user.id).unwrap();
 
-        let mut user_db = data.database.auto_collection::<User>().find_one(doc! { "_id": user_id }, None).await.map_err(|e| ServerFnError::ServerError(e.to_string()))?.unwrap();
+            let mut user_db = data
+                .database
+                .auto_collection::<User>()
+                .find_one(doc! { "_id": user_id }, None)
+                .await
+                .map_err(|e| ServerFnError::ServerError(e.to_string()))?
+                .unwrap();
 
-        user_db.username = user.username;
-        user_db.name = user.name;
-        user_db.role = user.role;
-        user_db.email = email;
+            user_db.username = user.username;
+            user_db.name = user.name;
+            user_db.role = user.role;
+            user_db.email = email;
 
-        user_db.save(&data.database).await.map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+            user_db
+                .save(&data.database)
+                .await
+                .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
 
-        Ok(())
-    }).await?
+            Ok(())
+        },
+    )
+    .await?
 }
 
 #[component]
@@ -289,18 +341,20 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
 
     let update_user_id = user.id.clone();
     let save = move |_| {
-        update_user_action.dispatch(UpdateUser { user: DisplayUser {
-            id: update_user_id.clone(),
-            username: username(),
-            name: name(),
-            email: if email().is_empty() {
-                None
-            } else {
-                Some(email())
+        update_user_action.dispatch(UpdateUser {
+            user: DisplayUser {
+                id: update_user_id.clone(),
+                username: username(),
+                name: name(),
+                email: if email().is_empty() {
+                    None
+                } else {
+                    Some(email())
+                },
+                email_verified: email_verified(),
+                role: role(),
             },
-            email_verified: email_verified(),
-            role: role(),
-        }});
+        });
     };
 
     let delete_user_action = create_server_action::<DeleteUser>();
@@ -308,7 +362,9 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
     let user_delete_id = user.id.clone();
     let delete_user = move |_| {
         delete_dialog.get().unwrap().close();
-        delete_user_action.dispatch(DeleteUser{ user_id: user_delete_id.clone() });
+        delete_user_action.dispatch(DeleteUser {
+            user_id: user_delete_id.clone(),
+        });
     };
 
     create_effect(move |prev| {
@@ -398,14 +454,14 @@ pub struct TermInfo {
 
 #[server(GetTerms)]
 async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use mongodb::bson::{doc, from_document};
-    use goldleaf::{CollectionIdentity, AutoCollection};
+    use actix_web::web::Data;
     use db::models::{Course, Term};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, from_document};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
 
     let stage_attach_num_associated = doc! {
         "$lookup": {
@@ -439,66 +495,100 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
         }
     };
 
-    let terms = data.database.auto_collection::<Term>().aggregate(vec! [
-        stage_attach_num_associated,
-        stage_set_can_delete,
-        stage_sort_descending,
-    ], None).await?.try_collect::<Vec<_>>().await?;
+    let terms = data
+        .database
+        .auto_collection::<Term>()
+        .aggregate(
+            vec![
+                stage_attach_num_associated,
+                stage_set_can_delete,
+                stage_sort_descending,
+            ],
+            None,
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-    let terms = terms.into_iter().map(from_document).try_collect::<Vec<Term>>()?.into_iter().map(|t| {
-        TermInfo {
+    let terms = terms
+        .into_iter()
+        .map(from_document)
+        .try_collect::<Vec<Term>>()?
+        .into_iter()
+        .map(|t| TermInfo {
             id: t.id.unwrap().to_hex(),
             name: t.name,
             can_delete: t.can_delete.unwrap(),
-        }
-    }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     Ok(terms)
 }
 
 #[server(CreateTerm)]
 async fn create_term(name: String) -> Result<(), ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::AutoCollection;
+    use actix_web::web::Data;
     use db::models::Term;
+    use goldleaf::AutoCollection;
+    use leptos_actix::extract;
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
 
-    data.database.auto_collection::<Term>().insert_one(Term {
-        id: None,
-        name,
-        can_delete: None,
-    }, None).await?;
+    data.database
+        .auto_collection::<Term>()
+        .insert_one(
+            Term {
+                id: None,
+                name,
+                can_delete: None,
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
 
 #[server(DeleteTerm)]
 async fn delete_term(id: String) -> Result<(), ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
+    use actix_web::web::Data;
+    use db::models::{Course, Term};
     use goldleaf::AutoCollection;
-    use db::models::{Term, Course};
-    use mongodb::bson::{oid::ObjectId, doc};
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
 
     let id = ObjectId::from_str(&id).expect("id to be valid");
 
-    let num_associated = data.database.auto_collection::<Course>().count_documents(doc! {
-        "term": id
-    }, None).await?;
+    let num_associated = data
+        .database
+        .auto_collection::<Course>()
+        .count_documents(
+            doc! {
+                "term": id
+            },
+            None,
+        )
+        .await?;
 
     if num_associated > 0 {
-        return Err(ServerFnError::ServerError("Cannot delete term with associated courses".to_string()));
+        return Err(ServerFnError::ServerError(
+            "Cannot delete term with associated courses".to_string(),
+        ));
     }
 
-    data.database.auto_collection::<Term>().delete_one(doc! {
-        "_id": id
-    }, None).await?;
+    data.database
+        .auto_collection::<Term>()
+        .delete_one(
+            doc! {
+                "_id": id
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -512,14 +602,14 @@ pub struct BaseCourseInfo {
 
 #[server(GetCourses)]
 async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    use goldleaf::{CollectionIdentity, AutoCollection};
-    use db::models::{User, Course};
-    use mongodb::bson::{oid::ObjectId, doc, from_document};
+    use actix_web::web::Data;
+    use db::models::{Course, User};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, from_document, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{db::Role::Admin}>);
+    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
 
     let stage_match_term_id = doc! {
         "$match": {
@@ -551,35 +641,58 @@ async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnErr
         }
     };
 
-    let courses = data.database.auto_collection::<Course>().aggregate(vec![
-        stage_match_term_id,
-        stage_lookup_owner,
-        stage_attach_human_readable_owner,
-        stage_sort_name_ascending,
-    ], None).await?.try_collect::<Vec<_>>().await?;
+    let courses = data
+        .database
+        .auto_collection::<Course>()
+        .aggregate(
+            vec![
+                stage_match_term_id,
+                stage_lookup_owner,
+                stage_attach_human_readable_owner,
+                stage_sort_name_ascending,
+            ],
+            None,
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-    let courses = courses.into_iter().map(from_document).try_collect::<Vec<Course>>()?.into_iter().map(|c| BaseCourseInfo {
-        id: c.id.unwrap().to_hex(),
-        name: c.name,
-        owner: {
-            let human_owner = c.human_owner.unwrap();
-            HumanReadableUser { id: c.owner.to_hex(), name: human_owner.name, username: human_owner.username }
-        },
-    }).collect();
+    let courses = courses
+        .into_iter()
+        .map(from_document)
+        .try_collect::<Vec<Course>>()?
+        .into_iter()
+        .map(|c| BaseCourseInfo {
+            id: c.id.unwrap().to_hex(),
+            name: c.name,
+            owner: {
+                let human_owner = c.human_owner.unwrap();
+                HumanReadableUser {
+                    id: c.owner.to_hex(),
+                    name: human_owner.name,
+                    username: human_owner.username,
+                }
+            },
+        })
+        .collect();
 
     Ok(courses)
 }
 
 #[server(CreateCourse)]
-async fn create_course(name: String, owner_id: String, term_id: String) -> Result<(), ServerFnError> {
-    use leptos_actix::extract;
+async fn create_course(
+    name: String,
+    owner_id: String,
+    term_id: String,
+) -> Result<(), ServerFnError> {
+    use crate::{server::WebState, AuthedUser};
     use actix_web::web::Data;
-    use crate::{AuthedUser, server::WebState};
-    use goldleaf::{CollectionIdentity, AutoCollection};
-    use db::models::{User, Course};
-    use mongodb::bson::{oid::ObjectId, doc, from_document};
+    use db::models::{Course, User};
+    use goldleaf::{AutoCollection, CollectionIdentity};
+    use leptos_actix::extract;
+    use mongodb::bson::{doc, from_document, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser<{db::Role::Admin}>);
+    let (data, _user) = extract!(Data<WebState>, AuthedUser<{ db::Role::Admin }>);
 
     let new_course = Course {
         id: None,
@@ -592,7 +705,10 @@ async fn create_course(name: String, owner_id: String, term_id: String) -> Resul
         human_owner: None,
     };
 
-    data.database.auto_collection::<Course>().insert_one(new_course, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .insert_one(new_course, None)
+        .await?;
 
     Ok(())
 }
@@ -627,7 +743,7 @@ pub fn Courses() -> impl IntoView {
         } else {
             (add_prev, delete_prev)
         }
-    }); 
+    });
 
     let new_course_trigger = create_trigger();
     let course_term = create_rw_signal(None);
@@ -676,10 +792,10 @@ pub fn Courses() -> impl IntoView {
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>
             <div class="term-actions">
-                <input 
-                    type="text" 
-                    placeholder="New Term Name" 
-                    prop:value=new_term_name 
+                <input
+                    type="text"
+                    placeholder="New Term Name"
+                    prop:value=new_term_name
                     on:input=move |ev| set_new_term_name(event_target_value(&ev))
                     on:keypress=move |ev| {
                         if ev.key() == "Enter" && !new_term_name().is_empty() {
@@ -687,8 +803,8 @@ pub fn Courses() -> impl IntoView {
                         }
                     }
                 />
-                <button 
-                    disabled=move || new_term_name.with(|ntn| ntn.is_empty()) 
+                <button
+                    disabled=move || new_term_name.with(|ntn| ntn.is_empty())
                     on:click=move |_| add_term.dispatch(CreateTerm { name: new_term_name() })
                 >"Add Term"</button>
             </div>
@@ -711,7 +827,7 @@ pub fn Courses() -> impl IntoView {
                                 <tr>
                                     <th scope="row">{term.id}</th>
                                     <td>{term.name}</td>
-                                    <td><button 
+                                    <td><button
                                         disabled=move || !term.can_delete
                                         on:click=move |_| delete_term.dispatch(DeleteTerm { id: term_id.clone() })
                                     >"Delete"</button></td>
@@ -727,14 +843,21 @@ pub fn Courses() -> impl IntoView {
 }
 
 #[component]
-fn CourseCreator(create_course: ServerAction<CreateCourse>, create_course_ref: NodeRef<Dialog>) -> impl IntoView {
+fn CourseCreator(
+    create_course: ServerAction<CreateCourse>,
+    create_course_ref: NodeRef<Dialog>,
+) -> impl IntoView {
     let (new_course_name, set_new_course_name) = create_signal(String::new());
     let (new_course_owner, set_new_course_owner) = create_signal(None);
     // let (new_course_term, set_new_course_term) = create_signal(None);
     let new_course_term = create_rw_signal(None);
 
     let on_click = move |_| {
-        create_course.dispatch(CreateCourse { name: new_course_name(), owner_id: new_course_owner().expect("because submission is blocked until not None"), term_id: new_course_term().expect("because submission is blocked until not None") });
+        create_course.dispatch(CreateCourse {
+            name: new_course_name(),
+            owner_id: new_course_owner().expect("because submission is blocked until not None"),
+            term_id: new_course_term().expect("because submission is blocked until not None"),
+        });
         create_course_ref.get().unwrap().close();
     };
 

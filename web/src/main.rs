@@ -3,11 +3,11 @@ use db::UserId;
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    use ::web::app::*;
     use actix_files::Files;
     use actix_web::*;
     use leptos::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
-    use ::web::app::*;
 
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -57,25 +57,34 @@ async fn favicon(
 #[actix_web::get("/logout")]
 async fn logout(
     req: actix_web::HttpRequest,
-    data: actix_web::web::Data<web::server::WebState>
+    data: actix_web::web::Data<web::server::WebState>,
 ) -> impl actix_web::Responder {
-    use actix_web::cookie::Cookie;
     use actix_web::cookie::time::OffsetDateTime;
+    use actix_web::cookie::Cookie;
     use actix_web::http::header::HeaderValue;
     match req.cookie("session") {
-        None => {},
+        None => {}
         Some(cookie) => {
             auth::logout(&data.database, cookie.value()).await.unwrap();
         }
     }
 
     // Clear session cookie if it exists
-    let cookie = Cookie::build("session", "").expires(Some(OffsetDateTime::now_utc())).path("/").finish();
+    let cookie = Cookie::build("session", "")
+        .expires(Some(OffsetDateTime::now_utc()))
+        .path("/")
+        .finish();
     // response.insert_header(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
 
     let mut res = actix_web::HttpResponse::SeeOther().finish();
-    res.headers_mut().insert(actix_web::http::header::LOCATION, "/?logout".parse().unwrap());
-    res.headers_mut().insert(actix_web::http::header::SET_COOKIE, HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"));
+    res.headers_mut().insert(
+        actix_web::http::header::LOCATION,
+        "/?logout".parse().unwrap(),
+    );
+    res.headers_mut().insert(
+        actix_web::http::header::SET_COOKIE,
+        HeaderValue::from_str(&cookie.to_string()).expect("Failed to write cookie"),
+    );
     res
 }
 
@@ -93,8 +102,8 @@ pub fn main() {
     // prefer using `cargo leptos serve` instead
     // to run: `trunk serve --open --features csr`
     use leptos::*;
-    use web::app::*;
     use wasm_bindgen::prelude::wasm_bindgen;
+    use web::app::*;
 
     console_error_panic_hook::set_once();
 

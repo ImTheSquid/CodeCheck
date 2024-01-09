@@ -1,30 +1,40 @@
-use leptos::{*, html::Button};
+use leptos::{html::Button, *};
 use leptos_meta::*;
 use leptos_router::*;
 
 #[server(CheckSetupStatus)]
 async fn check_setup_status() -> Result<bool, ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
+    use actix_web::web::Data;
+    use leptos_actix::extract;
 
     extract(|data: Data<WebState>| async move {
-        data.config.read().expect("Failed to get read lock for config!").setup_complete
-    }).await
+        data.config
+            .read()
+            .expect("Failed to get read lock for config!")
+            .setup_complete
+    })
+    .await
 }
 
 #[server(CompleteSetup)]
 async fn complete_setup() -> Result<(), ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+
     extract(|data: Data<WebState>| async move {
-        let mut write = data.config.write().expect("Failed to get write lock for config!");
+        let mut write = data
+            .config
+            .write()
+            .expect("Failed to get write lock for config!");
         write.setup_complete = true;
-        write.write().map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+        write
+            .write()
+            .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
         Ok(())
-    }).await?
+    })
+    .await?
 }
 
 #[derive(Debug)]
@@ -35,52 +45,60 @@ enum SetupStage {
 
 #[component]
 pub fn Setup() -> impl IntoView {
-    let setup_is_complete = create_resource(|| (), |_| async move {
-        check_setup_status().await
-    });
+    let setup_is_complete = create_resource(|| (), |_| async move { check_setup_status().await });
 
     let (stage, set_stage) = create_signal(SetupStage::Authentication);
 
     view! {
-        <Suspense fallback=move || view!{<p>"Verifying setup availability..."</p>}>
-        {move || if setup_is_complete.with(|sic| sic.as_ref().is_some_and(|val| val.as_ref().is_ok_and(|r| *r)))  {
-                view!{<div><p style="color: red;">"Setup has already been completed!"</p></div>}
-            } else {
-                view!{
-<div>
-            <h1>"CodeCheck Setup"</h1>
-            {move || stage.with(|stage| match stage {
-                    SetupStage::Authentication => 
-                        view! { <AuthSetup on_complete=move |_| { set_stage(SetupStage::Files) }/> },
-                    SetupStage::Files =>
-                        view! { <FilesSetup on_complete=move |_| {
-                            create_resource(||(), |_| async move {
-                                complete_setup().await
-                            });
-                            use_navigate()("/login?next=%2Fadmin", Default::default()) 
-                        }/> },
-                })
-            }
-        </div>
+            <Suspense fallback=move || view!{<p>"Verifying setup availability..."</p>}>
+            {move || if setup_is_complete.with(|sic| sic.as_ref().is_some_and(|val| val.as_ref().is_ok_and(|r| *r)))  {
+                    view!{<div><p style="color: red;">"Setup has already been completed!"</p></div>}
+                } else {
+                    view!{
+    <div>
+                <h1>"CodeCheck Setup"</h1>
+                {move || stage.with(|stage| match stage {
+                        SetupStage::Authentication =>
+                            view! { <AuthSetup on_complete=move |_| { set_stage(SetupStage::Files) }/> },
+                        SetupStage::Files =>
+                            view! { <FilesSetup on_complete=move |_| {
+                                create_resource(||(), |_| async move {
+                                    complete_setup().await
+                                });
+                                use_navigate()("/login?next=%2Fadmin", Default::default())
+                            }/> },
+                    })
+                }
+            </div>
+                    }
                 }
             }
+            </Suspense>
         }
-        </Suspense>
-    }
 }
 
 #[server(FilesSetup)]
 async fn setup_files(vocareum_api_key: String) -> Result<(), ServerFnError> {
-    use leptos_actix::extract;
-    use actix_web::web::Data;
     use crate::server::WebState;
-    
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+
     extract(|data: Data<WebState>| async move {
-        let mut write = data.config.write().expect("Failed to get write lock for config!");
-        write.vocareum_key = if vocareum_api_key.is_empty() { None } else { Some(vocareum_api_key) };
-        write.write().map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+        let mut write = data
+            .config
+            .write()
+            .expect("Failed to get write lock for config!");
+        write.vocareum_key = if vocareum_api_key.is_empty() {
+            None
+        } else {
+            Some(vocareum_api_key)
+        };
+        write
+            .write()
+            .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
         Ok(())
-    }).await?
+    })
+    .await?
 }
 
 #[component]
@@ -88,7 +106,10 @@ fn FilesSetup(#[prop(into)] on_complete: Callback<()>) -> impl IntoView {
     let setup_files_action = create_server_action::<FilesSetup>();
 
     create_effect(move |_| {
-        if setup_files_action.value().with(|value| matches!(value, Some(Ok(())))) {
+        if setup_files_action
+            .value()
+            .with(|value| matches!(value, Some(Ok(()))))
+        {
             on_complete(());
         }
     });
@@ -126,7 +147,7 @@ cfg_if::cfg_if! {
             use leptos_actix::extract;
             use actix_web::web::Data;
             use crate::server::WebState;
-            
+
             extract(|data: Data<WebState>| async move {
                 auth::basic::enroll_root(&data.database, username, password).await.map_err(|e| ServerFnError::ServerError(e.to_string()))
             }).await?
