@@ -45,8 +45,7 @@ COPY macros ./macros
 COPY analysis ./analysis
 COPY web ./web
 COPY storage ./storage
-COPY vocareum ./vocareum
-RUN printf "[workspace]\nmembers=[\"db\",\"auth\",\"util\",\"macros\",\"analysis\",\"web\"]\nresolver=\"2\"\n[profile.wasm-release]\ninherits = \"release\"\nopt-level = 'z'\nlto = true\ncodegen-units = 1\npanic = \"abort\"" > ./Cargo.toml
+RUN printf "[workspace]\nmembers=[\"db\",\"auth\",\"util\",\"macros\",\"analysis\",\"storage\", \"web\"]\nresolver=\"2\"\n[profile.wasm-release]\ninherits = \"release\"\nopt-level = 'z'\nlto = true\ncodegen-units = 1\npanic = \"abort\"" > ./Cargo.toml
 
 # Copy env file to all subdirectories (library crates)
 COPY .env .

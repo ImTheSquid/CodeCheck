@@ -1,7 +1,12 @@
+html {
+    height: 100%;
+}
+
 body {
 	font-family: sans-serif;
-	text-align: center;
+//	text-align: center;
     margin: 0;
+    height: 100%;
 }
 
 .vertical {
@@ -21,18 +26,23 @@ span.code {
   border-radius: 4px;
 }
 
+.sidebar-container {
+    display: flex;
+}
+
 // Positioning is to be left to other elements
 .sidebar {
-    height: 100%;
-    // width: 15em;
-    position: fixed;
-    top: 0;
+    // height: 100%;
+    width: 15em;
+    // position: fixed;
+    // top: 0;
     // left: -15em;
     background-color: #333;
     overflow-x: hidden;
     transition: 0.5s;
-    padding-top: 3em;
+//    padding-top: 2em;
     color: white;
+    padding: 0.5em;
 }
 
 .sidebar a {
@@ -48,7 +58,7 @@ span.code {
     background-color: #555;
 }
 
-#content {
+.content {
     transition: margin-left 0.5s;
     padding: 1em;
 }

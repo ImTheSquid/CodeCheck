@@ -6,7 +6,7 @@ use leptos_meta::*;
 use leptos_router::*;
 use styled::style;
 use std::str::FromStr;
-use crate::app::{UserSearchBox, TermSelector};
+use crate::{app::{UserSearchBox, TermSelector, ServerAction}, home::sidebar::CourseSidebar};
 
 #[component]
 pub fn Admin() -> impl IntoView {
@@ -165,11 +165,10 @@ pub fn Users() -> impl IntoView {
 
 // I only did this because Rust got fussy about the styling macro
 // The code looks a bit cleaner now too
-use server_fn::ServerFn;
 
 use crate::HumanReadableUser;
 #[component]
-fn NewUserForm(new_user_action: Action<CreateUser, Result<<CreateUser as ServerFn<()>>::Output, ServerFnError>>) -> impl IntoView {
+fn NewUserForm(new_user_action: ServerAction<CreateUser>) -> impl IntoView {
     view! {
         <ActionForm action=new_user_action>
             <label>
@@ -571,6 +570,33 @@ async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnErr
     Ok(courses)
 }
 
+#[server(CreateCourse)]
+async fn create_course(name: String, owner_id: String, term_id: String) -> Result<(), ServerFnError> {
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use crate::{AuthedUser, server::WebState};
+    use goldleaf::{CollectionIdentity, AutoCollection};
+    use db::models::{User, Course};
+    use mongodb::bson::{oid::ObjectId, doc, from_document};
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser<{db::Role::Admin}>);
+
+    let new_course = Course {
+        id: None,
+        name,
+        owner: ObjectId::from_str(&owner_id)?,
+        instructors: vec![],
+        graders: vec![],
+        sections: vec![],
+        term: ObjectId::from_str(&term_id)?,
+        human_owner: None,
+    };
+
+    data.database.auto_collection::<Course>().insert_one(new_course, None).await?;
+
+    Ok(())
+}
+
 #[component]
 pub fn Courses() -> impl IntoView {
     let terms = create_blocking_resource(|| (), |_| async move { get_terms().await });
@@ -578,7 +604,7 @@ pub fn Courses() -> impl IntoView {
     let manage_terms_ref = create_node_ref::<Dialog>();
     let create_course_ref = create_node_ref::<Dialog>();
 
-    let (new_term_name, set_new_term_name) = create_signal("".to_string());
+    let (new_term_name, set_new_term_name) = create_signal(String::new());
 
     let styles = style!(
         .term-actions {
@@ -589,6 +615,7 @@ pub fn Courses() -> impl IntoView {
     let add_term = create_server_action::<CreateTerm>();
     let delete_term = create_server_action::<DeleteTerm>();
 
+    // Refreshes term list when a term is added or deleted
     create_effect(move |prev| {
         let (add_prev, delete_prev) = prev.unwrap_or((0_usize, 0_usize));
         let add_new = add_term.version()();
@@ -600,30 +627,51 @@ pub fn Courses() -> impl IntoView {
         } else {
             (add_prev, delete_prev)
         }
+    }); 
+
+    let new_course_trigger = create_trigger();
+    let course_term = create_rw_signal(None);
+
+    let create_course = create_server_action::<CreateCourse>();
+
+    // Refreshes courses when a new one is created
+    create_effect(move |prev| {
+        let course_prev = prev.unwrap_or(0_usize);
+        let course_new = create_course.version()();
+        if course_new != course_prev {
+            new_course_trigger.notify();
+            create_course_ref.get().unwrap().close();
+            course_new
+        } else {
+            course_prev
+        }
     });
 
-    let (new_course_name, set_new_course_name) = create_signal(String::new());
-    let (new_course_owner, set_new_course_owner) = create_signal(None);
-    let (new_course_term, set_new_course_term) = create_signal(None);
+    // Removes URL path when term is changed
+    create_effect(move |prev_term| {
+        if let Some(term) = prev_term {
+            if term != course_term.get() {
+                leptos_router::use_navigate()("/admin/courses/", Default::default());
+                course_term.get()
+            } else {
+                term
+            }
+        } else {
+            course_term.get()
+        }
+    });
 
     styled::view! { styles,
         <div>
             <h2>"Course and Term Configuration"</h2>
             <button on:click=move |_| manage_terms_ref.get().unwrap().show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
             <button on:click=move |_| create_course_ref.get().unwrap().show_modal().expect("Failed to show course modal!")>"Create Course..."</button>
+            <TermSelector selected_term_id=course_term/>
+            <CourseSidebar try_get_all=true term_id=course_term refresh=new_course_trigger/>
         </div>
         <dialog node_ref=create_course_ref>
             <h1>"Create Course"</h1>
-            <input
-                type="text"
-                placeholder="New Course Name"
-                prop:value=new_course_name
-                on:input=move |ev| set_new_course_name(event_target_value(&ev))
-            />
-            <UserSearchBox selected_user_id=set_new_course_owner placeholder="Search for Course Owner...".to_string()/>
-            <TermSelector selected_term_id=set_new_course_term/>
-            <button on:click=move |_| create_course_ref.get().unwrap().close()>"Cancel"</button>
-            <button disabled=move || new_course_name.with(|name| name.is_empty()) || new_course_owner.with(|owner| owner.is_none())>"Create"</button>
+            <CourseCreator create_course=create_course create_course_ref=create_course_ref/>
         </dialog>
         <dialog node_ref=manage_terms_ref>
             <h1>"Manage Terms"</h1>
@@ -675,5 +723,69 @@ pub fn Courses() -> impl IntoView {
             </table>
             <button on:click=move |_| manage_terms_ref.get().unwrap().close()>"Close"</button>
         </dialog>
+    }
+}
+
+#[component]
+fn CourseCreator(create_course: ServerAction<CreateCourse>, create_course_ref: NodeRef<Dialog>) -> impl IntoView {
+    let (new_course_name, set_new_course_name) = create_signal(String::new());
+    let (new_course_owner, set_new_course_owner) = create_signal(None);
+    // let (new_course_term, set_new_course_term) = create_signal(None);
+    let new_course_term = create_rw_signal(None);
+
+    let on_click = move |_| {
+        create_course.dispatch(CreateCourse { name: new_course_name(), owner_id: new_course_owner().expect("because submission is blocked until not None"), term_id: new_course_term().expect("because submission is blocked until not None") });
+        create_course_ref.get().unwrap().close();
+    };
+
+    view! {
+        <div>
+            <input
+                type="text"
+                name="name"
+                placeholder="New Course Name"
+                prop:value=new_course_name
+                on:input=move |ev| set_new_course_name(event_target_value(&ev))
+            />
+            <UserSearchBox selected_user_id=set_new_course_owner placeholder="Search for Course Owner..." name="owner_id"/>
+            <TermSelector selected_term_id=new_course_term name="term_id"/>
+            <button on:click=move |_| create_course_ref.get().unwrap().close()>"Cancel"</button>
+            <button disabled=move || new_course_name.with(String::is_empty) || new_course_owner.with(Option::is_none) || new_course_term.with(Option::is_none)
+                on:click=on_click
+            >"Create"</button>
+        </div>
+    }
+}
+
+pub mod course {
+    use super::*;
+
+    #[component]
+    pub fn Wrapper() -> impl IntoView {
+        view! {
+            <h1>"Manage Course"</h1>
+            <Outlet/>
+        }
+    }
+
+    #[component]
+    pub fn Home() -> impl IntoView {
+        view! {
+            <p>"home"</p>
+        }
+    }
+
+    #[component]
+    pub fn Instructors() -> impl IntoView {
+        view! {
+            <p>"instructors"</p>
+        }
+    }
+
+    #[component]
+    pub fn Graders() -> impl IntoView {
+        view! {
+            <p>"graders"</p>
+        }
     }
 }

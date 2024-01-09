@@ -1,1 +1,10 @@
-target/
+*
+!analysis/
+!auth/
+!db/
+!macros/
+!storage/
+!util/
+!web/
+!Cargo.toml
+!.env

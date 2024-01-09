@@ -1,5 +1,5 @@
 use futures_util::{StreamExt, TryStreamExt};
-use leptos::*;
+use leptos::{*, logging::*};
 use leptos_meta::*;
 use leptos_router::*;
 use rand::distributions::{Alphanumeric, DistString};
@@ -9,6 +9,8 @@ use crate::login::{Login, LoggedIn};
 use crate::admin::Admin;
 use crate::{admin, HumanReadableUser};
 use crate::home::{sidebar::CourseSidebar, Home};
+
+pub type ServerAction<T> = Action<T, Result<<T as server_fn::ServerFn<()>>::Output, ServerFnError>>;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -35,11 +37,19 @@ pub fn App() -> impl IntoView {
                         </LoggedIn>
                     }>
                         <Route path="users" view=admin::Users/>
-                        <Route path="courses" view=admin::Courses/>
+                        <Route path="courses" view=admin::Courses>
+                            <Route path=":course" view=admin::course::Wrapper>
+                                <Route path="" view=admin::course::Home/>
+                                <Route path="instructors" view=admin::course::Instructors/>
+                                <Route path="graders" view=admin::course::Graders/>
+                            </Route>
+                            <Route path="" view=|| view! { <p>"Select a course."</p> }/>
+                        </Route>
                     </Route>
                     <Route path="home" view=|| view! {
                         <LoggedIn minimum_role=db::Role::Assistant>
-                            <CourseSidebar/>
+                            //<CourseSidebar try_get_all=false/>
+                            <Outlet/>
                         </LoggedIn>
                     }>
                         <Route path=":course" view=Home>
@@ -139,7 +149,7 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
 }
 
 #[component]
-pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optional)] placeholder: String) -> impl IntoView {
+pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optional, into)] placeholder: String, #[prop(optional, into)] name: String) -> impl IntoView {
     let (query, set_query) = create_signal(String::new());
     let found_users = create_resource(query, |query| async move {
         lookup_users(query).await
@@ -151,12 +161,12 @@ pub fn UserSearchBox(selected_user_id: WriteSignal<Option<String>>, #[prop(optio
     let placeholder = if placeholder.is_empty() { "Search Users...".to_string() } else { placeholder };
 
     view! {
-        <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") prop:value=query on:input=move |ev| {
+        <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") name=name prop:value=query on:input=move |ev| {
             if let Some(Ok(users_list)) = found_users() {
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
                     set_query(format!("{} ({})", user.name, user.username));
 
-                    selected_user_id(Some(event_target_value(&ev)));
+                    selected_user_id(Some(user.id.clone()));
                     set_has_valid(true);
                 } else if has_valid() {
                     selected_user_id(None);
@@ -223,26 +233,57 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
 }
 
 #[component]
-pub fn TermSelector(selected_term_id: WriteSignal<Option<String>>) -> impl IntoView {
+pub fn TermSelector(selected_term_id: RwSignal<Option<String>>, #[prop(optional, into)] name: String) -> impl IntoView {
     let terms = create_blocking_resource(|| (), |()| async move {
         get_terms().await
     });
 
+    let (selected_term_id, set_selected_term_id) = selected_term_id.split();
+
+    let select = create_node_ref::<leptos::html::Select>();
+
+    // Sets the initial value for the selector once terms have loaded
+    let (did_initial, set_did_initial) = create_signal(false);
+
+    create_effect(move |_| {
+        if let Some(Ok(terms)) = terms() {
+            if let Some(term_id) = selected_term_id() {
+                select().unwrap().set_value(&term_id);
+            } else {
+                // Due to how the HTML works it always chooses the last item on load
+                if let Some(term) = terms.last() {
+                    if !did_initial() {
+                        set_selected_term_id(Some(term.id.clone()));
+                        set_did_initial(true);
+                    }
+                }
+            }
+        }
+    });
+
     view! {
-        <select on:input=move |ev| {
+        <select name=name node_ref=select on:input=move |ev| {
             if let Some(Ok(terms)) = terms.get() {
                 if let Some(term) = terms.iter().find(|t| t.id == event_target_value(&ev)) {
-                    selected_term_id(Some(term.id.clone()));
+                    set_selected_term_id(Some(term.id.clone()));
                 }
             }
         }>
-            <option selected disabled>"Term..."</option>
-            <Transition>
+            <Transition fallback=|| view! {
+                <option selected disabled>"Term..."</option>
+            }>
                 {move ||
-                    terms.get().map(|terms| {
+                    terms().map(|terms| {
+                        let terms = store_value(terms);
+                        let has_terms = !terms().as_ref().unwrap().is_empty();
+                        
                         view! {
+                            <Show
+                                when=move || has_terms
+                                fallback=|| view! { <option selected disabled>"Term..."</option> }
+                            >
                             <For
-                                each=move || terms.clone().unwrap()
+                                each=move || terms().clone().unwrap()
                                 key=|term| term.id.clone()
                                 children=move |term| {
                                     view! {
@@ -250,6 +291,7 @@ pub fn TermSelector(selected_term_id: WriteSignal<Option<String>>) -> impl IntoV
                                     }
                                 }
                             />
+                            </Show>
                         }
                     })             
                 }
