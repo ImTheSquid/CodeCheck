@@ -1,11 +1,16 @@
 html {
     height: 100%;
+    overflow: hidden;
 }
 
 body {
 	font-family: sans-serif;
 //	text-align: center;
+    height: 100%;
     margin: 0;
+}
+
+main {
     height: 100%;
 }
 
@@ -27,12 +32,12 @@ span.code {
 }
 
 .sidebar-container {
+    height: var(--sidebar-height);
     display: flex;
 }
 
 // Positioning is to be left to other elements
 .sidebar {
-    // height: 100%;
     width: 15em;
     // position: fixed;
     // top: 0;
@@ -46,7 +51,7 @@ span.code {
 }
 
 .sidebar a {
-    padding: 1em 2.5em;
+    padding: 0.5em;
     text-decoration: none;
     font-size: 1.2em;
     color: white;

@@ -75,6 +75,18 @@ impl<const R: db::Role> actix_web::FromRequest for AuthedUser<R> {
 }
 
 #[cfg(feature = "ssr")]
+pub mod server_prelude {
+    pub use crate::server::WebState;
+    pub use crate::AuthedUser;
+    pub use actix_web::web::Data;
+    pub use actix_web::HttpRequest;
+    pub use goldleaf::{AutoCollection, CollectionIdentity};
+    pub use leptos_actix::{extract, ResponseOptions};
+    pub use mongodb::bson::{doc, from_document, oid::ObjectId};
+    pub use db::Role;
+}
+
+#[cfg(feature = "ssr")]
 pub mod server {
     use mongodb::Database;
     use std::{env, sync::RwLock};

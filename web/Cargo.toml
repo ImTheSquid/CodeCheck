@@ -31,6 +31,8 @@ futures-util = "0.3.29"
 styled = "0.2.0"
 stylist = "0.13.0"
 rand = "0.8.5"
+leptos-use = "0.9.0"
+web-sys = "0.3.66"
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr", "styled/csr"]
@@ -47,6 +49,7 @@ ssr = [
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
+  "leptos-use/ssr",
   "stylist/ssr",
   "styled/ssr",
 ]

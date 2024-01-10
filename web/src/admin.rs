@@ -5,7 +5,7 @@ use crate::{
 use auth::ValidatedUser;
 use db::Role;
 use futures_util::{StreamExt, TryStreamExt};
-use leptos::{html::Dialog, *};
+use leptos::{html::Dialog, logging::*, *};
 use leptos_meta::*;
 use leptos_router::*;
 use std::str::FromStr;
@@ -702,7 +702,7 @@ async fn create_course(
         graders: vec![],
         sections: vec![],
         term: ObjectId::from_str(&term_id)?,
-        human_owner: None,
+        ..Default::default()
     };
 
     data.database
@@ -712,6 +712,9 @@ async fn create_course(
 
     Ok(())
 }
+
+#[derive(Debug, Clone, Copy)]
+struct SelectedTerm(WriteSignal<Option<String>>);
 
 #[component]
 pub fn Courses() -> impl IntoView {
@@ -748,6 +751,8 @@ pub fn Courses() -> impl IntoView {
     let new_course_trigger = create_trigger();
     let course_term = create_rw_signal(None);
 
+    provide_context(SelectedTerm(course_term.write_only()));
+
     let create_course = create_server_action::<CreateCourse>();
 
     // Refreshes courses when a new one is created
@@ -764,10 +769,12 @@ pub fn Courses() -> impl IntoView {
     });
 
     // Removes URL path when term is changed
-    create_effect(move |prev_term| {
+    create_effect(move |prev_term: Option<Option<String>>| {
         if let Some(term) = prev_term {
             if term != course_term.get() {
-                leptos_router::use_navigate()("/admin/courses/", Default::default());
+                if term.is_some() {
+                    leptos_router::use_navigate()("/admin/courses/", Default::default());
+                }
                 course_term.get()
             } else {
                 term
@@ -881,12 +888,22 @@ fn CourseCreator(
 }
 
 pub mod course {
+    use crate::home::sidebar::get_course;
+
     use super::*;
 
     #[component]
     pub fn Wrapper() -> impl IntoView {
+        let set_selected_term = expect_context::<SelectedTerm>();
+
+        let course = create_blocking_resource(|| {
+            use_params_map()().get("course").unwrap().to_string()
+        }, |course| async move {
+            get_course(true, course).await
+        });
+
         view! {
-            <h1>"Manage Course"</h1>
+            <h1>"Manage "{move || course().map(|c| c.unwrap().name).unwrap_or("Course".to_string())}</h1>
             <Outlet/>
         }
     }

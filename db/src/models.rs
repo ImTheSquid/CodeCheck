@@ -74,7 +74,7 @@ pub struct HumanReadableWithoutId {
     pub username: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
+#[derive(Debug, Serialize, Deserialize, CollectionIdentity, Default)]
 #[db(name = "course")]
 pub struct Course {
     #[db(native_id_field)]
@@ -87,6 +87,8 @@ pub struct Course {
     pub sections: Vec<CourseSection>,
     pub term: TermId,
     pub human_owner: Option<HumanReadableWithoutId>,
+    pub user_instructors: Option<Vec<User>>,
+    pub user_graders: Option<Vec<User>>,
 }
 
 pub type AssignmentId = ObjectId;
