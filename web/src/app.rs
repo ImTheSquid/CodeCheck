@@ -8,7 +8,7 @@ use crate::admin::Admin;
 use crate::home::{sidebar::CourseSidebar, Home};
 use crate::login::{LoggedIn, Login};
 use crate::setup::Setup;
-use crate::{admin, HumanReadableUser};
+use crate::{admin, HumanReadableUser, RoleRequirement};
 
 pub type ServerAction<T> = Action<T, Result<<T as server_fn::ServerFn<()>>::Output, ServerFnError>>;
 
@@ -38,11 +38,7 @@ pub fn App() -> impl IntoView {
                     }>
                         <Route path="users" view=admin::Users/>
                         <Route path="courses" view=admin::Courses>
-                            <Route path=":course" view=admin::course::Wrapper>
-                                <Route path="" view=admin::course::Home/>
-                                <Route path="instructors" view=admin::course::Instructors/>
-                                <Route path="graders" view=admin::course::Graders/>
-                            </Route>
+                            <Route path=":course" view=admin::Course/>
                             <Route path="" view=|| view! { <p>"Select a course."</p> }/>
                         </Route>
                     </Route>
@@ -109,7 +105,7 @@ fn NotFound() -> impl IntoView {
 }
 
 #[server(LookupUsers)]
-async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnError> {
+async fn lookup_users(query: String, role_requirement: RoleRequirement) -> Result<Vec<HumanReadableUser>, ServerFnError> {
     use crate::server::WebState;
     use actix_web::web::Data;
     use db::models::User;
@@ -139,6 +135,9 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
                             {"indexOfCP": [{"$toLower": "$name"}, &query]},
                             -1
                         ]
+                    },
+                    {
+                        "_id": &query,
                     }
                 ]
             }}}],
@@ -153,11 +152,18 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
         .map(from_document)
         .try_collect::<Vec<User>>()?
         .into_iter()
-        .map(|user| HumanReadableUser {
-            id: user.id.unwrap().to_hex(),
-            username: user.username,
-            name: user.name,
-        })
+        .filter_map(|user| 
+            if role_requirement.includes_role(user.role) {
+                Some(
+                    HumanReadableUser {
+                        id: user.id.expect("id to exist").to_hex(),
+                        username: user.username,
+                        name: user.name,
+                })
+            } else {
+                None
+            }
+        )
         .collect();
 
     Ok(found_users)
@@ -165,12 +171,20 @@ async fn lookup_users(query: String) -> Result<Vec<HumanReadableUser>, ServerFnE
 
 #[component]
 pub fn UserSearchBox(
-    selected_user_id: WriteSignal<Option<String>>,
+    selected_user_id: RwSignal<Option<String>>,
     #[prop(optional, into)] placeholder: String,
     #[prop(optional, into)] name: String,
+    #[prop(optional)] role_requirement: RoleRequirement,
 ) -> impl IntoView {
+    let (selected_user_id, set_selected_user_id) = selected_user_id.split();
     let (query, set_query) = create_signal(String::new());
-    let found_users = create_resource(query, |query| async move { lookup_users(query).await });
+    let found_users = create_resource(query, move |query| async move {
+        if query.is_empty() {
+            Ok(vec![])
+        } else {
+            lookup_users(query, role_requirement).await
+        }
+    });
     let identifier = Alphanumeric.sample_string(&mut rand::thread_rng(), 8);
     let identifier_clone = identifier.clone();
     // Tracks when the user backspaces without needing a ReadSignal from the parent
@@ -181,16 +195,30 @@ pub fn UserSearchBox(
         placeholder
     };
 
+    create_effect(move |_| {
+        if let (Some(Ok(users)), Some(id)) = (found_users(), selected_user_id()) {
+            if let Some(user) = users.iter().find(|u| u.id == id) {
+                set_query(format!("{} ({})", user.name, user.username));
+
+                set_has_valid(true);
+            } else {
+                set_query(id);
+                set_has_valid(false);
+            }
+        }
+    });
+
     view! {
         <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") name=name prop:value=query on:input=move |ev| {
+            set_query(event_target_value(&ev));
             if let Some(Ok(users_list)) = found_users() {
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
                     set_query(format!("{} ({})", user.name, user.username));
 
-                    selected_user_id(Some(user.id.clone()));
+                    set_selected_user_id(Some(user.id.clone()));
                     set_has_valid(true);
                 } else if has_valid() {
-                    selected_user_id(None);
+                    set_selected_user_id(None);
                     set_query(String::new());
                     set_has_valid(false);
                 }
@@ -255,7 +283,7 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
         .try_collect::<Vec<Term>>()?
         .into_iter()
         .map(|t| TermInfo {
-            id: t.id.unwrap().to_hex(),
+            id: t.id.expect("id to be valid").to_hex(),
             name: t.name,
         })
         .collect();
@@ -280,7 +308,7 @@ pub fn TermSelector(
     create_effect(move |_| {
         if let Some(Ok(terms)) = terms() {
             if let Some(term_id) = selected_term_id() {
-                select().unwrap().set_value(&term_id);
+                select().expect("select to be mounted").set_value(&term_id);
             } else {
                 // Due to how the HTML works it always chooses the last item on load
                 if let Some(term) = terms.last() {
@@ -307,7 +335,7 @@ pub fn TermSelector(
                 {move ||
                     terms().map(|terms| {
                         let terms = store_value(terms);
-                        let has_terms = !terms().as_ref().unwrap().is_empty();
+                        let has_terms = !terms().as_ref().expect("terms to be loaded").is_empty();
 
                         view! {
                             <Show
@@ -315,7 +343,7 @@ pub fn TermSelector(
                                 fallback=|| view! { <option selected disabled>"Term..."</option> }
                             >
                             <For
-                                each=move || terms().clone().unwrap()
+                                each=move || terms().clone().expect("terms to be valid")
                                 key=|term| term.id.clone()
                                 children=move |term| {
                                     view! {

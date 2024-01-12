@@ -1,6 +1,7 @@
 #![feature(fs_try_exists)]
 #![feature(adt_const_params)]
 #![feature(iterator_try_collect)]
+#![deny(clippy::unwrap_used)]
 pub mod admin;
 pub mod app;
 pub mod home;
@@ -24,6 +25,43 @@ if #[cfg(feature = "hydrate")] {
       leptos::mount_to_body(App);
     }
 }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum RoleRequirementCondition {
+    ExactOrGreater,
+    Exact
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct RoleRequirement {
+    role: db::Role,
+    condition: RoleRequirementCondition,
+}
+
+impl RoleRequirement {
+    pub fn new(role: db::Role, condition: RoleRequirementCondition) -> Self {
+        Self {
+            role,
+            condition,
+        }
+    }
+
+    pub fn includes_role(&self, role: db::Role) -> bool {
+        match self.condition {
+            RoleRequirementCondition::ExactOrGreater => role >= self.role,
+            RoleRequirementCondition::Exact => role == self.role,
+        }
+    }
+}
+
+impl Default for RoleRequirement {
+    fn default() -> Self {
+        Self {
+            role: db::Role::Assistant,
+            condition: RoleRequirementCondition::ExactOrGreater,
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

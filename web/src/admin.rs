@@ -1,6 +1,6 @@
 use crate::{
     app::{ServerAction, TermSelector, UserSearchBox},
-    home::sidebar::CourseSidebar,
+    home::sidebar::{get_course, CourseSidebar},
 };
 use auth::ValidatedUser;
 use db::Role;
@@ -149,7 +149,7 @@ pub fn Users() -> impl IntoView {
         let prev = prev.unwrap_or(0);
         let new = new_user_action.version()();
         if prev != new {
-            new_user_dialog.get().unwrap().close();
+            new_user_dialog.get().expect("new user dialog to be mounted").close();
             users_res.refetch();
             new
         } else {
@@ -172,7 +172,7 @@ pub fn Users() -> impl IntoView {
                     <th scope="col">"Role"</th>
                     <th scope="col">"Email"</th>
                     <th scope="col">"Email Verified?"</th>
-                    <th scope="col"><button on:click=move |_| new_user_dialog.get().unwrap().show_modal().expect("Failed to open add dialog")>"Add"</button></th>
+                    <th scope="col"><button on:click=move |_| new_user_dialog.get().expect("new user dialog to be mounted").show_modal().expect("Failed to open add dialog")>"Add"</button></th>
                 </tr>
 
                 {move || {
@@ -190,7 +190,7 @@ pub fn Users() -> impl IntoView {
 
             <dialog node_ref=new_user_dialog>
                 <NewUserForm new_user_action=new_user_action/>
-                <button on:click=move |_| new_user_dialog.get().unwrap().close()>"Cancel"</button>
+                <button on:click=move |_| new_user_dialog.get().expect("new user dialog to be mounted").close()>"Cancel"</button>
             </dialog>
         </Transition>
     }
@@ -250,7 +250,7 @@ async fn delete_user(user_id: String) -> Result<(), ServerFnError> {
 
     extract(
         move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
-            let user_id = ObjectId::from_str(&user_id).unwrap();
+            let user_id = ObjectId::from_str(&user_id).expect("user_id to be a valid objectID");
             let res = data
                 .database
                 .auto_collection::<User>()
@@ -361,7 +361,7 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
 
     let user_delete_id = user.id.clone();
     let delete_user = move |_| {
-        delete_dialog.get().unwrap().close();
+        delete_dialog.get().expect("delete dialog to be mounted").close();
         delete_user_action.dispatch(DeleteUser {
             user_id: user_delete_id.clone(),
         });
@@ -402,7 +402,7 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
                 {move || if is_editing() {
                     view! {
                         <select prop:value=move|| role().to_string().to_lowercase() on:input=move |ev| {
-                            set_role(db::Role::from_str(event_target_value(&ev).as_str()).unwrap());
+                            set_role(db::Role::from_str(event_target_value(&ev).as_str()).expect("role to be valid"));
                         }>
                             <option selected disabled hidden>"Change..."</option>
                             <option value="admin">"Admin"</option>
@@ -432,13 +432,13 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
                 {move || if is_editing() {
                     view! {<button on:click=save.clone()>"Save"</button><button on:click=cancel_editing.clone()>"Cancel"</button>}
                 } else {
-                    view! {<button on:click=move |_| set_is_editing(true)>"Edit"</button><button on:click=move |_| delete_dialog.get().unwrap().show_modal().expect("Failed to open removal dialog")>"Remove"</button>}
+                    view! {<button on:click=move |_| set_is_editing(true)>"Edit"</button><button on:click=move |_| delete_dialog.get().expect("delete dialog to be mounted").show_modal().expect("Failed to open removal dialog")>"Remove"</button>}
                 }}
             </td>
         </tr>
         <dialog node_ref=delete_dialog>
             <p>"Are you sure you want to delete " {username_str}"?"</p>
-            <button on:click=move |_| delete_dialog.get().unwrap().close()>"No, cancel."</button>
+            <button on:click=move |_| delete_dialog.get().expect("delete dialog to be mounted").close()>"No, cancel."</button>
             <button on:click=delete_user.clone()>"Yes, delete."</button>
         </dialog>
     }
@@ -516,9 +516,9 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
         .try_collect::<Vec<Term>>()?
         .into_iter()
         .map(|t| TermInfo {
-            id: t.id.unwrap().to_hex(),
+            id: t.id.expect("term to have an id").to_hex(),
             name: t.name,
-            can_delete: t.can_delete.unwrap(),
+            can_delete: t.can_delete.expect("can delete to be attached to the document"),
         })
         .collect::<Vec<_>>();
 
@@ -663,10 +663,10 @@ async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnErr
         .try_collect::<Vec<Course>>()?
         .into_iter()
         .map(|c| BaseCourseInfo {
-            id: c.id.unwrap().to_hex(),
+            id: c.id.expect("id to exist on the course").to_hex(),
             name: c.name,
             owner: {
-                let human_owner = c.human_owner.unwrap();
+                let human_owner = c.human_owner.expect("human owner to be attaached to the document");
                 HumanReadableUser {
                     id: c.owner.to_hex(),
                     name: human_owner.name,
@@ -761,7 +761,7 @@ pub fn Courses() -> impl IntoView {
         let course_new = create_course.version()();
         if course_new != course_prev {
             new_course_trigger.notify();
-            create_course_ref.get().unwrap().close();
+            create_course_ref.get().expect("create course dialog to be mounted").close();
             course_new
         } else {
             course_prev
@@ -769,26 +769,26 @@ pub fn Courses() -> impl IntoView {
     });
 
     // Removes URL path when term is changed
-    create_effect(move |prev_term: Option<Option<String>>| {
-        if let Some(term) = prev_term {
-            if term != course_term.get() {
-                if term.is_some() {
-                    leptos_router::use_navigate()("/admin/courses/", Default::default());
-                }
-                course_term.get()
-            } else {
-                term
-            }
-        } else {
-            course_term.get()
-        }
-    });
+    // create_effect(move |prev_term: Option<Option<String>>| {
+    //     if let Some(term) = prev_term {
+    //         if term != course_term.get() {
+    //             if term.is_some() {
+    //                 leptos_router::use_navigate()("/admin/courses/", Default::default());
+    //             }
+    //             course_term.get()
+    //         } else {
+    //             term
+    //         }
+    //     } else {
+    //         course_term.get()
+    //     }
+    // });
 
     styled::view! { styles,
         <div>
             <h2>"Course and Term Configuration"</h2>
-            <button on:click=move |_| manage_terms_ref.get().unwrap().show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
-            <button on:click=move |_| create_course_ref.get().unwrap().show_modal().expect("Failed to show course modal!")>"Create Course..."</button>
+            <button on:click=move |_| manage_terms_ref.get().expect("manage terms dialog to be mounted").show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
+            <button on:click=move |_| create_course_ref.get().expect("create course dialog to be mounted").show_modal().expect("Failed to show course modal!")>"Create Course..."</button>
             <TermSelector selected_term_id=course_term/>
             <CourseSidebar try_get_all=true term_id=course_term refresh=new_course_trigger/>
         </div>
@@ -844,7 +844,7 @@ pub fn Courses() -> impl IntoView {
                     />})}
                 </Transition>
             </table>
-            <button on:click=move |_| manage_terms_ref.get().unwrap().close()>"Close"</button>
+            <button on:click=move |_| manage_terms_ref.get().expect("manage terms dialog to be mounted").close()>"Close"</button>
         </dialog>
     }
 }
@@ -855,7 +855,7 @@ fn CourseCreator(
     create_course_ref: NodeRef<Dialog>,
 ) -> impl IntoView {
     let (new_course_name, set_new_course_name) = create_signal(String::new());
-    let (new_course_owner, set_new_course_owner) = create_signal(None);
+    let new_course_owner = create_rw_signal(None);
     // let (new_course_term, set_new_course_term) = create_signal(None);
     let new_course_term = create_rw_signal(None);
 
@@ -865,7 +865,7 @@ fn CourseCreator(
             owner_id: new_course_owner().expect("because submission is blocked until not None"),
             term_id: new_course_term().expect("because submission is blocked until not None"),
         });
-        create_course_ref.get().unwrap().close();
+        create_course_ref.get().expect("create course dialog to be mounted").close();
     };
 
     view! {
@@ -877,9 +877,9 @@ fn CourseCreator(
                 prop:value=new_course_name
                 on:input=move |ev| set_new_course_name(event_target_value(&ev))
             />
-            <UserSearchBox selected_user_id=set_new_course_owner placeholder="Search for Course Owner..." name="owner_id"/>
+            <UserSearchBox selected_user_id=new_course_owner placeholder="Search for Course Owner..." name="owner_id"/>
             <TermSelector selected_term_id=new_course_term name="term_id"/>
-            <button on:click=move |_| create_course_ref.get().unwrap().close()>"Cancel"</button>
+            <button on:click=move |_| create_course_ref.get().expect("create course dialog to be mounted").close()>"Cancel"</button>
             <button disabled=move || new_course_name.with(String::is_empty) || new_course_owner.with(Option::is_none) || new_course_term.with(Option::is_none)
                 on:click=on_click
             >"Create"</button>
@@ -887,45 +887,53 @@ fn CourseCreator(
     }
 }
 
-pub mod course {
-    use crate::home::sidebar::get_course;
+#[component]
+pub fn Course() -> impl IntoView {
+    let set_selected_term = expect_context::<SelectedTerm>();
 
-    use super::*;
+    let course = create_blocking_resource(|| {
+        use_params_map()().get("course").expect("course to be in the URL params").to_string()
+    }, |course| async move {
+        get_course(true, course).await
+    });
 
-    #[component]
-    pub fn Wrapper() -> impl IntoView {
-        let set_selected_term = expect_context::<SelectedTerm>();
-
-        let course = create_blocking_resource(|| {
-            use_params_map()().get("course").unwrap().to_string()
-        }, |course| async move {
-            get_course(true, course).await
-        });
-
-        view! {
-            <h1>"Manage "{move || course().map(|c| c.unwrap().name).unwrap_or("Course".to_string())}</h1>
-            <Outlet/>
+    let styles = style!(
+        div.fields {
+            display: inline-block;
         }
-    }
 
-    #[component]
-    pub fn Home() -> impl IntoView {
-        view! {
-            <p>"home"</p>
+        div.lists {
+            display: flex;
         }
-    }
+    );
 
-    #[component]
-    pub fn Instructors() -> impl IntoView {
-        view! {
-            <p>"instructors"</p>
-        }
-    }
+    let (name, set_name) = create_signal(String::new());
+    let selected_user_id = create_rw_signal(None);
 
-    #[component]
-    pub fn Graders() -> impl IntoView {
-        view! {
-            <p>"graders"</p>
+    create_effect(move |_| {
+        if let Some(Ok(course)) = course() {
+            set_selected_term.0(Some(course.term_id));
+            set_name(course.name);
+            selected_user_id.set(Some(course.owner.id));
         }
+    });
+
+    styled::view! { styles,
+        <h1>"Manage "{move || course().map(|c| c.expect("course to load properly").name).unwrap_or("Course".to_string())}</h1>
+        <div class="fields">
+            <input prop:value=name on:input=move |ev| set_name(event_target_value(&ev)) placeholder="Course Name"/>
+            <UserSearchBox selected_user_id=selected_user_id placeholder="Course Owner"/>
+        </div>
+        <div class="lists">
+            <div>
+                <h2>"Sections"</h2>
+            </div>
+            <div>
+                <h2>"Instructors"</h2>
+            </div>
+            <div>
+                <h2>"Graders"</h2>
+            </div>
+        </div>
     }
 }

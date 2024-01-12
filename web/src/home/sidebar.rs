@@ -304,14 +304,14 @@ pub fn CourseSidebar(
     let resize_listener = window_event_listener(ev::resize, move |ev| {
         let target = event_target::<web_sys::Window>(&ev);
         let height = target.inner_height().expect("window height to be valid").as_f64().expect("window height to be a float");
-        let top = container().unwrap().get_bounding_client_rect().y() as f64;
+        let top = container().expect("div to be mounted").get_bounding_client_rect().y() as f64;
         set_sidebar_height(format!("{}px", height - top));
     });
     on_cleanup(move || resize_listener.remove());
 
     create_effect(move |_| {
         let height = window().inner_height().expect("window height to be valid").as_f64().expect("window height to be a float");
-        let top = container().unwrap().get_bounding_client_rect().y();
+        let top = container().expect("div to be mounted").get_bounding_client_rect().y();
         set_sidebar_height(format!("{}px", height - top));
     });
 
@@ -324,7 +324,7 @@ pub fn CourseSidebar(
                             Some(courses) =>
                         view! {
                             <For
-                                each=move || courses.clone().unwrap()
+                                each=move || courses.clone().expect("courses to be valid")
                                 key=|course| course.id.clone()
                                 children=|course| {
                                     view! {
