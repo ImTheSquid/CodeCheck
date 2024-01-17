@@ -198,6 +198,7 @@ pub fn UserSearchBox(
     // Jank-ass solution to stop stuff from conflicting
     let (lock, set_lock) = create_signal(false);
 
+    // Allows for the parent to set the ID
     create_effect(move |_| {
         if let Some(Ok(users)) = found_users() {
             if let Some(id) = selected_user_id() {
@@ -229,6 +230,7 @@ pub fn UserSearchBox(
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
                     set_query(format!("{} ({})", user.name, user.username));
 
+                    set_lock(false);
                     set_selected_user_id(Some(user.id.clone()));
                     set_has_valid(true);
                 } else if has_valid() {
