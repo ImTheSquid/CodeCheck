@@ -120,7 +120,7 @@ pub mod server_prelude {
     pub use actix_web::HttpRequest;
     pub use goldleaf::{AutoCollection, CollectionIdentity};
     pub use leptos_actix::{extract, ResponseOptions};
-    pub use mongodb::bson::{doc, from_document, oid::ObjectId};
+    pub use mongodb::bson::{doc, from_document, oid::ObjectId, to_bson};
     pub use db::Role;
 }
 

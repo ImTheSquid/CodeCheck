@@ -1,6 +1,6 @@
 use crate::{
     app::{ServerAction, TermSelector, UserSearchBox},
-    home::sidebar::{get_course, CourseSidebar},
+    home::sidebar::{get_course, CourseSidebar, SectionInfo}, RoleRequirement,
 };
 use auth::ValidatedUser;
 use db::Role;
@@ -887,12 +887,165 @@ fn CourseCreator(
     }
 }
 
+#[server(SaveCourseInfo)]
+async fn save_course_info(course_id: String, name: String, owner_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$set": {
+            "name": name,
+            "owner": ObjectId::from_str(&owner_id)?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(DeleteCourse)]
+async fn delete_course(course_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+    
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().delete_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(CreateSection)]
+async fn create_section(course_id: String, section_name: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::{Course, CourseSection};
+    
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$push": {
+            "sections": to_bson(&CourseSection { id: ObjectId::new(), name: section_name })?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(DeleteSection)]
+async fn delete_section(course_id: String, section_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$pull": {
+            "sections": {
+                "id": ObjectId::from_str(&section_id)?,
+            }
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(AddInstructor)]
+async fn add_instructor(course_id: String, user_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$push": {
+            "instructors": ObjectId::from_str(&user_id)?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(RemoveInstructor)]
+async fn remove_instructor(course_id: String, user_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$pull": {
+            "instructors": ObjectId::from_str(&user_id)?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(AddGrader)]
+async fn add_grader(course_id: String, user_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$push": {
+            "graders": ObjectId::from_str(&user_id)?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
+#[server(RemoveGrader)]
+async fn remove_grader(course_id: String, user_id: String) -> Result<(), ServerFnError> {
+    use crate::server_prelude::*;
+    use db::models::Course;
+
+    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+
+    data.database.auto_collection::<Course>().update_one(doc! {
+        "_id": ObjectId::from_str(&course_id)?,
+    }, doc! {
+        "$pull": {
+            "graders": ObjectId::from_str(&user_id)?,
+        }
+    }, None).await?;
+
+    Ok(())
+}
+
 #[component]
 pub fn Course() -> impl IntoView {
     let set_selected_term = expect_context::<SelectedTerm>();
+    let create_section = create_server_action::<CreateSection>();
+    let delete_section = create_server_action::<DeleteSection>();
+    let save_course = create_server_action::<SaveCourseInfo>();
+    let delete_course = create_server_action::<DeleteCourse>();
+    let add_instructor = create_server_action::<AddInstructor>();
+    let remove_instructor = create_server_action::<RemoveInstructor>();
+    let add_grader = create_server_action::<AddGrader>();
+    let remove_grader = create_server_action::<RemoveGrader>();
+    let params = use_params_map();
+    let course_id = move || params.with(|params| params.get("course").cloned().expect(":course to be in URL params"));
 
-    let course = create_blocking_resource(|| {
-        use_params_map()().get("course").expect("course to be in the URL params").to_string()
+    let course = create_blocking_resource(move || {
+        course_id()
     }, |course| async move {
         get_course(true, course).await
     });
@@ -904,6 +1057,15 @@ pub fn Course() -> impl IntoView {
 
         div.lists {
             display: flex;
+        }
+
+        div.lists > div {
+            flex: 1;
+            margin: 0 1e0em;
+        }
+
+        div.list-inline {
+            display: inline-block;
         }
     );
 
@@ -918,22 +1080,164 @@ pub fn Course() -> impl IntoView {
         }
     });
 
+    create_effect(move |_| {
+        create_section.version().track();
+        delete_section.version().track();
+        save_course.version().track();
+        add_instructor.version().track();
+        remove_instructor.version().track();
+        add_grader.version().track();
+        remove_grader.version().track();
+        course.refetch();
+    });
+
+    let (new_section_name, set_new_section_name) = create_signal(String::new());
+    let new_instructor = create_rw_signal(None);
+    let new_grader = create_rw_signal(None);
+
+    let create_new_section = move || {
+        create_section.dispatch(CreateSection { course_id: course_id(), section_name: new_section_name() });
+        set_new_section_name(String::new());
+    };
+
+    let add_instructor = move || {
+        add_instructor.dispatch(AddInstructor { course_id: course_id(), user_id: new_instructor().expect("instructor to be selected") });
+        new_instructor.set(None);
+    };
+
+    let add_grader = move || {
+        add_grader.dispatch(AddGrader { course_id: course_id(), user_id: new_grader().expect("grader to be selected") });
+        new_grader.set(None);
+    };
+
     styled::view! { styles,
         <h1>"Manage "{move || course().map(|c| c.expect("course to load properly").name).unwrap_or("Course".to_string())}</h1>
         <div class="fields">
             <input prop:value=name on:input=move |ev| set_name(event_target_value(&ev)) placeholder="Course Name"/>
             <UserSearchBox selected_user_id=selected_user_id placeholder="Course Owner"/>
+            <button disabled=move || name.with(String::is_empty) || selected_user_id.with(Option::is_none) on:click=move |_| save_course.dispatch(SaveCourseInfo { course_id: course_id(), name: name(), owner_id: selected_user_id().expect("owner to be selected")})>"Save"</button>
+            <button on:click=move |_| {
+                delete_course.dispatch(DeleteCourse { course_id: course_id() });
+                use_navigate()("/admin/courses", Default::default());
+            }>"Delete (can't undo)"</button>
         </div>
         <div class="lists">
             <div>
                 <h2>"Sections"</h2>
+                <div class="list-inline">
+                    <input type="text" placeholder="New Section Name" prop:value=new_section_name on:input=move |ev| set_new_section_name(event_target_value(&ev)) on:keypress=move |ev| if ev.key() == "Enter" && !new_section_name.with(String::is_empty) { create_new_section() }/>
+                    <button disabled=move || new_section_name.with(String::is_empty) on:click=move |_| create_new_section()>"Create"</button>
+                </div>
+                <Transition>
+                    {move || course().map(|c| {
+                        view! {
+                            <div>
+                            <For
+                                each=move || c.clone().expect("course to have loaded").sections
+                                key=|s| s.id.clone()
+                                children=move |s| {
+                                    let id = s.id.clone();
+                                    view! {
+                                        <div class="list-inline">
+                                            <p>{s.name}</p>
+                                            <button on:click=move |_| delete_section.dispatch(DeleteSection { course_id: course_id(), section_id: id.clone() })>"Remove"</button>
+                                        </div>
+                                    }
+                                }
+                            />
+                                </div>
+                        }}
+                    )}
+                </Transition>
             </div>
             <div>
                 <h2>"Instructors"</h2>
+                <div class="list-inline">
+                    <UserSearchBox selected_user_id=new_instructor placeholder="New Instructor" role_requirement=RoleRequirement::new(db::Role::Instructor, crate::RoleRequirementCondition::ExactOrGreater)/>
+                    <button disabled=move || new_instructor.with(Option::is_none) on:click=move |_| add_instructor()>"Add"</button>
+                </div>
+                <Transition>
+                    {move || course().map(|c|
+                        view! {
+                            <div>
+                            <For
+                                each=move || c.clone().expect("course to have loaded").instructors
+                                key=|i| i.id.clone()
+                                children=move |i| {
+                                    view! {
+                                        <div>
+                                            <p>{format!("{} ({})", i.name, i.username)}</p>
+                                            <button on:click=move |_| remove_instructor.dispatch(RemoveInstructor { course_id: course_id(), user_id: i.id.clone() })>"Remove"</button>
+                                        </div>
+                                    }
+                                }
+                            />
+                                </div>
+                        }
+                    )}
+                </Transition>
             </div>
             <div>
                 <h2>"Graders"</h2>
+                <div class="list-inline">
+                    <UserSearchBox selected_user_id=new_grader placeholder="New Grader"/>
+                    <button disabled=move || new_grader.with(Option::is_none) on:click=move |_| add_grader()>"Add"</button>
+                </div>
+                <Transition>
+                    {move || course().map(|c|
+                        view! {
+                            <div>
+                            <For
+                                each=move || c.clone().expect("course to have loaded").graders
+                                key=|i| i.id.clone()
+                                children=move |i| {
+                                    view! {
+                                        <div>
+                                            <p>{format!("{} ({})", i.name, i.username)}</p>
+                                            <button on:click=move |_| remove_grader.dispatch(RemoveGrader { course_id: course_id(), user_id: i.id.clone() })>"Remove"</button>
+                                        </div>
+                                    }
+                                }
+                            />
+                                </div>
+                        }
+                    )}
+                </Transition>
             </div>
+        </div>
+    }
+}
+
+#[component]
+fn CourseSectionListRowItem(section: SectionInfo, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
+    let styles = style!(
+        div {
+            display: inline-block;
+            justify-content: space-between;
+        }
+    );
+
+    styled::view! { styles,
+        <div>
+            <p>{section.name}</p>
+            <button on:click=move |_| on_remove(())>"Remove"</button>
+        </div>
+    }
+}
+
+#[component]
+fn CourseUserListRowItem(user: HumanReadableUser, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
+    let styles = style!(
+        div {
+            display: inline-block;
+            justify-content: space-between;
+        }
+    );
+
+    styled::view! { styles,
+        <div>
+            <p>{format!("{} ({})", user.name, user.username)}</p>
+            <button on:click=move |_| on_remove(())>"Remove"</button>
         </div>
     }
 }

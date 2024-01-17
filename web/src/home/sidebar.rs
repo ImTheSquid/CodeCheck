@@ -142,9 +142,9 @@ async fn get_courses(
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-struct SectionInfo {
-    id: String,
-    name: String,
+pub struct SectionInfo {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

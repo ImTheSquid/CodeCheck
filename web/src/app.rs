@@ -195,14 +195,27 @@ pub fn UserSearchBox(
         placeholder
     };
 
-    create_effect(move |_| {
-        if let (Some(Ok(users)), Some(id)) = (found_users(), selected_user_id()) {
-            if let Some(user) = users.iter().find(|u| u.id == id) {
-                set_query(format!("{} ({})", user.name, user.username));
+    // Jank-ass solution to stop stuff from conflicting
+    let (lock, set_lock) = create_signal(false);
 
-                set_has_valid(true);
+    create_effect(move |_| {
+        if let Some(Ok(users)) = found_users() {
+            if let Some(id) = selected_user_id() {
+                if let Some(user) = users.iter().find(|u| u.id == id) {
+                    set_query(format!("{} ({})", user.name, user.username));
+
+                    set_has_valid(true);
+                } else {
+                    set_query(id);
+                    set_has_valid(false);
+                }
             } else {
-                set_query(id);
+                // Damn this is dirty
+                if lock.get_untracked() {
+                    set_lock.set_untracked(false);
+                    return;
+                }
+                set_query(String::new());
                 set_has_valid(false);
             }
         }
@@ -210,6 +223,7 @@ pub fn UserSearchBox(
 
     view! {
         <input type="text" placeholder=placeholder list=move || format!("user-search-{identifier}") name=name prop:value=query on:input=move |ev| {
+            set_lock(true);
             set_query(event_target_value(&ev));
             if let Some(Ok(users_list)) = found_users() {
                 if let Some(user) = users_list.iter().find(|u| u.id == event_target_value(&ev)) {
