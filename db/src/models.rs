@@ -93,6 +93,12 @@ pub struct Course {
 
 pub type AssignmentId = ObjectId;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum JobStatus {
+    InProgress(f64),
+    Failed,
+}
+
 #[derive(Debug, Serialize, Deserialize, CollectionIdentity)]
 #[db(name = "assignment")]
 pub struct Assignment {
@@ -102,6 +108,7 @@ pub struct Assignment {
     pub name: String,
     pub course: CourseSectionId,
     pub last_ast_path: Option<String>,
+    pub job_status: Option<JobStatus>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

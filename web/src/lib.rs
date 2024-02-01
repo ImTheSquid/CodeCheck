@@ -7,6 +7,8 @@ pub mod app;
 pub mod home;
 pub mod login;
 pub mod setup;
+#[cfg(feature = "ssr")]
+pub mod jobs;
 
 use cfg_if::cfg_if;
 

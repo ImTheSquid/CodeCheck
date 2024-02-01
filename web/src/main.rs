@@ -3,7 +3,17 @@ use db::UserId;
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    use ::web::app::*;
+    {
+        let args = args();
+        if args.len() > 1 {
+            let job_data = args.skip(1).next().expect("a second value from the iterator");
+            jobs::job_main(serde_json::from_str(&job_data).expect("job data to have a valid format")).await;
+        }
+    }
+
+    use std::env::args;
+
+    use ::web::{app::*, jobs};
     use actix_files::Files;
     use actix_web::*;
     use leptos::*;

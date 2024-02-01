@@ -53,7 +53,7 @@ pub fn App() -> impl IntoView {
                                 <Route path=":assignment" view=Home/>
                             </Route>
                         </Route>
-                        <Route path="" view=|| view! { <p>"Select a course"</p> }/>
+                        <Route path="" view=Home/>
                     </Route>
                     <Route path="*any" view=NotFound/>
                 </Routes>
