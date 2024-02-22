@@ -10,7 +10,7 @@ use crate::login::{LoggedIn, Login};
 use crate::setup::Setup;
 use crate::{admin, HumanReadableUser, RoleRequirement};
 
-pub type ServerAction<T> = Action<T, Result<<T as server_fn::ServerFn<()>>::Output, ServerFnError>>;
+pub type ServerAction<T> = Action<T, Result<<T as server_fn::ServerFn>::Output, ServerFnError>>;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -113,7 +113,7 @@ async fn lookup_users(query: String, role_requirement: RoleRequirement) -> Resul
     use leptos_actix::extract;
     use mongodb::bson::{doc, from_document};
 
-    let data = extract!(Data<WebState>);
+    let data: Data<WebState> = extract().await?;
 
     let query = query.to_lowercase();
 
@@ -277,7 +277,7 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
     use leptos_actix::extract;
     use mongodb::bson::{doc, from_document};
 
-    let data = extract!(Data<WebState>);
+    let data: Data<WebState> = extract().await?;
 
     let stage_sort_by_name = doc! {
         "$sort": {

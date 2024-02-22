@@ -13,35 +13,32 @@ async fn validate_login(required_role: Role) -> Result<ValidatedUser, ServerFnEr
     use leptos_actix::{extract, ResponseOptions};
 
     let response = expect_context::<ResponseOptions>();
+    let (data, req): (Data<WebState>, HttpRequest) = extract().await?;
 
-    extract(move |data: Data<WebState>, req: HttpRequest| async move {
-        let cookie = match req.cookie("session") {
-            None => {
-                leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
-                return Err(ServerFnError::ServerError("No cookie present!".to_string()));
-            }
-            Some(cookie) => cookie,
-        };
-
-        let res = match auth::validate_token(&data.database, cookie.value())
-            .await
-            .map_err(|e| ServerFnError::ServerError(e.to_string()))
-        {
-            Err(e) => {
-                leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
-                return Err(ServerFnError::ServerError(e.to_string()));
-            }
-            Ok(res) => res,
-        };
-
-        if res.role < required_role {
-            response.set_status(actix_web::http::StatusCode::FORBIDDEN);
-            return Err(ServerFnError::ServerError("Forbidden".to_string()));
+    let cookie = match req.cookie("session") {
+        None => {
+            leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
+            return Err(ServerFnError::ServerError("No cookie present!".to_string()));
         }
+        Some(cookie) => cookie,
+    };
 
-        Ok(res)
-    })
-    .await?
+    let res = match auth::validate_token(&data.database, cookie.value())
+        .await
+    {
+        Err(e) => {
+            leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
+            return Err(ServerFnError::ServerError(e.to_string()));
+        }
+        Ok(res) => res,
+    };
+
+    if res.role < required_role {
+        response.set_status(actix_web::http::StatusCode::FORBIDDEN);
+        return Err(ServerFnError::ServerError("Forbidden".to_string()));
+    }
+
+    Ok(res)
 }
 
 /// Requires the user to be logged in to see the inner view, otherwise

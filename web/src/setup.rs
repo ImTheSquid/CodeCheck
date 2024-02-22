@@ -8,13 +8,14 @@ async fn check_setup_status() -> Result<bool, ServerFnError> {
     use actix_web::web::Data;
     use leptos_actix::extract;
 
-    extract(|data: Data<WebState>| async move {
-        data.config
-            .read()
-            .expect("Failed to get read lock for config!")
-            .setup_complete
-    })
-    .await
+    let data: Data<WebState> = extract().await?;
+
+    let complete = data.config
+        .read()
+        .expect("Failed to get read lock for config!")
+        .setup_complete;
+
+    Ok(complete)
 }
 
 #[server(CompleteSetup)]
@@ -23,18 +24,16 @@ async fn complete_setup() -> Result<(), ServerFnError> {
     use actix_web::web::Data;
     use leptos_actix::extract;
 
-    extract(|data: Data<WebState>| async move {
-        let mut write = data
-            .config
-            .write()
-            .expect("Failed to get write lock for config!");
-        write.setup_complete = true;
-        write
-            .write()
-            .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
-        Ok(())
-    })
-    .await?
+    let data: Data<WebState> = extract().await?;
+
+    let mut write = data
+        .config
+        .write()
+        .expect("Failed to get write lock for config!");
+    write.setup_complete = true;
+    write
+        .write().expect("config write to succeed");
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -83,22 +82,20 @@ async fn setup_files(vocareum_api_key: String) -> Result<(), ServerFnError> {
     use actix_web::web::Data;
     use leptos_actix::extract;
 
-    extract(|data: Data<WebState>| async move {
-        let mut write = data
-            .config
-            .write()
-            .expect("Failed to get write lock for config!");
-        write.vocareum_key = if vocareum_api_key.is_empty() {
-            None
-        } else {
-            Some(vocareum_api_key)
-        };
-        write
-            .write()
-            .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
-        Ok(())
-    })
-    .await?
+    let data: Data<WebState> = extract().await?;
+
+    let mut write = data
+        .config
+        .write()
+        .expect("Failed to get write lock for config!");
+    write.vocareum_key = if vocareum_api_key.is_empty() {
+        None
+    } else {
+        Some(vocareum_api_key)
+    };
+    write
+        .write().expect("write op to succeed");
+    Ok(())
 }
 
 #[component]

@@ -41,34 +41,31 @@ async fn get_all_users() -> Result<Vec<DisplayUser>, ServerFnError> {
     use leptos_actix::{extract, ResponseOptions};
     use mongodb::bson::doc;
 
-    extract(
-        |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
-            let all_users = data
-                .database
-                .auto_collection::<User>()
-                .find(doc! {}, None)
-                .await?
-                .try_collect::<Vec<_>>()
-                .await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
-            let all_users = all_users
-                .into_iter()
-                .map(|u| DisplayUser {
-                    id: u.id.unwrap().to_hex(),
-                    username: u.username,
-                    name: u.name,
-                    role: u.role,
-                    email: u.email.as_ref().map(|vr| vr.resource.to_owned()),
-                    email_verified: u.email.is_some_and(|vr| {
-                        matches!(vr.status, db::models::VerificationStatus::Verified)
-                    }),
-                })
-                .collect();
+    let all_users = data
+        .database
+        .auto_collection::<User>()
+        .find(doc! {}, None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-            Ok(all_users)
-        },
-    )
-    .await?
+    let all_users = all_users
+        .into_iter()
+        .map(|u| DisplayUser {
+            id: u.id.unwrap().to_hex(),
+            username: u.username,
+            name: u.name,
+            role: u.role,
+            email: u.email.as_ref().map(|vr| vr.resource.to_owned()),
+            email_verified: u.email.is_some_and(|vr| {
+                matches!(vr.status, db::models::VerificationStatus::Verified)
+            }),
+        })
+        .collect();
+
+    Ok(all_users)
 }
 
 #[server(CreateUser)]
@@ -94,48 +91,45 @@ async fn create_user(
     use leptos_actix::{extract, ResponseOptions};
     use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(
-        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
-            let email = email.map(|e| VerifiedResource {
-                resource: e,
-                status: if email_verified {
-                    VerificationStatus::Verified
-                } else {
-                    // todo: send verification email
-                    todo!()
-                },
-            });
+    let (data, _user): (Data<WebState>, AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
-            #[cfg(feature = "basic_auth")]
-            data.database
-                .auto_collection::<User>()
-                .insert_one(
-                    User {
-                        id: None,
-                        username,
-                        name,
-                        role,
-                        sessions: vec![],
-                        email,
-                        password: argon2::Argon2::default()
-                            .hash_password(
-                                password.as_bytes(),
-                                &argon2::password_hash::SaltString::generate(&mut OsRng),
-                            )
-                            .map_err(|e| ServerFnError::ServerError(e.to_string()))?
-                            .to_string(),
-                    },
-                    None,
-                )
-                .await?;
-
-            #[cfg(not(feature = "basic_auth"))]
-            panic!();
-
-            Ok(())
+    let email = email.map(|e| VerifiedResource {
+        resource: e,
+        status: if email_verified {
+            VerificationStatus::Verified
+        } else {
+            // todo: send verification email
+            todo!()
         },
-    )
-    .await?
+    });
+
+    #[cfg(feature = "basic_auth")]
+    data.database
+        .auto_collection::<User>()
+        .insert_one(
+            User {
+                id: None,
+                username,
+                name,
+                role,
+                sessions: vec![],
+                email,
+                password: argon2::Argon2::default()
+                    .hash_password(
+                        password.as_bytes(),
+                        &argon2::password_hash::SaltString::generate(&mut OsRng),
+                    )
+                    .expect("hash to be successful")
+                    .to_string(),
+            },
+            None,
+        )
+        .await?;
+
+    #[cfg(not(feature = "basic_auth"))]
+    panic!();
+
+    Ok(())
 }
 
 #[component]
@@ -157,11 +151,7 @@ pub fn Users() -> impl IntoView {
         }
     });
 
-    let styles = style!(
-        // Maybe add more later
-    );
-
-    styled::view! { styles,
+    view! {
         <h2>"User Management"</h2>
         <Transition fallback=|| view!{ <p>"Loading users..."</p> }>
             <table class="adminTable">
@@ -248,22 +238,19 @@ async fn delete_user(user_id: String) -> Result<(), ServerFnError> {
     use leptos_actix::{extract, ResponseOptions};
     use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(
-        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
-            let user_id = ObjectId::from_str(&user_id).expect("user_id to be a valid objectID");
-            let res = data
-                .database
-                .auto_collection::<User>()
-                .delete_one(doc! { "_id": user_id }, None)
-                .await?;
-            if res.deleted_count != 1 {
-                Err(ServerFnError::ServerError("Invalid user".to_string()))
-            } else {
-                Ok(())
-            }
-        },
-    )
-    .await?
+    let (data, _user): (Data<WebState>, AuthedUser<{ db::Role::Admin }>) = extract().await?;
+
+    let user_id = ObjectId::from_str(&user_id).expect("user_id to be a valid objectID");
+    let res = data
+        .database
+        .auto_collection::<User>()
+        .delete_one(doc! { "_id": user_id }, None)
+        .await?;
+    if res.deleted_count != 1 {
+        Err(ServerFnError::ServerError("Invalid user".to_string()))
+    } else {
+        Ok(())
+    }
 }
 
 #[server(UpdateUser)]
@@ -277,42 +264,37 @@ async fn update_user(user: DisplayUser) -> Result<(), ServerFnError> {
     use leptos_actix::{extract, ResponseOptions};
     use mongodb::bson::{doc, oid::ObjectId};
 
-    extract(
-        move |data: Data<WebState>, _user: AuthedUser<{ db::Role::Admin }>| async move {
-            let email = user.email.map(|e| VerifiedResource {
-                resource: e,
-                status: if user.email_verified {
-                    VerificationStatus::Verified
-                } else {
-                    // todo: send verification email
-                    todo!()
-                },
-            });
+    let (data, _user): (Data<WebState>, AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
-            let user_id = ObjectId::parse_str(user.id).unwrap();
-
-            let mut user_db = data
-                .database
-                .auto_collection::<User>()
-                .find_one(doc! { "_id": user_id }, None)
-                .await
-                .map_err(|e| ServerFnError::ServerError(e.to_string()))?
-                .unwrap();
-
-            user_db.username = user.username;
-            user_db.name = user.name;
-            user_db.role = user.role;
-            user_db.email = email;
-
-            user_db
-                .save(&data.database)
-                .await
-                .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
-
-            Ok(())
+    let email = user.email.map(|e| VerifiedResource {
+        resource: e,
+        status: if user.email_verified {
+            VerificationStatus::Verified
+        } else {
+            // todo: send verification email
+            todo!()
         },
-    )
-    .await?
+    });
+
+    let user_id = ObjectId::parse_str(user.id).unwrap();
+
+    let mut user_db = data
+        .database
+        .auto_collection::<User>()
+        .find_one(doc! { "_id": user_id }, None)
+        .await?
+        .unwrap();
+
+    user_db.username = user.username;
+    user_db.name = user.name;
+    user_db.role = user.role;
+    user_db.email = email;
+
+    user_db
+        .save(&data.database)
+        .await?;
+
+    Ok(())
 }
 
 #[component]
@@ -461,7 +443,7 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
     use leptos_actix::extract;
     use mongodb::bson::{doc, from_document};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
+    let (data, _user): (Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
     let stage_attach_num_associated = doc! {
         "$lookup": {
@@ -533,7 +515,7 @@ async fn create_term(name: String) -> Result<(), ServerFnError> {
     use goldleaf::AutoCollection;
     use leptos_actix::extract;
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
+    let (data, _user): (Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
     data.database
         .auto_collection::<Term>()
@@ -559,7 +541,7 @@ async fn delete_term(id: String) -> Result<(), ServerFnError> {
     use leptos_actix::extract;
     use mongodb::bson::{doc, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
+    let (data, _user): (Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
     let id = ObjectId::from_str(&id).expect("id to be valid");
 
@@ -609,7 +591,7 @@ async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnErr
     use leptos_actix::extract;
     use mongodb::bson::{doc, from_document, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>);
+    let (data, _user): (Data<WebState>, crate::AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
     let stage_match_term_id = doc! {
         "$match": {
@@ -692,7 +674,7 @@ async fn create_course(
     use leptos_actix::extract;
     use mongodb::bson::{doc, from_document, oid::ObjectId};
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser<{ db::Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser<{ db::Role::Admin }>) = extract().await?;
 
     let new_course = Course {
         id: None,
@@ -724,12 +706,6 @@ pub fn Courses() -> impl IntoView {
     let create_course_ref = create_node_ref::<Dialog>();
 
     let (new_term_name, set_new_term_name) = create_signal(String::new());
-
-    let styles = style!(
-        .term-actions {
-            display: inline-block;
-        }
-    );
 
     let add_term = create_server_action::<CreateTerm>();
     let delete_term = create_server_action::<DeleteTerm>();
@@ -784,7 +760,7 @@ pub fn Courses() -> impl IntoView {
     //     }
     // });
 
-    styled::view! { styles,
+    view! {
         <div>
             <h2>"Course and Term Configuration"</h2>
             <button on:click=move |_| manage_terms_ref.get().expect("manage terms dialog to be mounted").show_modal().expect("Failed to show Term modal!")>"Manage Terms..."</button>
@@ -892,7 +868,7 @@ async fn save_course_info(course_id: String, name: String, owner_id: String) -> 
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -911,7 +887,7 @@ async fn delete_course(course_id: String) -> Result<(), ServerFnError> {
     use crate::server_prelude::*;
     use db::models::Course;
     
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().delete_one(doc! {
         "_id": ObjectId::from_str(&course_id)?
@@ -925,7 +901,7 @@ async fn create_section(course_id: String, section_name: String) -> Result<(), S
     use crate::server_prelude::*;
     use db::models::{Course, CourseSection};
     
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -943,7 +919,7 @@ async fn delete_section(course_id: String, section_id: String) -> Result<(), Ser
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -963,7 +939,7 @@ async fn add_instructor(course_id: String, user_id: String) -> Result<(), Server
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -981,7 +957,7 @@ async fn remove_instructor(course_id: String, user_id: String) -> Result<(), Ser
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -999,7 +975,7 @@ async fn add_grader(course_id: String, user_id: String) -> Result<(), ServerFnEr
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -1017,7 +993,7 @@ async fn remove_grader(course_id: String, user_id: String) -> Result<(), ServerF
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user) = extract!(Data<WebState>, AuthedUser::<{ Role::Admin }>);
+    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -1050,24 +1026,24 @@ pub fn Course() -> impl IntoView {
         get_course(true, course).await
     });
 
-    let styles = style!(
-        div.fields {
-            display: inline-block;
-        }
-
-        div.lists {
-            display: flex;
-        }
-
-        div.lists > div {
-            flex: 1;
-            margin: 0 1e0em;
-        }
-
-        div.list-inline {
-            display: inline-block;
-        }
-    );
+    // let styles = style!(
+    //     div.fields {
+    //         display: inline-block;
+    //     }
+    //
+    //     div.lists {
+    //         display: flex;
+    //     }
+    //
+    //     div.lists > div {
+    //         flex: 1;
+    //         margin: 0 1e0em;
+    //     }
+    //
+    //     div.list-inline {
+    //         display: inline-block;
+    //     }
+    // );
 
     let (name, set_name) = create_signal(String::new());
     let selected_user_id = create_rw_signal(None);
@@ -1110,7 +1086,7 @@ pub fn Course() -> impl IntoView {
         new_grader.set(None);
     };
 
-    styled::view! { styles,
+    view! {
         <h1>"Manage "{move || course().map(|c| c.expect("course to load properly").name).unwrap_or("Course".to_string())}</h1>
         <div class="fields">
             <input prop:value=name on:input=move |ev| set_name(event_target_value(&ev)) placeholder="Course Name"/>
@@ -1210,14 +1186,14 @@ pub fn Course() -> impl IntoView {
 
 #[component]
 fn CourseSectionListRowItem(section: SectionInfo, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
-    let styles = style!(
-        div {
-            display: inline-block;
-            justify-content: space-between;
-        }
-    );
+    // let styles = style!(
+    //     div {
+    //         display: inline-block;
+    //         justify-content: space-between;
+    //     }
+    // );
 
-    styled::view! { styles,
+    view! {
         <div>
             <p>{section.name}</p>
             <button on:click=move |_| on_remove(())>"Remove"</button>
@@ -1227,14 +1203,14 @@ fn CourseSectionListRowItem(section: SectionInfo, #[prop(into)] on_remove: Callb
 
 #[component]
 fn CourseUserListRowItem(user: HumanReadableUser, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
-    let styles = style!(
-        div {
-            display: inline-block;
-            justify-content: space-between;
-        }
-    );
+    // let styles = style!(
+    //     div {
+    //         display: inline-block;
+    //         justify-content: space-between;
+    //     }
+    // );
 
-    styled::view! { styles,
+    view! {
         <div>
             <p>{format!("{} ({})", user.name, user.username)}</p>
             <button on:click=move |_| on_remove(())>"Remove"</button>

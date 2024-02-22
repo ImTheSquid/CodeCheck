@@ -95,7 +95,10 @@ pub type AssignmentId = ObjectId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum JobStatus {
-    InProgress(f64),
+    InProgress {
+        progress: f64,
+        pid: u32,
+    },
     Failed,
 }
 

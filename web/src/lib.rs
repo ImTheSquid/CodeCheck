@@ -140,16 +140,20 @@ pub mod server {
         pub database: Database,
     }
 
+    pub async fn database() -> Result<mongodb::Database, anyhow::Error> {
+        db::connect(
+            &env::var("CODECHECK_MONGO_URI")
+                .expect("`CODECHECK_MONGO_URI` variable required!"),
+            "codecheck",
+        )
+        .await
+    }
+
     impl WebState {
         pub async fn new() -> Result<Self, anyhow::Error> {
             Ok(Self {
                 config: RwLock::new(Config::read()?),
-                database: db::connect(
-                    &env::var("CODECHECK_MONGO_URI")
-                        .expect("`CODECHECK_MONGO_URI` variable required!"),
-                    "codecheck",
-                )
-                .await?,
+                database: database().await?,
             })
         }
     }

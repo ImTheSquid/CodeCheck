@@ -45,14 +45,14 @@ async fn get_courses(
 
     let term_id = ObjectId::from_str(&term_id)?;
 
-    let data = extract!(Data<WebState>);
+    let data: Data<WebState> = extract().await?;
 
     let mut aggregation = if try_get_all {
-        let _user = extract!(AuthedUser<{ db::Role::Admin }>);
+        let _user: AuthedUser<{ db::Role::Admin }> = extract().await?;
 
         Vec::new()
     } else {
-        let user = extract!(AuthedUser<{ db::Role::Instructor }>);
+        let user: AuthedUser<{ db::Role::Instructor }> = extract().await?;
 
         vec![doc! {
             "$match": {
@@ -164,10 +164,10 @@ pub async fn get_course(try_override_membership: bool, id: String) -> Result<Ful
     use db::models::{User, Course};
 
     let id = ObjectId::from_str(&id)?;
-    let data = extract!(Data<WebState>);
+    let data: Data<WebState> = extract().await?;
 
     let aggregation = if try_override_membership {
-        let _user = extract!(AuthedUser<{ Role::Admin }>);
+        let _user: AuthedUser<{ Role::Admin }> = extract().await?;
 
         doc! {
             "$match": {
@@ -175,7 +175,7 @@ pub async fn get_course(try_override_membership: bool, id: String) -> Result<Ful
             }
         }
     } else {
-        let user = extract!(AuthedUser<{ Role::Instructor }>);
+        let user: AuthedUser<{ Role::Instructor }> = extract().await?;
 
         doc! {
             "$match": {
@@ -347,15 +347,7 @@ pub fn CourseSidebar(
 
 #[component]
 fn CourseLink(info: CourseInfo) -> impl IntoView {
-    let styles = style!(
-        div {
-            display: block;
-            text-decoration: none;
-
-        }
-    );
-
-    styled::view! { styles,
+    view! {
         <A href={info.id}>
             <strong><p class="name">{info.name}</p></strong>
             <p class="owner">{move || format!("{} ({})", info.owner.name, info.owner.username)}</p>

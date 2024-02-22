@@ -7,14 +7,7 @@ pub mod sidebar;
 
 #[component]
 pub fn Home() -> impl IntoView {
-    let styles = style!(
-        div {
-            background-color: red;
-            color: white;
-        }
-    );
-
-    styled::view! { styles,
+    view! {
         <div>"Test"<Outlet/></div>
     }
 }
