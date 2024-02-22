@@ -16,7 +16,7 @@ pub struct CppTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<CppTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<CppTreeItem, usize, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -59,7 +59,7 @@ auto_visitor!(cpp14parser, CppTree, CppTreeItem);
 
 impl SyntaxTree for CppTree {
     type Item = CppTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }

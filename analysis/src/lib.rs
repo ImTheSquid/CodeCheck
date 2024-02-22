@@ -7,6 +7,9 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::fs::File;
+use std::io::Read;
+//use std::{fs, array};
 
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
@@ -15,7 +18,7 @@ use nalgebra::{DMatrix, Dyn, VecStorage};
 use syntree::Empty;
 use thiserror::Error;
 use std::sync::mpsc;
-use rayon::prelude::*;
+use rayon::{array, prelude::*};
 use crate::c::{CTree, CTreeItem};
 
 mod c;
@@ -55,7 +58,7 @@ pub enum RuntimeComplexity {
 /// Represents any tree for a specific language
 pub trait SyntaxTree {
     type Item: PartialEq;
-    fn symbol_tree(self) -> Result<syntree::Tree<Self::Item, Empty, usize>, TreeParseError>;
+    fn symbol_tree(self) -> Result<syntree::Tree<Self::Item, usize, usize>, TreeParseError>;
 }
 
 /// Any errors that may occur when generating a parse tree
@@ -129,7 +132,7 @@ pub fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync + 'static,
     })
 }
 
-fn convert_sources_to_trees<'a, 'b, Ident: ToOwned, S, T, I>(
+pub fn convert_sources_to_trees<'a, 'b, Ident: ToOwned, S, T, I>(
     sources: &[AssociatedStruct<'b, Ident, S>]
 ) -> Result<Vec<AssociatedStruct<'b, Ident, Tree<I>>>, TreeParseError>
 where
@@ -154,8 +157,8 @@ where
     Ok(out)
 }
 
-type Tree<TreeItem> = syntree::Tree<TreeItem, Empty, usize>;
-type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, Empty, usize>;
+type Tree<TreeItem> = syntree::Tree<TreeItem, usize, usize>;
+type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, usize, usize>;
 
 #[derive(Debug, Clone)]
 pub struct AssociatedStruct<'a, Ident, T> {
@@ -379,7 +382,8 @@ macro_rules! test_parse {
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
-
+    use std::fs::File;
+    use super::*;
     use nalgebra::matrix;
     use crate::{AssociatedStruct, detect_plagiarism_in_sources, Language};
 
@@ -514,5 +518,131 @@ printf("NO");
         assert_ne!(res[(0, 1)], 0.0);
         assert_ne!(res[(1, 0)], 1.0);
         assert_ne!(res[(1, 0)], 0.0);
+    }
+
+    #[test]
+    fn compare_c_value() {
+        #[derive(Debug, Hash, Clone)]
+    struct SampleIdent;
+
+    let path1 = "C:/Users/Admin/CodeCheck/analysis/examples/java/dataset/case-07/non-plagiarized/01/T07.java";
+    let path2 = "C:/Users/Admin/CodeCheck/analysis/examples/java/dataset/case-07/plagiarized/L2/07/Kasus7L2.java";
+
+    let mut file1 = File::open(path1).unwrap();
+    let mut content1 = String::new();
+    file1.read_to_string(&mut content1).unwrap();
+
+    let mut array_of_structs: Vec<AssociatedStruct<'_, _, String>>   = Vec::new();
+
+    array_of_structs.push(AssociatedStruct {
+        owner: &SampleIdent,
+        source: path1.into(),
+        inner: content1,
+    });
+
+    let mut file2 = File::open(path2).unwrap();
+    let mut content2 = String::new();
+    file2.read_to_string(&mut content2).unwrap();
+
+    array_of_structs.push(AssociatedStruct {
+        owner: &SampleIdent,
+        source: path2.into(),
+        inner: content2,
+    });
+
+    let array_tree = convert_sources_to_trees::<SampleIdent, String, JavaTree, JavaTreeItem>(&array_of_structs).unwrap();
+    let comp = Arc::new(TreeCompare { trees: array_tree });
+
+    let k = comp.k(&comp.trees[0], &comp.trees[1]);
+
+
+    let a_subtrees = comp.subtrees(&comp.trees[0].first().unwrap());
+    let b_subtrees = comp.subtrees(&comp.trees[1].first().unwrap());
+
+    let mut visited_spans_b = Vec::new();
+    let mut line_numbers_b = Vec::new();
+
+    let mut visited_spans_a = Vec::new();
+    let mut line_numbers_a = Vec::new();
+
+    let mut number = 0;
+
+    for subtree_a in &a_subtrees{
+        for subtree_b in &b_subtrees {
+            let span_b = subtree_b.inner.span();
+            if (!visited_spans_b.contains(&span_b)) {
+                visited_spans_b.push(span_b);
+                //println!("value: {:?}", span_b);
+            }
+            let c = comp.c(&subtree_a, &comp.trees[0], &subtree_b, &comp.trees[1]);
+            if (c > 0.000005 * k) {
+                let span_b = subtree_b.inner.span();
+                //println!("{}", subtree_b.inner.span());
+                if (!visited_spans_b.contains(&span_b)) {
+                    visited_spans_b.push(span_b);
+                    //println!("{}", span);
+                    //println!("b: {}", &array_of_structs[1].inner[span_b.start..span_b.end].to_string());
+                    let mut line_start = span_b.start;
+                    number = array_of_structs[1].inner[..line_start].lines().count();
+                    if (!line_numbers_b.contains(&number)) {
+                        line_numbers_b.push(number);
+                    }
+                }
+
+                let span_a = subtree_a.inner.span();
+                //println!("{}", subtree_b.inner.span());
+                if (!visited_spans_a.contains(&span_a)) {
+                    visited_spans_a.push(span_a);
+                    //println!("{}", span);
+                    //println!("{}", &array_of_structs[0].inner[span_a.start..span_a.end].to_string());
+                    let mut line_start = span_a.start;
+                    number = array_of_structs[0].inner[..line_start].lines().count();
+                    if (!line_numbers_a.contains(&number)) {
+                        line_numbers_a.push(number);
+                    }
+                }
+            }
+        }
+    }
+    println!("b: {:?}", line_numbers_b);
+    println!("a: {:?}", line_numbers_a);
+    //println!("value: {:?}", b_subtrees[0].inner.span());
+    //println!("k: {:?}", k);
+    let span = visited_spans_b.pop().unwrap();
+    println!("{}", span);
+    println!("{}", array_of_structs[1].inner[..span.start].lines().count());
+    }
+
+    #[test]
+    fn test_spans() {
+            #[derive(Debug, Hash, Clone)]
+        struct SampleIdent;
+    
+        let path1 = "C:/Users/Admin/CodeCheck/analysis/examples/java/dataset/case-07/non-plagiarized/01/T07.java";
+    
+        let mut file1 = File::open(path1).unwrap();
+        let mut content1 = String::new();
+        file1.read_to_string(&mut content1).unwrap();
+    
+        let mut array_of_structs: Vec<AssociatedStruct<'_, _, String>>   = Vec::new();
+    
+        array_of_structs.push(AssociatedStruct {
+            owner: &SampleIdent,
+            source: path1.into(),
+            inner: content1,
+        });
+    
+    
+        let array_tree = convert_sources_to_trees::<SampleIdent, String, JavaTree, JavaTreeItem>(&array_of_structs).unwrap();
+        let tree = &array_tree[0];
+        println!("{:?}", tree.first().unwrap().inner);
+        let comp = Arc::new(TreeCompare { trees: array_tree });
+        let subtrees = comp.subtrees(&comp.trees[0].first().unwrap()); 
+
+        for sub in subtrees {
+            println!("{:?}", sub.inner.span());
+        }
+        
+
     }
 }

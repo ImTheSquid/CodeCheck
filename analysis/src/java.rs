@@ -1,7 +1,10 @@
-use antlr_rust::InputStream;
+use std::char;
+
+use antlr_rust::{input_stream, InputStream};
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 use syntree::{Tree, Empty};
+use antlr_rust::input_stream::CodePoint8BitCharStream;
 
 use crate::gen::javalexer::JavaLexer;
 use crate::gen::javaparser::*;
@@ -16,7 +19,7 @@ pub struct JavaTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<JavaTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<JavaTreeItem, usize, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -38,14 +41,19 @@ impl ParseTreeVisitorCompat<'_> for JavaTree {
         &mut self.tmp
     }
 
-    fn visit_terminal(&mut self, _node: &TerminalNode<'_, Self::Node>) -> Self::Return {
-        // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
-        //     visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
-        // }
+    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+        let start = node.symbol.start;
+        let end = node.symbol.stop + 1;
+         if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
+             visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
+         }
 
-        // visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
+         visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.start as usize - self.symbol_tree.cursor()));
 
-        visitor_result!(self.symbol_tree.token_empty(JavaTreeItem::Terminal));
+         let text = &node.symbol.text;
+         //println!("Start: {}, End: {}, Text: {}", start, end, text);
+
+        //visitor_result!(self.symbol_tree.token_empty(JavaTreeItem::Terminal));
 
         VisitorReturn(Ok(()))
     }
@@ -59,7 +67,7 @@ auto_visitor!(javaparser, JavaTree, JavaTreeItem);
 
 impl SyntaxTree for JavaTree {
     type Item = JavaTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
@@ -86,9 +94,13 @@ impl TryFrom<String> for JavaTree {
 
 #[cfg(test)]
 mod tests {
+    use std::any::Any;
+
     use crate::test_parse;
 
     use super::JavaTree;
+
+    use super::*;
 
     test_parse!(comment_import_comment, JavaTree, r#"/*
 TEST COMMENT    
@@ -331,4 +343,55 @@ public class T7 {
     }
 
 }"#);
+
+#[test]
+fn test_token_positions() {
+    // Example Java code snippet
+    let java_code = r#"
+        class Example {
+            public static void main(String[] args) {
+                System.out.println("Hello, world!");
+            }
+        }
+    "#;
+
+    println!("Raw Java code:{}", java_code);
+    // Parse the Java code and construct the symbol tree
+    let java_tree_result = JavaTree::try_from(java_code.to_string());
+    assert!(java_tree_result.is_ok(), "Parsing failed");
+
+    let java_tree = java_tree_result.unwrap();
+
+    // Traverse the symbol tree and extract token information
+    //let mut tokens = Vec::new();
+    /*traverse_tree(java_tree.symbol_tree.build().unwrap(), &mut tokens);
+
+    // Compare extracted token information with actual token positions
+    // For simplicity, you can print the token positions for manual verification
+    for (token_type, start, end) in tokens {
+        println!("Token: {:?}, Start: {}, End: {}", token_type, start, end);
+    }*/
+}
+
+// Helper function to traverse the symbol tree and extract token information
+fn traverse_tree<'a>(
+    tree: syntree::Tree<JavaTreeItem, usize, usize>,
+    tokens: &mut Vec<(JavaTreeItem, usize, usize)>,
+) {
+    // Traverse the tree using walk() method
+    for node in tree.walk() {
+        match node.value() {
+            JavaTreeItem::Terminal => {
+                let start = node.span().start;
+                let end = node.span().end;
+                tokens.push((JavaTreeItem::Terminal, start, end));
+            }
+            _ => {
+                // Non-terminal nodes may also need processing
+                // Adjust as necessary based on your requirements
+            }
+        }
+    }
+}
+
 }
