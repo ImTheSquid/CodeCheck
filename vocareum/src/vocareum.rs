@@ -12,6 +12,7 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 
 
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,17 +82,49 @@ async fn fetch_students(token: &str, course_id: u32) -> Result<Vec<Student>, req
     Ok(resp)
 }
 
-async fn fetch_submissions(token: &str, course_id: u32, assignment_id: u32) -> Result<Vec<Submission>, reqwest::Error> {
-    let client = reqwest::Client::new();
-    let url = format!("https://api.example.com/courses/{}/assignments/{}/submissions", course_id, assignment_id);
+
+struct Submission {
+    student_id: u32,
+    content: String, 
+}
+
+async fn fetch_all_submissions(token: &str, course_id: u32, assignment_id: u32, student_ids: &[u32]) -> Result<(), reqwest::Error> {
+    const PARALLEL_REQUESTS: usize = student_ids.len; 
+
+    let client = Client::new();
+
+    let submissions = stream::iter(student_ids)
+        .map(|&student_id| { // Note the use of & to avoid moving `student_ids`
+            let client = client.clone();
+            let token = token.to_string(); // Clone the token for use in the async block
+            tokio::spawn(async move {
+                fetch_submission(&client, &token, course_id, assignment_id, student_id).await
+            })
+        })
+        .buffer_unordered(PARALLEL_REQUESTS)
+        .collect::<Vec<_>>()
+        .await;
+
+    for submission in submissions {
+        match submission {
+            Ok(Ok(sub)) => println!("Got submission: {:?}", sub),
+            Ok(Err(e)) => eprintln!("Got a reqwest::Error: {}", e),
+            Err(e) => eprintln!("Got a tokio::JoinError: {}", e),
+        }
+    }
+
+    Ok(())
+}
+
+async fn fetch_submission(client: &Client, token: &str, course_id: u32, assignment_id: u32, student_id: u32) -> Result<Submission, reqwest::Error> {
+    let url = format!("https://api.example.com/courses/{}/assignments/{}/submissions/{}", course_id, assignment_id, student_id);
     let resp = client
         .get(&url)
         .bearer_auth(token)
         .send()
         .await?
-        .json::<Vec<Submission>>()
+        .json::<Submission>()
         .await?;
     Ok(resp)
 }
-
 
