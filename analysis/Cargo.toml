@@ -17,4 +17,5 @@ nalgebra = "0.32.3"
 rayon = "1.8.0"
 
 [dev-dependencies]
+glob = "0.3.1"
 indicatif = { version = "0.17.7", features = ["improved_unicode"] }

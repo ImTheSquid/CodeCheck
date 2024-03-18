@@ -1,11 +1,10 @@
-#![feature(async_closure)]
-
 use std::{
     borrow::Cow,
     env::args,
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
     thread::spawn,
     time::Duration,
 };
@@ -53,7 +52,7 @@ fn main() {
 
         f.write_all(b",").unwrap();
 
-        let orig = vec![original_file];
+        let orig = [original_file];
         let it = orig
             .iter()
             .chain(plagiarized_files.iter())
@@ -73,7 +72,7 @@ fn main() {
         let sources = it
             .iter()
             .map(|p| AssociatedStruct {
-                owner: &1234,
+                owner: Arc::new(p.as_os_str().to_string_lossy().as_ref().to_owned()),
                 source: Cow::Owned(p.as_os_str().to_string_lossy().as_ref().to_owned()),
                 inner: fs::read_to_string(p).unwrap(),
             })
@@ -93,7 +92,7 @@ fn main() {
             println!("✅ Comparisons finished in {}", HumanDuration(pb.elapsed()));
         });
 
-        let mat = detect_plagiarism_in_sources(&sources, Some(Language::Java), Some(tx)).unwrap();
+        let mat = detect_plagiarism_in_sources(sources, Some(Language::Java), Some(tx)).unwrap();
         for (row, file) in mat.row_iter().zip(&it) {
             f.write_all(format!("{}, ", file.to_string_lossy()).as_bytes())
                 .unwrap();

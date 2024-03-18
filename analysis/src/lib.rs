@@ -3,7 +3,6 @@
 #![feature(iterator_try_collect)]
 
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{borrow::Cow, path::PathBuf};
@@ -110,8 +109,8 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
     }
 }
 
-pub fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync + 'static, S: AsRef<str>>(
-    sources: &[AssociatedStruct<'_, Ident, S>],
+pub fn detect_plagiarism_in_sources<Ident: PartialEq + Clone + Send + Sync + 'static, S: AsRef<str> + Send>(
+    sources: Vec<AssociatedStruct<'_, Ident, S>>,
     language: Option<Language>,
     progress: Option<mpsc::Sender<()>>,
 ) -> Result<DMatrix<f64>> {
@@ -130,44 +129,58 @@ pub fn detect_plagiarism_in_sources<Ident: Hash + Clone + Send + Sync + 'static,
 
     Ok(match language {
         Language::Java => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources)?,
+            convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
             progress,
         ),
         Language::C => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources)?,
+            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
             progress,
         ),
         Language::Cpp => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources)?,
+            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
             progress,
         ),
         Language::Python => todo!(),
     })
 }
 
-fn convert_sources_to_trees<'a, 'b, Ident: ToOwned, S, T, I>(
-    sources: &[AssociatedStruct<'b, Ident, S>],
-) -> Result<Vec<AssociatedStruct<'b, Ident, Tree<I>>>, TreeParseError>
+fn convert_sources_to_trees<'a, 'b, Ident: ToOwned + Sync + Send, S, T, I: Send>(
+    sources: Vec<AssociatedStruct<'b, Ident, S>>,
+) -> Vec<Result<AssociatedStruct<'b, Ident, Tree<I>>, TreeParseError>>
 where
-    S: AsRef<str> + 'a,
+    S: AsRef<str> + Send + 'a,
     T: TryFrom<String, Error = TreeParseError> + SyntaxTree<Item = I>,
 {
-    let mut out = Vec::with_capacity(sources.len());
-    for source in sources {
+    // let mut out = Vec::with_capacity(sources.len());
+    sources.into_par_iter().map(|source| {
         let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
         match T::try_from(inner_value) {
             Ok(t) => match t.symbol_tree() {
-                Ok(st) => out.push(AssociatedStruct {
-                    owner: source.owner,
+                Ok(st) => Ok(AssociatedStruct {
+                    owner: source.owner.clone(),
                     source: source.source.clone(),
                     inner: st,
                 }),
-                Err(e) => return Err(e),
+                Err(e) => Err(e),
             },
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
-    }
-    Ok(out)
+    }).collect::<Vec<_>>()
+    // for source in sources {
+    //     let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
+    //     match T::try_from(inner_value) {
+    //         Ok(t) => match t.symbol_tree() {
+    //             Ok(st) => out.push(AssociatedStruct {
+    //                 owner: source.owner.clone(),
+    //                 source: source.source.clone(),
+    //                 inner: st,
+    //             }),
+    //             Err(e) => return Err(e),
+    //         },
+    //         Err(e) => return Err(e),
+    //     }
+    // }
+    // out
 }
 
 type Tree<TreeItem> = syntree::Tree<TreeItem, Empty, usize>;
@@ -176,18 +189,32 @@ type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, Empty, usize>;
 #[derive(Debug, Clone)]
 pub struct AssociatedStruct<'a, Ident, T> {
     /// The real owner of the AST
-    pub owner: &'a Ident,
+    pub owner: Arc<Ident>,
     /// The relative path of the source file the AST came from
     pub source: Cow<'a, str>,
     /// The inner item
     pub inner: T,
 }
 
-impl<TreeNode, Ident> AssociatedStruct<'_, Ident, Tree<TreeNode>> {
+#[derive(Debug, Clone)]
+pub struct DepthAwareTree<TreeNode> {
+    tree: Tree<TreeNode>,
+    depth: usize,
+}
+
+impl<TreeNode> Deref for DepthAwareTree<TreeNode> {
+    type Target = Tree<TreeNode>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tree
+    }
+}
+
+impl<TreeNode, Ident> AssociatedStruct<'_, Ident, DepthAwareTree<TreeNode>> {
     fn first(&self) -> Option<AssociatedStruct<'_, Ident, Node<'_, TreeNode>>> {
-        self.inner.first().map(|n| AssociatedStruct {
-            owner: self.owner,
-            source: self.source.clone(),
+        self.inner.tree.first().map(|n| AssociatedStruct {
+            owner: self.owner.clone(),
+            source: Cow::Borrowed(self.source.as_ref()),
             inner: n,
         })
     }
@@ -207,15 +234,32 @@ impl<Ident, T> Deref for AssociatedStruct<'_, Ident, T> {
 
 const LAMBDA_TREE: f64 = 0.1;
 
-pub struct TreeCompare<'a, Ident: Hash, TreeItem> {
-    trees: Vec<AssociatedStruct<'a, Ident, Tree<TreeItem>>>,
+pub struct TreeCompare<'a, Ident, TreeItem> {
+    trees: Vec<AssociatedStruct<'a, Ident, DepthAwareTree<TreeItem>>>,
 }
 
-impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Ident, TreeItem> {
+macro_rules! tree_depth {
+    ($n:ident) => {
+        $n.walk().with_depths().par_bridge().map(|(depth, _)| depth).max().unwrap_or(0)
+    };
+}
+
+impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
+    TreeCompare<'_, Ident, TreeItem>
+{
     pub fn comparison_matrix(
         trees: Vec<AssociatedStruct<'_, Ident, Tree<TreeItem>>>,
         progress: Option<mpsc::Sender<()>>,
     ) -> DMatrix<f64> {
+        let trees = trees.into_par_iter().map(|t| {
+            let tr = &t.inner;
+            let depth = tree_depth!(tr);
+            AssociatedStruct {
+                owner: t.owner,
+                source: t.source,
+                inner: DepthAwareTree { tree: t.inner, depth }
+            }
+        }).collect::<Vec<_>>();
         let num_trees = trees.len();
         let comp = Arc::new(TreeCompare { trees });
         // let mat = Arc::new(RwLock::new(Option::Some(DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), vec![1.0; comp.trees.len().pow(2)])))));
@@ -228,7 +272,11 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
                     .chain((i + 1..num_trees).into_par_iter().map_with(
                         &*bundle,
                         |(comp, progress), j| {
-                            let res = comp.k_prime(&comp.trees[i], &comp.trees[j]);
+                            let res = if comp.trees[i].owner != comp.trees[j].owner {
+                                comp.k_prime(&comp.trees[i], &comp.trees[j])
+                            } else {
+                                -1.0
+                            };
                             if let Some(progress) = progress {
                                 progress.send(()).unwrap();
                             }
@@ -255,20 +303,19 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     /// Cosine similarity
     fn k_prime(
         &self,
-        a: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
-        b: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        a: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
+        b: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         let numerator = self.k(a, b);
         let denom_a = self.k(a, a);
         let denom_b = self.k(b, b);
-
         numerator / (denom_a * denom_b).sqrt()
     }
 
     fn k(
         &self,
-        a: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
-        b: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        a: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
+        b: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         if !a.first().is_some_and(|n| n.has_children())
             || !b.first().is_some_and(|n| n.has_children())
@@ -297,8 +344,9 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     ) -> Vec<AssociatedStruct<'b, Ident, Node<'a, TreeItem>>> {
         tree.inner
             .walk()
+            .par_bridge()
             .map(|n| AssociatedStruct {
-                owner: tree.owner,
+                owner: tree.owner.clone(),
                 source: tree.source.clone(),
                 inner: n,
             })
@@ -308,9 +356,9 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     fn c(
         &self,
         a: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>,
-        a_full: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        a_full: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
         b: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>,
-        b_full: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        b_full: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         // Terminal nodes have no useful information and the parents were already compared in the else block, so just return 0
         if a.inner != b.inner || (!a.has_children() && !b.has_children()) {
@@ -326,13 +374,13 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
                             .clone()
                             .map(|j| {
                                 let st_s1_i = AssociatedStruct {
-                                    owner: a.owner,
+                                    owner: a.owner.clone(),
                                     source: a.source.clone(),
                                     inner: a.children().nth(i).unwrap(),
                                 };
 
                                 let st_s2_j = AssociatedStruct {
-                                    owner: b.owner,
+                                    owner: b.owner.clone(),
                                     source: b.source.clone(),
                                     inner: b.children().nth(j).unwrap(),
                                 };
@@ -352,7 +400,7 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     fn w_st(
         &self,
         subtree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>,
-        tree: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        tree: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         self.tf(subtree, tree) * self.idf(subtree)
     }
@@ -360,14 +408,14 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     fn cnt(
         &self,
         subtree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>,
-        tree: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        tree: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         self.subtree_appearances_in_tree(subtree, tree, false) as f64
             / self.n(&tree.first().unwrap()) as f64
     }
 
     fn n(&self, tree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>) -> usize {
-        self.subtrees(tree).len()
+        tree.walk().par_bridge().count()
     }
 
     fn idf(&self, subtree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>) -> f64 {
@@ -375,23 +423,20 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     }
 
     fn trees_contain_s(&self, subtree: &Node<'_, TreeItem>) -> usize {
-        let mut count = 0_usize;
-        for tree in &self.trees {
-            if self.subtree_appearances_in_tree(subtree, tree, true) > 0 {
-                count += 1;
-            }
-        }
-
-        count
+        self.trees.par_iter().filter(|tree| self.subtree_appearances_in_tree(subtree, tree, true) > 0).count()
     }
 
     /// TODO: Rayon optimize
     fn subtree_appearances_in_tree(
         &self,
         subtree: &Node<'_, TreeItem>,
-        tree: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        tree: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
         find_first_only: bool,
     ) -> usize {
+        if tree.depth < tree_depth!(subtree) {
+            return 0;
+        }
+
         let mut appearances = 0_usize;
 
         for node in tree.walk() {
@@ -400,12 +445,15 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
                 // This is a really shitty way of doing it that I know has bugs, but it should work for now
                 let mut node_iter = node.walk();
                 let mut subtree_iter = subtree.walk();
-                while let Some((s_node, t_node)) = (&mut node_iter).zip(&mut subtree_iter).next() {
-                    if s_node.value() != t_node.value() {
-                        are_equal = false;
-                        break;
-                    }
+                if (&mut node_iter).zip(&mut subtree_iter).par_bridge().any(|(s_node, t_node)| s_node.value() != t_node.value()) {
+                    are_equal = false;
                 }
+                // while let Some((s_node, t_node)) = (&mut node_iter).zip(&mut subtree_iter).next() {
+                //     if s_node.value() != t_node.value() {
+                //         are_equal = false;
+                //         break;
+                //     }
+                // }
 
                 // If the subtree hasn't had all of its elements consumed, the trees must be different
                 if subtree_iter.next().is_some() {
@@ -431,7 +479,7 @@ impl<Ident: Hash + Sync, TreeItem: Sync + Send + PartialEq> TreeCompare<'_, Iden
     fn tf(
         &self,
         subtree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>,
-        tree: &AssociatedStruct<'_, Ident, Tree<TreeItem>>,
+        tree: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         self.cnt(subtree, tree) / self.n(&tree.first().unwrap()) as f64
     }
@@ -463,6 +511,7 @@ mod tests {
 
     use crate::{detect_plagiarism_in_sources, AssociatedStruct, Language};
     use nalgebra::matrix;
+    use std::sync::Arc;
 
     #[test]
     fn compare_same() {
@@ -482,19 +531,19 @@ return 0;
 
         let store = vec![
             AssociatedStruct {
-                owner: &1234,
+                owner: Arc::new(1234),
                 source: std::borrow::Cow::Borrowed("a.c"),
                 inner: a.to_string(),
             },
             AssociatedStruct {
-                owner: &5678,
+                owner: Arc::new(5678),
                 source: Cow::Borrowed("b.c"),
                 inner: a.to_string(),
             },
         ];
 
         let res =
-            detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C), None).unwrap();
+            detect_plagiarism_in_sources::<usize, String>(store, Some(Language::C), None).unwrap();
         assert_eq!(
             res,
             matrix![
@@ -538,19 +587,19 @@ printf("NO");
 
         let store = vec![
             AssociatedStruct {
-                owner: &1234,
+                owner: Arc::new(1234),
                 source: Cow::Borrowed("a.c"),
                 inner: a.to_string(),
             },
             AssociatedStruct {
-                owner: &5678,
+                owner: Arc::new(5678),
                 source: Cow::Borrowed("b.c"),
                 inner: b.to_string(),
             },
         ];
 
         let res =
-            detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C), None).unwrap();
+            detect_plagiarism_in_sources::<usize, String>(store, Some(Language::C), None).unwrap();
         println!("{}", res);
         assert_ne!(res[(0, 1)], 1.0);
         assert_ne!(res[(0, 1)], 0.0);
@@ -593,19 +642,19 @@ printf("NO");
 
         let store = vec![
             AssociatedStruct {
-                owner: &1234,
+                owner: Arc::new(1234),
                 source: Cow::Borrowed("a.c"),
                 inner: a.to_string(),
             },
             AssociatedStruct {
-                owner: &5678,
+                owner: Arc::new(5678),
                 source: Cow::Borrowed("b.c"),
                 inner: b.to_string(),
             },
         ];
 
         let res =
-            detect_plagiarism_in_sources::<usize, String>(&store, Some(Language::C), None).unwrap();
+            detect_plagiarism_in_sources::<usize, String>(store, Some(Language::C), None).unwrap();
         assert_ne!(res[(0, 1)], 1.0);
         assert_ne!(res[(0, 1)], 0.0);
         assert_ne!(res[(1, 0)], 1.0);
