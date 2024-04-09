@@ -1,10 +1,17 @@
-#![feature(async_closure)]
+use std::{
+    borrow::Cow,
+    env::args,
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::Arc,
+    thread::spawn,
+    time::Duration,
+};
 
-use std::{env::args, fs, path::{Path, PathBuf}, io::Write, time::Duration, thread::spawn, borrow::Cow};
-
-use analysis::{AssociatedStruct, detect_plagiarism_in_sources, Language};
+use analysis::{detect_plagiarism_in_sources, AssociatedStruct, Language};
+use indicatif::{HumanDuration, ProgressBar, ProgressStyle};
 use std::sync::mpsc;
-use indicatif::{ProgressBar, ProgressStyle, HumanDuration};
 
 extern crate analysis;
 
@@ -17,12 +24,13 @@ fn main() {
     let dataset = PathBuf::from(args.next().unwrap()).canonicalize().unwrap();
     let output = PathBuf::from(args.next().unwrap());
     fs::create_dir_all(&output).unwrap();
-    
+
     for case in fs::read_dir(dataset).unwrap() {
         let case = case.unwrap();
 
         let plagiarized_dir = case.path().join("plagiarized");
-        let plagiarized_files = fs::read_dir(plagiarized_dir).unwrap()
+        let plagiarized_files = fs::read_dir(plagiarized_dir)
+            .unwrap()
             .filter(|rd| rd.as_ref().unwrap().file_type().unwrap().is_dir())
             .flat_map(|rd| fs::read_dir(rd.unwrap().path()).unwrap())
             .filter(|rd| rd.as_ref().unwrap().file_type().unwrap().is_dir())
@@ -30,31 +38,45 @@ fn main() {
             .collect::<Vec<_>>();
 
         let non_plagiarized_dir = case.path().join("non-plagiarized");
-        let non_plagiarized_files = fs::read_dir(non_plagiarized_dir).unwrap().filter(|rd| rd.as_ref().unwrap().file_type().unwrap().is_dir()).map(|rd| get_single_file_from_dir(rd.unwrap().path())).collect::<Vec<_>>();
+        let non_plagiarized_files = fs::read_dir(non_plagiarized_dir)
+            .unwrap()
+            .filter(|rd| rd.as_ref().unwrap().file_type().unwrap().is_dir())
+            .map(|rd| get_single_file_from_dir(rd.unwrap().path()))
+            .collect::<Vec<_>>();
 
         let original_file = get_single_file_from_dir(case.path().join("original"));
 
-        let mut f = fs::File::create(output.join(format!("{}.csv", case.file_name().to_string_lossy()))).unwrap();
+        let mut f =
+            fs::File::create(output.join(format!("{}.csv", case.file_name().to_string_lossy())))
+                .unwrap();
 
         f.write_all(b",").unwrap();
 
-        let orig = vec![original_file];
-        let it = orig.iter().chain(plagiarized_files.iter()).chain(non_plagiarized_files.iter()).collect::<Vec<_>>();
+        let orig = [original_file];
+        let it = orig
+            .iter()
+            .chain(plagiarized_files.iter())
+            .chain(non_plagiarized_files.iter())
+            .collect::<Vec<_>>();
 
         let num_comps = {
             let num_trees = it.len();
             num_trees * (num_trees - 1) / 2
         };
-        
+
         for path in &it {
-            f.write_all(format!("{}, ", path.to_string_lossy()).as_bytes()).unwrap();
+            f.write_all(format!("{}, ", path.to_string_lossy()).as_bytes())
+                .unwrap();
         }
 
-        let sources = it.iter().map(|p| AssociatedStruct {
-            owner: &1234,
-            source: Cow::Owned(p.as_os_str().to_string_lossy().as_ref().to_owned()),
-            inner: fs::read_to_string(p).unwrap(),
-        }).collect::<Vec<_>>();
+        let sources = it
+            .iter()
+            .map(|p| AssociatedStruct {
+                owner: Arc::new(p.as_os_str().to_string_lossy().as_ref().to_owned()),
+                source: Cow::Owned(p.as_os_str().to_string_lossy().as_ref().to_owned()),
+                inner: fs::read_to_string(p).unwrap(),
+            })
+            .collect::<Vec<_>>();
 
         f.write_all(b"\n").unwrap();
 
@@ -70,9 +92,10 @@ fn main() {
             println!("✅ Comparisons finished in {}", HumanDuration(pb.elapsed()));
         });
 
-        let mat = detect_plagiarism_in_sources(&sources, Some(Language::Java), Some(tx)).unwrap();
+        let mat = detect_plagiarism_in_sources(sources, Some(Language::Java), Some(tx)).unwrap();
         for (row, file) in mat.row_iter().zip(&it) {
-            f.write_all(format!("{}, ", file.to_string_lossy()).as_bytes()).unwrap();
+            f.write_all(format!("{}, ", file.to_string_lossy()).as_bytes())
+                .unwrap();
 
             for item in &row {
                 f.write_all(format!("{}, ", item).as_bytes()).unwrap();
@@ -87,5 +110,17 @@ fn main() {
 
 #[inline]
 fn get_single_file_from_dir<P: AsRef<Path>>(path: P) -> PathBuf {
-    fs::read_dir(path).unwrap().find(|rd| rd.as_ref().unwrap().file_name().to_str().unwrap().ends_with(".java")).unwrap().unwrap().path()
+    fs::read_dir(path)
+        .unwrap()
+        .find(|rd| {
+            rd.as_ref()
+                .unwrap()
+                .file_name()
+                .to_str()
+                .unwrap()
+                .ends_with(".java")
+        })
+        .unwrap()
+        .unwrap()
+        .path()
 }

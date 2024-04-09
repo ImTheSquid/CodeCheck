@@ -1,12 +1,12 @@
-use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
-use syntree::{Tree, Empty};
+use antlr_rust::InputStream;
+use syntree::{Empty, Tree};
 
 use crate::gen::javalexer::JavaLexer;
 use crate::gen::javaparser::*;
 use crate::gen::javaparservisitor::JavaParserVisitorCompat;
-use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result};
+use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,7 +16,7 @@ pub struct JavaTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<JavaTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<UniqueItem<JavaTreeItem>, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -45,7 +45,9 @@ impl ParseTreeVisitorCompat<'_> for JavaTree {
 
         // visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self.symbol_tree.token_empty(JavaTreeItem::Terminal));
+        visitor_result!(self
+            .symbol_tree
+            .token_empty(UniqueItem::new(JavaTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -59,7 +61,9 @@ auto_visitor!(javaparser, JavaTree, JavaTreeItem);
 
 impl SyntaxTree for JavaTree {
     type Item = JavaTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(
+        self,
+    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
@@ -90,7 +94,10 @@ mod tests {
 
     use super::JavaTree;
 
-    test_parse!(comment_import_comment, JavaTree, r#"/*
+    test_parse!(
+        comment_import_comment,
+        JavaTree,
+        r#"/*
 TEST COMMENT    
  */
 
@@ -104,10 +111,14 @@ public class Test {
     }
 }
     
-"#);
+"#
+    );
 
     // Test cases from https://infedu.vu.lt/journal/INFEDU/article/16/info (https://github.com/oscarkarnalim/sourcecodeplagiarismdataset)
-    test_parse!(simple_print, JavaTree, r#"public class T1 {
+    test_parse!(
+        simple_print,
+        JavaTree,
+        r#"public class T1 {
     public static void main(String[] args) {
         System.out.println("Welcome to Java");
         System.out.println("Welcome to Java");
@@ -116,9 +127,13 @@ public class Test {
         System.out.println("Welcome to Java");
     }
 
-}"#);
+}"#
+    );
 
-    test_parse!(simple_print_with_multiline, JavaTree, r#"public class T1 {
+    test_parse!(
+        simple_print_with_multiline,
+        JavaTree,
+        r#"public class T1 {
     /*
         This is a test of multi-line comments
      */
@@ -130,9 +145,13 @@ public class Test {
         System.out.println("Welcome to Java");
     }
 
-}"#);
+}"#
+    );
 
-    test_parse!(whitespace_beginning, JavaTree, r#"
+    test_parse!(
+        whitespace_beginning,
+        JavaTree,
+        r#"
     
 import java.util.Scanner;
 
@@ -164,9 +183,13 @@ public class Main {
         
         System.out.print("Sum of the elements in the major diagonal is " + hasilPertambahanDiagonal(n));
     }
-}"#);
+}"#
+    );
 
-    test_parse!(more_complex_with_multiline, JavaTree, r#"/*
+    test_parse!(
+        more_complex_with_multiline,
+        JavaTree,
+        r#"/*
 * To change this license header, choose License Headers in Project Properties.
 * To change this template file, choose Tools | Templates
 * and open the template in the editor.
@@ -190,9 +213,13 @@ public class Kasus5L6 {
         }
         System.out.println();
     }
-}"#);
+}"#
+    );
 
-    test_parse!(volume, JavaTree, r#"import java.util.Scanner;
+    test_parse!(
+        volume,
+        JavaTree,
+        r#"import java.util.Scanner;
 
 public class T2 {
     public static void main(String[] args) {
@@ -211,9 +238,13 @@ public class T2 {
     }
 
 }
-"#);
+"#
+    );
 
-    test_parse!(bmi, JavaTree, r#"import java.util.Scanner;
+    test_parse!(
+        bmi,
+        JavaTree,
+        r#"import java.util.Scanner;
 
 public class T3 {
     public static void main(String[] args) {
@@ -247,9 +278,13 @@ public class T3 {
     }
 
 }
-"#);
+"#
+    );
 
-    test_parse!(distance_conversion, JavaTree, r#"public class T4 {
+    test_parse!(
+        distance_conversion,
+        JavaTree,
+        r#"public class T4 {
     public static void main(String[] args) {
         System.out.println("Miles\t\tKilometers");
         System.out.println("-------------------------------");
@@ -263,9 +298,13 @@ public class T3 {
     }
 
 }
-"#);
+"#
+    );
 
-    test_parse!(int_reverse, JavaTree, r#"public class T5 {
+    test_parse!(
+        int_reverse,
+        JavaTree,
+        r#"public class T5 {
     public static void main(String[] args) {
         System.out.print("Enter an integer: ");
         java.util.Scanner input = new java.util.Scanner(System.in);
@@ -283,9 +322,13 @@ public class T3 {
         System.out.println();
     }
 
-}"#);
+}"#
+    );
 
-    test_parse!(array_builder, JavaTree, r#"public class T6 {
+    test_parse!(
+        array_builder,
+        JavaTree,
+        r#"public class T6 {
     public static void main(String[] args) {
         java.util.Scanner input = new java.util.Scanner(System.in);
         int[] num = new int[10];
@@ -303,9 +346,13 @@ public class T3 {
         }
     }
 
-}"#);
+}"#
+    );
 
-    test_parse!(diagonal_sum, JavaTree, r#"import java.util.Scanner;
+    test_parse!(
+        diagonal_sum,
+        JavaTree,
+        r#"import java.util.Scanner;
 
 public class T7 {
     public static void main(String[] args) {
@@ -330,5 +377,6 @@ public class T7 {
         return sum;
     }
 
-}"#);
+}"#
+    );
 }

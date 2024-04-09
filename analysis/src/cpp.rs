@@ -1,12 +1,12 @@
-use antlr_rust::InputStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
-use syntree::{Tree, Empty};
+use antlr_rust::InputStream;
+use syntree::{Empty, Tree};
 
 use crate::gen::cpp14lexer::CPP14Lexer;
 use crate::gen::cpp14parser::*;
 use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
-use crate::{SyntaxTree, VisitorReturn, TreeParseError, visitor_result};
+use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,14 +16,14 @@ pub struct CppTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<CppTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<UniqueItem<CppTreeItem>, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
 
-impl Clone for CppTree{
-    fn clone(&self) -> Self{
-        Self{
+impl Clone for CppTree {
+    fn clone(&self) -> Self {
+        Self {
             symbol_tree: self.symbol_tree.clone(),
             tmp: Default::default(),
         }
@@ -45,7 +45,9 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
 
         // visitor_result!(self.symbol_tree.token(CppTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self.symbol_tree.token_empty(CppTreeItem::Terminal));
+        visitor_result!(self
+            .symbol_tree
+            .token_empty(UniqueItem::new(CppTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -59,7 +61,9 @@ auto_visitor!(cpp14parser, CppTree, CppTreeItem);
 
 impl SyntaxTree for CppTree {
     type Item = CppTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(
+        self,
+    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
@@ -94,24 +98,38 @@ mod tests {
         CppTree::try_from("".to_owned()).unwrap();
     }
 
-    test_parse!(main_fn, CppTree, r"int main(int argc, char **argv) {
+    test_parse!(
+        main_fn,
+        CppTree,
+        r"int main(int argc, char **argv) {
     return 0;
 }
-");
+"
+    );
 
-    test_parse!(single_var, CppTree, r"int main(int argc, char **argv) {
+    test_parse!(
+        single_var,
+        CppTree,
+        r"int main(int argc, char **argv) {
     int var = 3 + 4 / 2;
     return var;
-}");
+}"
+    );
 
-    test_parse!(function_call, CppTree,
-r"int main(int argc, char **argv) {
+    test_parse!(
+        function_call,
+        CppTree,
+        r"int main(int argc, char **argv) {
     function();
     return 0;
 }
-");
+"
+    );
 
-    test_parse!(multiple_function_decls, CppTree, r"int sum(int a, int b) {
+    test_parse!(
+        multiple_function_decls,
+        CppTree,
+        r"int sum(int a, int b) {
     return a + b;
 }
 
@@ -119,15 +137,23 @@ int main(int argc, char **argv) {
     int var = 3 + 4 / 2;
     return sum(var, 3);
 }
-");
+"
+    );
 
-    test_parse!(function_call_args, CppTree, r#"int main(int argc, char **argv) {
+    test_parse!(
+        function_call_args,
+        CppTree,
+        r#"int main(int argc, char **argv) {
     int a = 3;
     function(3, 45, "abcd", &a);
     return 0;
-}"#);
+}"#
+    );
 
-    test_parse!(simple, CppTree, r#"##include <stdio.h>
+    test_parse!(
+        simple,
+        CppTree,
+        r#"##include <stdio.h>
 
 int
 main(int argc, char **argv) {
@@ -135,9 +161,13 @@ main(int argc, char **argv) {
     int myval = 5;
     printf("Hello, %s (%d)", test, myval);
 }
-"#);
+"#
+    );
 
-    test_parse!(simple_macro_expanded, CppTree, r#"# 1 "test.cc"
+    test_parse!(
+        simple_macro_expanded,
+        CppTree,
+        r#"# 1 "test.cc"
 # 1 "<built-in>" 1
 # 1 "<built-in>" 3
 # 433 "<built-in>" 3
@@ -827,10 +857,13 @@ main(int argc, char **argv) {
     printf("Hello, %s (%d)", test, myval);
 }
 
-"#);
+"#
+    );
 
-// Calculates the factorial of a number (FROM PAPER)
-    test_parse!(factorial_level0, CppTree, 
+    // Calculates the factorial of a number (FROM PAPER)
+    test_parse!(
+        factorial_level0,
+        CppTree,
         r#"using namespace std
         
         int factorial(int num) {
@@ -851,9 +884,12 @@ main(int argc, char **argv) {
             cout << "The factorial of " << number << " is: " << value << end1;
             system("PAUSE");
         }
-    "#);
+    "#
+    );
 
-    test_parse!(factorial_level5, CppTree,
+    test_parse!(
+        factorial_level5,
+        CppTree,
         r#"using namespace std;
 
         int number = 0, value = 1, index = 2;
@@ -870,9 +906,12 @@ main(int argc, char **argv) {
             cout << "The factorial of " << number << " is: " << value << end1;
             system("PAUSE");
         }
-    "#);
+    "#
+    );
 
-    test_parse!(factorial_level6, CppTree,
+    test_parse!(
+        factorial_level6,
+        CppTree,
         r#"using namespace std;
 
         int number = 0;
@@ -893,5 +932,6 @@ main(int argc, char **argv) {
             cout << "The factorial of " << number << " is: " << factorial(number) << "\n";
             system("PAUSE");
         }
-    "#);
+    "#
+    );
 }

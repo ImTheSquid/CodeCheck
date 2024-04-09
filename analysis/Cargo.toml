@@ -15,6 +15,9 @@ thiserror = "1.0.48"
 macros = { path = "../macros" }
 nalgebra = "0.32.3"
 rayon = "1.8.0"
+uuid = { version = "1.7.0", features = ["fast-rng", "v4"] }
+fxhash = "0.2.1"
 
 [dev-dependencies]
+glob = "0.3.1"
 indicatif = { version = "0.17.7", features = ["improved_unicode"] }
