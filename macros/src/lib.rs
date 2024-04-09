@@ -93,7 +93,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             quote! {
                 fn #name(#args) -> Self::Return {
                     // Open a tree node and make sure it was successful
-                    visitor_result!(self.symbol_tree.open(#tree_enum::#e));
+                    visitor_result!(self.symbol_tree.open(UniqueItem::new(#tree_enum::#e)));
 
                     // Visit children nodes
                     visitor_result!(self.visit_children(ctx).0);

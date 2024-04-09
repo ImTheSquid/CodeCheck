@@ -1,17 +1,10 @@
 #![feature(iterator_try_collect)]
 
 use std::{
-    borrow::Cow,
-    env::args,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    thread::spawn,
-    time::Duration,
-    sync::Arc,
+    borrow::Cow, env::args, fs, io::Write, path::PathBuf, sync::Arc, thread::spawn, time::Duration,
 };
 
-use analysis::{detect_plagiarism_in_sources, AssociatedStruct, Language};
+use analysis::{detect_plagiarism_in_sources, AssociatedStruct};
 use indicatif::{HumanDuration, ProgressBar, ProgressStyle};
 use std::sync::mpsc;
 
@@ -43,16 +36,16 @@ fn main() {
                         .to_string(),
                 )
             })
-        }).try_collect::<Vec<_>>().expect("good files");
+        })
+        .try_collect::<Vec<_>>()
+        .expect("good files");
 
     let num_comps = {
         let num_trees = files.len();
         num_trees * (num_trees - 1) / 2
     };
 
-    let mut f =
-        fs::File::create(output.join("output.csv"))
-            .unwrap();
+    let mut f = fs::File::create(output.join("output.csv")).unwrap();
 
     for path in &files {
         f.write_all(format!("{}, ", path.to_string_lossy()).as_bytes())
@@ -62,7 +55,15 @@ fn main() {
     let sources = files
         .iter()
         .map(|p| AssociatedStruct {
-            owner: Arc::new(p.components().nth(dataset.components().collect::<Vec<_>>().len() - 2).expect("submission").as_os_str().to_str().unwrap().to_owned()),
+            owner: Arc::new(
+                p.components()
+                    .nth(dataset.components().collect::<Vec<_>>().len() - 2)
+                    .expect("submission")
+                    .as_os_str()
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            ),
             source: Cow::Owned(p.as_os_str().to_string_lossy().as_ref().to_owned()),
             inner: fs::read_to_string(p).unwrap(),
         })
@@ -95,5 +96,4 @@ fn main() {
     }
 
     jh.join().unwrap();
-
 }

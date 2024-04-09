@@ -6,7 +6,7 @@ use syntree::{Empty, Tree};
 use crate::gen::cpp14lexer::CPP14Lexer;
 use crate::gen::cpp14parser::*;
 use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
-use crate::{visitor_result, SyntaxTree, TreeParseError, VisitorReturn};
+use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,7 +16,7 @@ pub struct CppTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<CppTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<UniqueItem<CppTreeItem>, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -45,7 +45,9 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
 
         // visitor_result!(self.symbol_tree.token(CppTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self.symbol_tree.token_empty(CppTreeItem::Terminal));
+        visitor_result!(self
+            .symbol_tree
+            .token_empty(UniqueItem::new(CppTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -59,7 +61,9 @@ auto_visitor!(cpp14parser, CppTree, CppTreeItem);
 
 impl SyntaxTree for CppTree {
     type Item = CppTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(
+        self,
+    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }

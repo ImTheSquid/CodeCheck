@@ -4,10 +4,11 @@
 
 use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{borrow::Cow, path::PathBuf};
 
 use crate::c::{CTree, CTreeItem};
+use crate::cpp::{CppTree, CppTreeItem};
 use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
 use java::{JavaTree, JavaTreeItem};
@@ -16,6 +17,8 @@ use rayon::prelude::*;
 use std::sync::mpsc;
 use syntree::Empty;
 use thiserror::Error;
+
+use fxhash::FxHashMap;
 
 mod c;
 mod cpp;
@@ -54,7 +57,9 @@ pub enum RuntimeComplexity {
 /// Represents any tree for a specific language
 pub trait SyntaxTree {
     type Item: PartialEq;
-    fn symbol_tree(self) -> Result<syntree::Tree<Self::Item, Empty, usize>, TreeParseError>;
+    fn symbol_tree(
+        self,
+    ) -> Result<syntree::Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError>;
 }
 
 /// Any errors that may occur when generating a parse tree
@@ -109,7 +114,10 @@ fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
     }
 }
 
-pub fn detect_plagiarism_in_sources<Ident: PartialEq + Clone + Send + Sync + 'static, S: AsRef<str> + Send>(
+pub fn detect_plagiarism_in_sources<
+    Ident: PartialEq + Clone + Send + Sync + 'static,
+    S: AsRef<str> + Send,
+>(
     sources: Vec<AssociatedStruct<'_, Ident, S>>,
     language: Option<Language>,
     progress: Option<mpsc::Sender<()>>,
@@ -129,15 +137,24 @@ pub fn detect_plagiarism_in_sources<Ident: PartialEq + Clone + Send + Sync + 'st
 
     Ok(match language {
         Language::Java => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
+            convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources)
+                .into_iter()
+                .filter_map(Result::ok)
+                .collect(),
             progress,
         ),
         Language::C => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
+            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources)
+                .into_iter()
+                .filter_map(Result::ok)
+                .collect(),
             progress,
         ),
         Language::Cpp => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources).into_iter().filter_map(Result::ok).collect(),
+            convert_sources_to_trees::<Ident, S, CppTree, CppTreeItem>(sources)
+                .into_iter()
+                .filter_map(Result::ok)
+                .collect(),
             progress,
         ),
         Language::Python => todo!(),
@@ -152,20 +169,23 @@ where
     T: TryFrom<String, Error = TreeParseError> + SyntaxTree<Item = I>,
 {
     // let mut out = Vec::with_capacity(sources.len());
-    sources.into_par_iter().map(|source| {
-        let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
-        match T::try_from(inner_value) {
-            Ok(t) => match t.symbol_tree() {
-                Ok(st) => Ok(AssociatedStruct {
-                    owner: source.owner.clone(),
-                    source: source.source.clone(),
-                    inner: st,
-                }),
+    sources
+        .into_par_iter()
+        .map(|source| {
+            let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
+            match T::try_from(inner_value) {
+                Ok(t) => match t.symbol_tree() {
+                    Ok(st) => Ok(AssociatedStruct {
+                        owner: source.owner.clone(),
+                        source: source.source.clone(),
+                        inner: st,
+                    }),
+                    Err(e) => Err(e),
+                },
                 Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        }
-    }).collect::<Vec<_>>()
+            }
+        })
+        .collect::<Vec<_>>()
     // for source in sources {
     //     let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
     //     match T::try_from(inner_value) {
@@ -183,8 +203,40 @@ where
     // out
 }
 
-type Tree<TreeItem> = syntree::Tree<TreeItem, Empty, usize>;
-type Node<'a, TreeItem> = syntree::Node<'a, TreeItem, Empty, usize>;
+type Tree<TreeItem> = syntree::Tree<UniqueItem<TreeItem>, Empty, usize>;
+type Node<'a, TreeItem> = syntree::Node<'a, UniqueItem<TreeItem>, Empty, usize>;
+
+#[derive(Debug, Clone, Copy)]
+pub struct UniqueItem<Item> {
+    pub item: Item,
+    pub id: uuid::Uuid,
+}
+
+impl<Item> PartialEq for UniqueItem<Item>
+where
+    Item: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.item == other.item
+    }
+}
+
+impl<Node> UniqueItem<Node> {
+    pub fn new(item: Node) -> Self {
+        Self {
+            item,
+            id: uuid::Uuid::new_v4(),
+        }
+    }
+}
+
+impl<Node> Deref for UniqueItem<Node> {
+    type Target = Node;
+
+    fn deref(&self) -> &Self::Target {
+        &self.item
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AssociatedStruct<'a, Ident, T> {
@@ -212,11 +264,14 @@ impl<TreeNode> Deref for DepthAwareTree<TreeNode> {
 
 impl<TreeNode, Ident> AssociatedStruct<'_, Ident, DepthAwareTree<TreeNode>> {
     fn first(&self) -> Option<AssociatedStruct<'_, Ident, Node<'_, TreeNode>>> {
-        self.inner.tree.first().map(|n| AssociatedStruct {
-            owner: self.owner.clone(),
-            source: Cow::Borrowed(self.source.as_ref()),
-            inner: n,
-        })
+        self.inner
+            .tree
+            .first()
+            .map(|n: Node<'_, TreeNode>| AssociatedStruct {
+                owner: self.owner.clone(),
+                source: Cow::Borrowed(self.source.as_ref()),
+                inner: n,
+            })
     }
 
     // fn as_node(&self) -> AssociatedStruct<Ident, Node<'_, TreeNode>> {
@@ -232,36 +287,61 @@ impl<Ident, T> Deref for AssociatedStruct<'_, Ident, T> {
     }
 }
 
-const LAMBDA_TREE: f64 = 0.1;
+const LAMBDA_TREE: f64 = 0.2;
 
 pub struct TreeCompare<'a, Ident, TreeItem> {
     trees: Vec<AssociatedStruct<'a, Ident, DepthAwareTree<TreeItem>>>,
+    tree_size_cache: std::sync::RwLock<FxHashMap<uuid::Uuid, usize>>,
+    subtree_depth_cache: RwLock<FxHashMap<uuid::Uuid, usize>>,
+    // Cache for trees_contain_s
+    subtree_containment_cache: RwLock<FxHashMap<uuid::Uuid, usize>>,
+    // Cache for the k(a, a) calls, where both trees are the same
+    k_self_cache: RwLock<FxHashMap<String, f64>>,
 }
 
 macro_rules! tree_depth {
     ($n:ident) => {
-        $n.walk().with_depths().par_bridge().map(|(depth, _)| depth).max().unwrap_or(0)
+        $n.walk()
+            .with_depths()
+            .par_bridge()
+            .map(|(depth, _)| depth)
+            .max()
+            .unwrap_or(0)
     };
 }
 
-impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
-    TreeCompare<'_, Ident, TreeItem>
+impl<'tree, Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
+    TreeCompare<'tree, Ident, TreeItem>
 {
     pub fn comparison_matrix(
-        trees: Vec<AssociatedStruct<'_, Ident, Tree<TreeItem>>>,
+        trees: Vec<AssociatedStruct<'tree, Ident, Tree<TreeItem>>>,
         progress: Option<mpsc::Sender<()>>,
     ) -> DMatrix<f64> {
-        let trees = trees.into_par_iter().map(|t| {
-            let tr = &t.inner;
-            let depth = tree_depth!(tr);
-            AssociatedStruct {
-                owner: t.owner,
-                source: t.source,
-                inner: DepthAwareTree { tree: t.inner, depth }
-            }
-        }).collect::<Vec<_>>();
+        let trees = trees
+            .into_par_iter()
+            .map(|t| {
+                let tr = &t.inner;
+                let depth = tree_depth!(tr);
+                AssociatedStruct {
+                    owner: t.owner,
+                    source: t.source,
+                    inner: DepthAwareTree {
+                        tree: t.inner,
+                        depth,
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
         let num_trees = trees.len();
-        let comp = Arc::new(TreeCompare { trees });
+
+        let comp = Arc::new(TreeCompare {
+            trees,
+            tree_size_cache: RwLock::new(FxHashMap::default()),
+            subtree_depth_cache: RwLock::new(FxHashMap::default()),
+            subtree_containment_cache: RwLock::new(FxHashMap::default()),
+            k_self_cache: RwLock::new(FxHashMap::default()),
+        });
+
         // let mat = Arc::new(RwLock::new(Option::Some(DMatrix::from_data(VecStorage::new(Dyn(comp.trees.len()), Dyn(comp.trees.len()), vec![1.0; comp.trees.len().pow(2)])))));
 
         let res: Vec<f64> = (0..num_trees)
@@ -273,6 +353,10 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
                         &*bundle,
                         |(comp, progress), j| {
                             let res = if comp.trees[i].owner != comp.trees[j].owner {
+                                println!(
+                                    "Compare {} to {}",
+                                    comp.trees[i].source, comp.trees[j].source
+                                );
                                 comp.k_prime(&comp.trees[i], &comp.trees[j])
                             } else {
                                 -1.0
@@ -281,7 +365,7 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
                                 progress.send(()).unwrap();
                             }
 
-                            res
+                            res.min(1.0)
                         },
                     ))
                     .collect::<Vec<_>>()
@@ -300,6 +384,23 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
         mat
     }
 
+    fn k_cache(&self, t: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>) -> f64 {
+        if let Some(k) = self
+            .k_self_cache
+            .read()
+            .expect("k cache read")
+            .get(&t.source.to_string())
+        {
+            return *k;
+        }
+        let k = self.k(t, t);
+        self.k_self_cache
+            .write()
+            .expect("k cache write")
+            .insert(t.source.to_string(), k);
+        k
+    }
+
     /// Cosine similarity
     fn k_prime(
         &self,
@@ -307,8 +408,8 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
         b: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
     ) -> f64 {
         let numerator = self.k(a, b);
-        let denom_a = self.k(a, a);
-        let denom_b = self.k(b, b);
+        let denom_a = self.k_cache(a);
+        let denom_b = self.k_cache(b);
         numerator / (denom_a * denom_b).sqrt()
     }
 
@@ -323,8 +424,10 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
             return 0.0;
         }
 
-        let a_subtrees = self.subtrees(&a.first().unwrap());
-        let b_subtrees = self.subtrees(&b.first().unwrap());
+        let a_first = a.first().unwrap();
+        let b_first = b.first().unwrap();
+        let a_subtrees = self.subtrees(&a_first);
+        let b_subtrees = self.subtrees(&b_first);
         let b_subtrees = &b_subtrees;
 
         a_subtrees
@@ -340,14 +443,14 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
 
     fn subtrees<'a, 'b>(
         &self,
-        tree: &AssociatedStruct<'b, Ident, Node<'a, TreeItem>>,
+        tree: &'b AssociatedStruct<'b, Ident, Node<'a, TreeItem>>,
     ) -> Vec<AssociatedStruct<'b, Ident, Node<'a, TreeItem>>> {
         tree.inner
             .walk()
             .par_bridge()
             .map(|n| AssociatedStruct {
                 owner: tree.owner.clone(),
-                source: tree.source.clone(),
+                source: Cow::Borrowed(tree.source.as_ref()),
                 inner: n,
             })
             .collect::<Vec<_>>()
@@ -375,13 +478,13 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
                             .map(|j| {
                                 let st_s1_i = AssociatedStruct {
                                     owner: a.owner.clone(),
-                                    source: a.source.clone(),
+                                    source: Cow::Borrowed(a.source.as_ref()),
                                     inner: a.children().nth(i).unwrap(),
                                 };
 
                                 let st_s2_j = AssociatedStruct {
                                     owner: b.owner.clone(),
-                                    source: b.source.clone(),
+                                    source: Cow::Borrowed(b.source.as_ref()),
                                     inner: b.children().nth(j).unwrap(),
                                 };
 
@@ -414,8 +517,21 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
             / self.n(&tree.first().unwrap()) as f64
     }
 
-    fn n(&self, tree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>) -> usize {
-        tree.walk().par_bridge().count()
+    fn n(&self, node: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>) -> usize {
+        if let Some(depth) = self
+            .tree_size_cache
+            .read()
+            .expect("depth cache read")
+            .get(&node.value().id)
+        {
+            return *depth;
+        }
+        let depth = node.walk().par_bridge().count();
+        self.tree_size_cache
+            .write()
+            .expect("depth cache write")
+            .insert(node.value().id, depth);
+        depth
     }
 
     fn idf(&self, subtree: &AssociatedStruct<'_, Ident, Node<'_, TreeItem>>) -> f64 {
@@ -423,7 +539,26 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
     }
 
     fn trees_contain_s(&self, subtree: &Node<'_, TreeItem>) -> usize {
-        self.trees.par_iter().filter(|tree| self.subtree_appearances_in_tree(subtree, tree, true) > 0).count()
+        if let Some(contain_count) = self
+            .subtree_containment_cache
+            .read()
+            .expect("containment cache read")
+            .get(&subtree.value().id)
+        {
+            return *contain_count;
+        }
+
+        let containment = self.trees
+            .par_iter()
+            .filter(|tree| self.subtree_appearances_in_tree(subtree, tree, true) > 0)
+            .count();
+
+        self.subtree_containment_cache
+            .write()
+            .expect("containment cache write")
+            .insert(subtree.value().id, containment);
+
+        containment
     }
 
     /// TODO: Rayon optimize
@@ -433,19 +568,45 @@ impl<Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + PartialEq>
         tree: &AssociatedStruct<'_, Ident, DepthAwareTree<TreeItem>>,
         find_first_only: bool,
     ) -> usize {
-        if tree.depth < tree_depth!(subtree) {
+        // This has to be written this way to not deadlock the RwLock
+        let subtree_depth = 'std: {
+            if let Some(depth) = self
+                .subtree_depth_cache
+                .read()
+                .expect("st depth cache read")
+                .get(&subtree.value().id)
+            {
+                break 'std *depth;
+            }
+            let depth = tree_depth!(subtree);
+            self.subtree_depth_cache
+                .write()
+                .expect("st depth cache write")
+                .insert(subtree.value().id, depth);
+            depth
+        };
+        if tree.depth < subtree_depth {
             return 0;
         }
 
         let mut appearances = 0_usize;
 
-        for node in tree.walk() {
-            if subtree.value() == node.value() {
+        for (node_depth, node) in tree.walk().with_depths() {
+            // Looking at each node in the tree to see if the subtree can fit
+            if tree.depth - node_depth < subtree_depth {
+                continue;
+            }
+
+            if **subtree.value() == **node.value() {
                 let mut are_equal = true;
                 // This is a really shitty way of doing it that I know has bugs, but it should work for now
                 let mut node_iter = node.walk();
                 let mut subtree_iter = subtree.walk();
-                if (&mut node_iter).zip(&mut subtree_iter).par_bridge().any(|(s_node, t_node)| s_node.value() != t_node.value()) {
+                if (&mut node_iter)
+                    .zip(&mut subtree_iter)
+                    .par_bridge()
+                    .any(|(s_node, t_node)| **s_node.value() != **t_node.value())
+                {
                     are_equal = false;
                 }
                 // while let Some((s_node, t_node)) = (&mut node_iter).zip(&mut subtree_iter).next() {

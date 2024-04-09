@@ -6,7 +6,7 @@ use syntree::{Empty, Tree};
 use crate::gen::clexer::CLexer;
 use crate::gen::cparser::*;
 use crate::gen::cvisitor::CVisitorCompat;
-use crate::{visitor_result, SyntaxTree, TreeParseError, VisitorReturn};
+use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,7 +16,7 @@ pub struct CTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<CTreeItem, Empty, usize>,
+    pub symbol_tree: syntree::Builder<UniqueItem<CTreeItem>, Empty, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -45,7 +45,9 @@ impl ParseTreeVisitorCompat<'_> for CTree {
 
         // visitor_result!(self.symbol_tree.token(CTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self.symbol_tree.token_empty(CTreeItem::Terminal));
+        visitor_result!(self
+            .symbol_tree
+            .token_empty(UniqueItem::new(CTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -59,7 +61,9 @@ auto_visitor!(c, CTree, CTreeItem);
 
 impl SyntaxTree for CTree {
     type Item = CTreeItem;
-    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, Empty, usize>, TreeParseError> {
+    fn symbol_tree(
+        self,
+    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
