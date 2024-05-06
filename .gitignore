@@ -15,3 +15,5 @@ Cargo.lock
 
 # In case this is ever needed
 .env
+
+.sass-cache
