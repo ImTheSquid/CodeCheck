@@ -7,6 +7,7 @@ members = [
     "auth",
     "storage",
     "macros",
+    "neural",
 ]
 resolver = "2"
 # Defines a size-optimized profile for the WASM bundle in release mode
