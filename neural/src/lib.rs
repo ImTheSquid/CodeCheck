@@ -1,5 +1,7 @@
+pub mod batch;
 pub mod contrastive;
 pub mod gat;
+pub mod model;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

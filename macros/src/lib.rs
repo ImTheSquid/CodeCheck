@@ -111,9 +111,32 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     let trait_name = &visitor_trait.ident;
     let trait_name: Ident = syn::parse_str(&format!("{}Compat", trait_name)).unwrap();
     let res = quote! {
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr, Ord)]
         pub enum #tree_enum {
             #(#generated_enum_cases),*
+        }
+
+        impl PartialOrd for #tree_enum {
+            fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
+                Some(if matches!(self, other) {
+                    ::std::cmp::Ordering::Equal
+                } else {
+                    self.as_ref().cmp(other.as_ref())
+                })
+            }
+        }
+
+        impl<B: ::burn::prelude::Backend> From<#tree_enum> for ::burn::prelude::Tensor<B, 1, ::burn::prelude::Int> {
+            fn from(value: #tree_enum) -> Self {
+                use ::strum::IntoEnumIterator;
+                let num_cases = #tree_enum::iter().len();
+                let mut sorted = #tree_enum::iter().collect::<Vec<_>>();
+                sorted.sort_unstable();
+                let pos = sorted.iter().position(|t| *t == value).expect("value to be part of enum");
+
+                let device = Default::default();
+                ::burn::prelude::Tensor::<B, 1>::one_hot(pos, num_cases, &device).int()
+            }
         }
 
         #[allow(non_snake_case)]

@@ -17,6 +17,8 @@ nalgebra = "0.32.3"
 rayon = "1.8.0"
 uuid = { version = "1.7.0", features = ["fast-rng", "v4"] }
 fxhash = "0.2.1"
+strum = { version = "0.26.2", features = ["derive"] }
+burn = "0.13.2"
 
 [dev-dependencies]
 glob = "0.3.1"
