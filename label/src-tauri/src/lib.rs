@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use ast::{guess_language_from_path, Language, TreeParseError};
-use util::Dataset;
+use util::{Dataset, Pair};
 use std::sync::RwLock;
 use std::fs;
 
@@ -53,7 +53,7 @@ str_error!(DirectoryValidationError);
 /// Ensures that all files in the directory are of the same (supported) file type and ignores everything else.
 /// If multiple supported file types are detected, this is an error
 #[tauri::command]
-fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result<usize, DirectoryValidationError> {
+fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result<(), DirectoryValidationError> {
     // Make sure this is actually a directory
     let path = Path::new(&path);
     if !path.is_dir() {
@@ -83,11 +83,9 @@ fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result
         data
     } else {
         Dataset {
-            pairs: vec![],
+            pairs: Default::default(),
         }
     };
-
-    let start_index = load.pairs.len();
 
     let _ = state.current_dataset.write().unwrap().insert(CurrentDataset {
         data: load,
@@ -95,7 +93,43 @@ fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result
         items: file_paths,
     });
 
-    Ok(start_index)
+    Ok(())
+}
+
+struct Item {
+    path: String,
+    contents: String,
+}
+
+struct PairData {
+    a: Item,
+    b: Item,
+    pairs: Vec<Pair>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum DatasetError {
+    #[error("No dataset loaded")]
+    NoDataset,
+}
+
+str_error!(DatasetError);
+
+#[tauri::command]
+fn get_overview(state: tauri::State<'_, AppState>) -> Result<Vec<Option<usize>>, DatasetError> {
+    let current = state.current_dataset.read().unwrap();
+    match current.as_ref() {
+        None => Err(DatasetError::NoDataset),
+        Some(current) => {
+            let mut status = vec![None; current.items.len()];
+
+            for (&k, v) in &current.data.pairs {
+                status[k] = Some(v.marks.len());
+            }
+
+            Ok(status)
+        }
+    }
 }
 
 #[tauri::command]
@@ -113,7 +147,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![validate_directory, load_pair, set_spans])
+        .invoke_handler(tauri::generate_handler![validate_directory, load_pair, set_spans, get_overview])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

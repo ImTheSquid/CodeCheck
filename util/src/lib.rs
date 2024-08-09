@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MarkSpan {
     pub start: usize,
@@ -19,5 +21,5 @@ pub struct Pair {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Dataset {
-    pub pairs: Vec<Pair>,
+    pub pairs: HashMap<usize, Pair>,
 }
