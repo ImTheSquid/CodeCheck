@@ -1,14 +1,23 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct MarkSpan {
+    pub start: usize,
+    pub end: usize,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Mark {
+    pub a: MarkSpan,
+    pub b: MarkSpan,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Pair {
+    pub a: String,
+    pub b: String,
+    pub marks: Vec<Mark>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Dataset {
+    pub pairs: Vec<Pair>,
 }

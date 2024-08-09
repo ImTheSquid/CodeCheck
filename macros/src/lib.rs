@@ -34,7 +34,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     // Find the visitor file with the necessary trait
     // This expects to be in the root of the Cargo workspace when executed
     let path = env::current_dir().unwrap().join(PathBuf::from(format!(
-        "analysis/src/gen/{}visitor.rs",
+        "ast/src/gen/{}visitor.rs",
         name.to_token_stream().to_string().to_lowercase()
     )));
 
@@ -93,7 +93,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             quote! {
                 fn #name(#args) -> Self::Return {
                     // Open a tree node and make sure it was successful
-                    visitor_result!(self.symbol_tree.open(UniqueItem::new(#tree_enum::#e)));
+                    visitor_result!(self.symbol_tree.open(#tree_enum::#e));
 
                     // Visit children nodes
                     visitor_result!(self.visit_children(ctx).0);

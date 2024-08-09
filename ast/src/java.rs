@@ -1,12 +1,12 @@
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 use antlr_rust::InputStream;
-use syntree::{Empty, Tree};
+use syntree::Tree;
 
 use crate::gen::javalexer::JavaLexer;
 use crate::gen::javaparser::*;
 use crate::gen::javaparservisitor::JavaParserVisitorCompat;
-use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
+use crate::{visitor_result, SyntaxTree, TreeParseError, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,7 +16,7 @@ pub struct JavaTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<UniqueItem<JavaTreeItem>, Empty, usize>,
+    pub symbol_tree: syntree::Builder<JavaTreeItem, usize, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -38,16 +38,16 @@ impl ParseTreeVisitorCompat<'_> for JavaTree {
         &mut self.tmp
     }
 
-    fn visit_terminal(&mut self, _node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
         // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
         //     visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
         // }
 
-        // visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
+        visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self
-            .symbol_tree
-            .token_empty(UniqueItem::new(JavaTreeItem::Terminal)));
+        // visitor_result!(self
+        //     .symbol_tree
+        //     .token_empty(UniqueItem::new(JavaTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -63,7 +63,7 @@ impl SyntaxTree for JavaTree {
     type Item = JavaTreeItem;
     fn symbol_tree(
         self,
-    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
+    ) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
@@ -98,7 +98,7 @@ mod tests {
         comment_import_comment,
         JavaTree,
         r#"/*
-TEST COMMENT    
+TEST COMMENT
  */
 
 import test.com;
@@ -110,7 +110,7 @@ public class Test {
 
     }
 }
-    
+
 "#
     );
 
@@ -152,7 +152,7 @@ public class Test {
         whitespace_beginning,
         JavaTree,
         r#"
-    
+
 import java.util.Scanner;
 
 /**
@@ -162,25 +162,25 @@ import java.util.Scanner;
 public class Main {
     public static double hasilPertambahanDiagonal(double[][] m) {
         double sum = 0;
-        
+
         for (int i = 0; i < m.length; i++)
             sum += m[i][i];
-        
+
         return sum;
     }
-    
+
     public static void main(String[] args) {
         Scanner input = new Scanner(System.in);
-        
+
         System.out.print("Enter a 4 by 4 matrix row by row: ");
         double[][] n = new double[4][4];
-        
+
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 n[i][j] = input.nextDouble();
             }
         }
-        
+
         System.out.print("Sum of the elements in the major diagonal is " + hasilPertambahanDiagonal(n));
     }
 }"#

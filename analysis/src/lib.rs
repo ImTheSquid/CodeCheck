@@ -20,22 +20,6 @@ use thiserror::Error;
 
 use fxhash::FxHashMap;
 
-mod c;
-mod cpp;
-mod java;
-#[macro_use]
-mod gen;
-
-#[macro_export]
-macro_rules! visitor_result {
-    ($x:expr) => {
-        match $x {
-            Ok(v) => v,
-            Err(e) => return VisitorReturn(Err(TreeParseError::from(e))),
-        }
-    };
-}
-
 /// Big-O runtime complexity
 pub enum RuntimeComplexity {
     /// O(1)
@@ -52,66 +36,6 @@ pub enum RuntimeComplexity {
     Exponential,
     /// O(n!)
     Factorial,
-}
-
-/// Represents any tree for a specific language
-pub trait SyntaxTree {
-    type Item: PartialEq;
-    fn symbol_tree(
-        self,
-    ) -> Result<syntree::Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError>;
-}
-
-/// Any errors that may occur when generating a parse tree
-#[derive(Debug, Error)]
-pub enum TreeParseError {
-    #[error(transparent)]
-    FileError(#[from] std::io::Error),
-    #[error("Unknown language")]
-    UnknownLanguage,
-    #[error("Invalid node")]
-    InvalidNode,
-    #[error("Missing node")]
-    MissingNode,
-    #[error(transparent)]
-    TreeError(#[from] syntree::Error),
-    #[error("ANTLR Error: {0}")]
-    AntlrError(String),
-    #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
-    PlaceholderError,
-    #[error("The input was empty")]
-    Empty,
-}
-
-impl From<ANTLRError> for TreeParseError {
-    fn from(value: ANTLRError) -> Self {
-        TreeParseError::AntlrError(value.to_string())
-    }
-}
-
-/// The language to be parsed
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Language {
-    Java,
-    C,
-    Cpp,
-    Python,
-}
-
-/// Attempts to guess the language of the file using a path
-fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
-    match path
-        .extension()
-        .ok_or(TreeParseError::UnknownLanguage)?
-        .to_str()
-        .ok_or(TreeParseError::UnknownLanguage)?
-    {
-        "java" => Ok(Language::Java),
-        "py" => Ok(Language::Python),
-        "c" | "h" => Ok(Language::C),
-        "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
-        _ => Err(TreeParseError::UnknownLanguage),
-    }
 }
 
 pub fn detect_plagiarism_in_sources<
@@ -203,8 +127,8 @@ where
     // out
 }
 
-type Tree<TreeItem> = syntree::Tree<UniqueItem<TreeItem>, Empty, usize>;
-type Node<'a, TreeItem> = syntree::Node<'a, UniqueItem<TreeItem>, Empty, usize>;
+type Tree<TreeItem> = syntree::Tree<UniqueItem<TreeItem>, usize, usize>;
+type Node<'a, TreeItem> = syntree::Node<'a, UniqueItem<TreeItem>, usize, usize>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct UniqueItem<Item> {
@@ -646,14 +570,7 @@ impl<'tree, Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + Part
     }
 }
 
-#[derive(Debug)]
-pub struct VisitorReturn<T>(Result<T, TreeParseError>);
 
-impl<T> Default for VisitorReturn<T> {
-    fn default() -> Self {
-        Self(Err(TreeParseError::PlaceholderError))
-    }
-}
 
 #[cfg(test)]
 #[macro_export]

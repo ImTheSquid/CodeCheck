@@ -1,12 +1,12 @@
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 use antlr_rust::InputStream;
-use syntree::{Empty, Tree};
+use syntree::Tree;
 
 use crate::gen::cpp14lexer::CPP14Lexer;
 use crate::gen::cpp14parser::*;
 use crate::gen::cpp14parservisitor::CPP14ParserVisitorCompat;
-use crate::{visitor_result, SyntaxTree, TreeParseError, UniqueItem, VisitorReturn};
+use crate::{visitor_result, SyntaxTree, TreeParseError, VisitorReturn};
 
 use macros::auto_visitor;
 
@@ -16,7 +16,7 @@ pub struct CppTree {
     /// symbols. This tree also contains whitespace and variable names, so it may not work as
     /// well for comparisons.
     /// TODO: Figure if non-token structure tree is needed
-    pub symbol_tree: syntree::Builder<UniqueItem<CppTreeItem>, Empty, usize>,
+    pub symbol_tree: syntree::Builder<CppTreeItem, usize, usize>,
     /// Temporary variable for visitor
     tmp: VisitorReturn<()>,
 }
@@ -38,16 +38,16 @@ impl ParseTreeVisitorCompat<'_> for CppTree {
         &mut self.tmp
     }
 
-    fn visit_terminal(&mut self, _node: &TerminalNode<'_, Self::Node>) -> Self::Return {
+    fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
         // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
         //     visitor_result!(self.symbol_tree.token(CppTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
         // }
 
-        // visitor_result!(self.symbol_tree.token(CppTreeItem::Terminal, node.symbol.text.len()));
+        visitor_result!(self.symbol_tree.token(CppTreeItem::Terminal, node.symbol.text.len()));
 
-        visitor_result!(self
-            .symbol_tree
-            .token_empty(UniqueItem::new(CppTreeItem::Terminal)));
+        // visitor_result!(self
+        //     .symbol_tree
+        //     .token_empty(UniqueItem::new(CppTreeItem::Terminal)));
 
         VisitorReturn(Ok(()))
     }
@@ -63,7 +63,7 @@ impl SyntaxTree for CppTree {
     type Item = CppTreeItem;
     fn symbol_tree(
         self,
-    ) -> anyhow::Result<Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError> {
+    ) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }
@@ -865,7 +865,7 @@ main(int argc, char **argv) {
         factorial_level0,
         CppTree,
         r#"using namespace std
-        
+
         int factorial(int num) {
             int result = 1;
             for(int i = 2; i <= num; i++){
