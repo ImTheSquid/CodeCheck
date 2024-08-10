@@ -13,7 +13,7 @@
     const minCellWidth = 150;
 </script>
 
-<h1>Dataset Items Overview</h1>
+<h1 class="text-xl font-bold">Dataset Items Overview</h1>
 {#if overviewData !== null}
   <p>This dataset has {overviewData.length} items and is {overviewData.filter(itm => itm !== null).length / overviewData.length}% complete.</p>
 
@@ -30,14 +30,13 @@
   </div>
 {/if}
 
-<style>
+<style lang="css">
   .grid-table {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(var(--cell-width), 1fr));
     gap: 10px;
     width: 100%;
   }
-
 
   .grid-cell {
     position: relative;

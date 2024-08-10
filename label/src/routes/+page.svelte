@@ -20,7 +20,7 @@
       }
     };
 </script>
-<h1>CodeCheck Labelling System</h1>
+<h1 class="text-xl font-bold">CodeCheck Labelling System</h1>
 <p>Load a dataset directory to get started.</p>
 <button on:click={_ => loadDirectory()}>Load Directory</button>
 
