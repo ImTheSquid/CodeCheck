@@ -9,8 +9,11 @@ let
       dbus
       openssl_3
       librsvg
-      webkitgtk_4_1
-      libsoup_3
+    ] ++ lib.optionals pkgs.stdenv.isLinux [
+        webkitgtk_4_1
+        libsoup_3
+    ] ++ lib.optionals pkgs.stdenv.isDarwin [
+        darwin.apple_sdk.frameworks.WebKit
     ];
 in
 pkgs.mkShell {
@@ -29,14 +32,16 @@ pkgs.mkShell {
     openssl_3
     glib
     gtk3
-    libsoup_3
-    webkitgtk_4_1
-    appimagekit
     librsvg
     cargo-tauri
     corepack_latest
     nodejs_latest
-  ];
+  ] ++ lib.optionals pkgs.stdenv.isLinux [
+         webkitgtk_4_1
+         libsoup_3
+     ] ++ lib.optionals pkgs.stdenv.isDarwin [
+         darwin.apple_sdk.frameworks.WebKit
+     ];
 
   shellHook = ''
     # Tauri stuff
