@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct MarkSpan {
     pub start: usize,
     pub end: usize,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct Mark {
     pub a: MarkSpan,
     pub b: MarkSpan,

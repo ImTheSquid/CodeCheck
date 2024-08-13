@@ -1,8 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import Error from '$lib/components/Error.svelte';
 	let err: string | null = null;
 	let overviewData: (number | null)[] | null = null;
+	let goto: number = 0;
+	$: {
+		if (goto < 0) {
+			goto = 0;
+		} else if (goto >= (overviewData?.length ?? 1)) {
+			goto = (overviewData?.length ?? 1) - 1;
+		}
+	}
 	onMount(async () => {
 		try {
 			overviewData = await invoke('get_overview');
@@ -14,23 +23,39 @@
 </script>
 
 <h1 class="text-xl font-bold">Dataset Items Overview</h1>
+<Error error={err} />
 {#if overviewData !== null}
 	<p>
-		This dataset has {overviewData.length} items and is {overviewData.filter((itm) => itm !== null)
-			.length / overviewData.length}% complete.
+		This dataset has {overviewData.length} comparisons and is {overviewData.filter(
+			(itm) => itm !== null
+		).length / overviewData.length}% complete.
 	</p>
 
-	<div class="grid-table" style="--cell-width: {minCellWidth}px;">
-		{#each overviewData as item, i}
-			<a class="grid-cell {item !== null ? 'done' : ''}" data-index={i + 1} href="items/view?i={i}">
-				{#if item === null}
-					<p>NOT VIEWED</p>
-				{:else}
-					{item}
-				{/if}
-			</a>
-		{/each}
+	<div class="flex p-1">
+		<p class="font-bold">GOTO INDEX:</p>
+		<input type="number" class="pl-1 pr-1" bind:value={goto} />
+		<a href="items/view?i={goto}" class="text-green-600">JUMP</a>
 	</div>
+
+	{#if overviewData.length < 20_000}
+		<div class="grid-table" style="--cell-width: {minCellWidth}px;">
+			{#each overviewData as item, i}
+				<a
+					class="grid-cell {item !== null ? 'done' : ''}"
+					data-index={i + 1}
+					href="items/view?i={i}"
+				>
+					{#if item === null}
+						<p>NOT VIEWED</p>
+					{:else}
+						{item}
+					{/if}
+				</a>
+			{/each}
+		</div>
+	{:else}
+		<p>Too many comparisons to show graphic :(</p>
+	{/if}
 {/if}
 
 <style lang="css">

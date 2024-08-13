@@ -1,23 +1,23 @@
 #![feature(iterator_try_collect)]
 
-use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 use ast::{guess_language_from_path, Language, TreeParseError};
-use util::{Dataset, Pair};
+use std::fs::{self, read_to_string};
+use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use std::fs;
+use util::{Dataset, Mark, Pair};
+use walkdir::WalkDir;
 
 macro_rules! str_error {
     ($t: ty) => {
         impl serde::Serialize for $t {
-          fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-          where
-            S: serde::ser::Serializer,
-          {
-            serializer.serialize_str(self.to_string().as_ref())
-          }
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::ser::Serializer,
+            {
+                serializer.serialize_str(self.to_string().as_ref())
+            }
         }
-    }
+    };
 }
 
 #[derive(Debug)]
@@ -53,7 +53,10 @@ str_error!(DirectoryValidationError);
 /// Ensures that all files in the directory are of the same (supported) file type and ignores everything else.
 /// If multiple supported file types are detected, this is an error
 #[tauri::command]
-fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result<(), DirectoryValidationError> {
+fn validate_directory(
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), DirectoryValidationError> {
     // Make sure this is actually a directory
     let path = Path::new(&path);
     if !path.is_dir() {
@@ -61,18 +64,34 @@ fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result
     }
 
     // Get a list of all files recursively
-    let mut file_paths = WalkDir::new(&path).into_iter().filter_map(|e| e.ok()).map(|e| e.path().strip_prefix(&path).expect("path to be child").to_owned()).collect::<Vec<_>>();
+    let mut file_paths = WalkDir::new(&path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .map(|e| {
+            e.path()
+                .strip_prefix(&path)
+                .expect("path to be child")
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
     file_paths.sort();
 
     // Are all of the source code files of the same type?
-    let detected_languages = file_paths.iter().filter_map(|p| guess_language_from_path(p).ok()).collect::<Vec<_>>();
+    let detected_languages = file_paths
+        .iter()
+        .filter_map(|p| guess_language_from_path(p).ok())
+        .collect::<Vec<_>>();
 
     // Check that there is at least two files
     if detected_languages.len() <= 1 {
         return Err(DirectoryValidationError::InsufficientData);
     }
 
-    if !detected_languages.iter().all(|l| *l == detected_languages[0]) {
+    if !detected_languages
+        .iter()
+        .all(|l| *l == detected_languages[0])
+    {
         return Err(DirectoryValidationError::MultipleLanguages);
     }
 
@@ -87,30 +106,41 @@ fn validate_directory(path: String, state: tauri::State<'_, AppState>) -> Result
         }
     };
 
-    let _ = state.current_dataset.write().unwrap().insert(CurrentDataset {
-        data: load,
-        path: path.to_path_buf(),
-        items: file_paths,
-    });
+    let _ = state
+        .current_dataset
+        .write()
+        .unwrap()
+        .insert(CurrentDataset {
+            data: load,
+            path: path.to_path_buf(),
+            items: file_paths,
+        });
 
     Ok(())
 }
 
+#[derive(Debug, serde::Serialize)]
 struct Item {
     path: String,
     contents: String,
 }
 
+#[derive(Debug, serde::Serialize)]
 struct PairData {
     a: Item,
     b: Item,
-    pairs: Vec<Pair>,
+    marks: Vec<Mark>,
+    lang: String,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum DatasetError {
     #[error("No dataset loaded")]
     NoDataset,
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Tree(#[from] TreeParseError),
 }
 
 str_error!(DatasetError);
@@ -118,36 +148,95 @@ str_error!(DatasetError);
 #[tauri::command]
 fn get_overview(state: tauri::State<'_, AppState>) -> Result<Vec<Option<usize>>, DatasetError> {
     let current = state.current_dataset.read().unwrap();
-    match current.as_ref() {
-        None => Err(DatasetError::NoDataset),
-        Some(current) => {
-            let mut status = vec![None; current.items.len()];
 
-            for (&k, v) in &current.data.pairs {
-                status[k] = Some(v.marks.len());
-            }
+    let current = current.as_ref().ok_or(DatasetError::NoDataset)?;
+    let mut status = vec![None; current.items.len() * (current.items.len() - 1) / 2];
 
-            Ok(status)
-        }
+    for (&k, v) in &current.data.pairs {
+        status[k] = Some(v.marks.len());
     }
+
+    Ok(status)
+}
+
+struct PairedIndices {
+    i: usize,
+    j: usize,
+}
+
+// I don't think you can get better than O(n)
+fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndices {
+    let mut remaining = n - 1;
+    let mut i = 0;
+    while k >= remaining {
+        i += 1;
+        k -= remaining;
+        remaining -= 1;
+    }
+
+    PairedIndices { i, j: i + k + 1 }
 }
 
 #[tauri::command]
-fn load_pair(pair_index: usize) {
+fn load_pair(
+    pair_index: usize,
+    state: tauri::State<'_, AppState>,
+) -> Result<PairData, DatasetError> {
+    let dataset = state.current_dataset.read().unwrap();
+    let dataset = dataset.as_ref().ok_or(DatasetError::NoDataset)?;
 
+    let (marks, a, b) = match dataset.data.pairs.get(&pair_index) {
+        Some(d) => (d.marks.clone(), PathBuf::from(&d.a), PathBuf::from(&d.b)),
+        None => {
+            let PairedIndices { i, j } =
+                find_paired_indices_from_pair_index(pair_index, dataset.items.len());
+
+            (vec![], dataset.items[i].clone(), dataset.items[j].clone())
+        }
+    };
+
+    let a_full = dataset.path.join(&a);
+    let b_full = dataset.path.join(&b);
+
+    let lang = match guess_language_from_path(&a_full)? {
+        Language::C => "c",
+        Language::Cpp => "cpp",
+        Language::Java => "java",
+        Language::Python => "python",
+    }
+    .to_string();
+
+    let a_contents = read_to_string(&a_full)?;
+    let b_contents = read_to_string(&b_full)?;
+
+    Ok(PairData {
+        a: Item {
+            path: a.to_string_lossy().into_owned(),
+            contents: a_contents,
+        },
+        b: Item {
+            path: b.to_string_lossy().into_owned(),
+            contents: b_contents,
+        },
+        marks,
+        lang,
+    })
 }
 
 #[tauri::command]
-fn set_spans(pair_index: usize) {
-
-}
+fn set_spans(pair_index: usize) {}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![validate_directory, load_pair, set_spans, get_overview])
+        .invoke_handler(tauri::generate_handler![
+            validate_directory,
+            load_pair,
+            set_spans,
+            get_overview
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
