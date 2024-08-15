@@ -164,17 +164,39 @@ struct PairedIndices {
     j: usize,
 }
 
-// I don't think you can get better than O(n)
-fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndices {
-    let mut remaining = n - 1;
-    let mut i = 0;
-    while k >= remaining {
-        i += 1;
-        k -= remaining;
-        remaining -= 1;
-    }
+// // I don't think you can get better than O(n)
+// fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndices {
+//     let mut remaining = n - 1;
+//     let mut i = 0;
+//     while k >= remaining {
+//         i += 1;
+//         k -= remaining;
+//         remaining -= 1;
+//     }
 
-    PairedIndices { i, j: i + k + 1 }
+//     PairedIndices { i, j: i + k + 1 }
+// }
+// YOU CAN DO BETTER! THANKS JOHN FOR O(log(n))
+// Special binary search implementation that tries to guess values of k at certain i values,
+// homing in on correct one
+fn binary_search_index(k: usize, n: usize, l: usize, r: usize) -> PairedIndices {
+    let x = (r - l) / 2 + l;
+    let val = n * (n - 1) / 2 - x * (x - 1) / 2;
+    if val <= k {
+        if k - val < x - 1 {
+            return PairedIndices { i: n - x, j: val };
+        }
+        return binary_search_index(k, n, l, x + 1);
+    }
+    binary_search_index(k, n, x + 1, r)
+}
+
+fn find_paired_indices_from_pair_index(k: usize, n: usize) -> PairedIndices {
+    let PairedIndices { i, j } = binary_search_index(k, n, 0, n);
+    PairedIndices {
+        i,
+        j: k - j + i + 1,
+    }
 }
 
 #[tauri::command]
