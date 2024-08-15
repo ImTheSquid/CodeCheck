@@ -33,7 +33,7 @@ pkgs.mkShell {
     glib
     gtk3
     librsvg
-    cargo-tauri
+    # cargo-tauri
     corepack_latest
     nodejs_latest
   ] ++ lib.optionals pkgs.stdenv.isLinux [
