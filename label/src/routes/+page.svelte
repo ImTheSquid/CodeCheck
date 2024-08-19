@@ -2,7 +2,8 @@
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { invoke } from '@tauri-apps/api/core';
 	import Error from '$lib/components/Error.svelte';
-	let err: String | null = null;
+	import Button from '$lib/components/Button.svelte';
+	let err: string | null = null;
 	const loadDirectory = async () => {
 		const res = await open({
 			directory: true,
@@ -24,6 +25,6 @@
 
 <h1 class="text-xl font-bold">CodeCheck Labelling System</h1>
 <p>Load a dataset directory to get started.</p>
-<button on:click={(_) => loadDirectory()}>Load Directory</button>
+<Button on:click={(_) => loadDirectory()}>Load Directory</Button>
 
 <Error error={err} />

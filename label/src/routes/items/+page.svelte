@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { numItems } from '$lib';
 	import Error from '$lib/components/Error.svelte';
+	import Link from '$lib/components/Link.svelte';
+	import Button from '$lib/components/Button.svelte';
 	let err: string | null = null;
 	let overviewData: (number | null)[] | null = null;
 	let goto: number = 0;
@@ -15,6 +18,7 @@
 	onMount(async () => {
 		try {
 			overviewData = await invoke('get_overview');
+			numItems.set(overviewData?.length ?? 0);
 		} catch (error) {
 			err = error;
 		}
@@ -34,8 +38,15 @@
 	<div class="flex p-1">
 		<p class="font-bold">GOTO INDEX:</p>
 		<input type="number" class="pl-1 pr-1" bind:value={goto} />
-		<a href="items/view?i={goto}" class="text-green-600">JUMP</a>
+		<Link href="items/view?i={goto}">JUMP</Link>
 	</div>
+
+	<Button
+		enabled={overviewData.some((d) => d === null)}
+		on:click={(_) => {
+			document.location.href = `items/view?i=${overviewData?.findIndex((v) => v === null)}`;
+		}}>Jump to next unviewed pair</Button
+	>
 
 	{#if overviewData.length < 20_000}
 		<div class="grid-table" style="--cell-width: {minCellWidth}px;">

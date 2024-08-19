@@ -1,5 +1,7 @@
 // place files you want to import through the `$lib` alias in this folder.
 import Color from 'color';
+import { writable } from 'svelte/store';
+export const numItems = writable(0);
 export interface MarkSpan {
 	start: number;
 	end: number;
@@ -26,7 +28,6 @@ export class HslGenerator {
 		const c = Color.hsl([this.rand * 360, 0.5 * 100, 0.7 * 100]);
 		this.rand += goldenRatioConjugate;
 		this.rand %= 1;
-		console.log(c.rgb().hex());
 		return c.rgb().hex();
 	}
 }

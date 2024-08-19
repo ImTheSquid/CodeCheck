@@ -2,10 +2,14 @@
 
 use ast::{guess_language_from_path, Language, TreeParseError};
 use std::fs::{self, read_to_string};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+use tauri::Manager;
 use util::{Dataset, Mark, Pair};
 use walkdir::WalkDir;
+
+const DATASET_FILE_NAME: &'static str = "dataset.json";
 
 macro_rules! str_error {
     ($t: ty) => {
@@ -64,24 +68,24 @@ fn validate_directory(
     }
 
     // Get a list of all files recursively
+    // Are all of the source code files of the same type?
     let mut file_paths = WalkDir::new(&path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
-        .map(|e| {
-            e.path()
-                .strip_prefix(&path)
-                .expect("path to be child")
-                .to_owned()
+        .filter_map(|e| match guess_language_from_path(e.path()) {
+            Err(_) => None,
+            Ok(l) => Some((
+                e.path()
+                    .strip_prefix(&path)
+                    .expect("path to be child")
+                    .to_owned(),
+                l,
+            )),
         })
         .collect::<Vec<_>>();
-    file_paths.sort();
-
-    // Are all of the source code files of the same type?
-    let detected_languages = file_paths
-        .iter()
-        .filter_map(|p| guess_language_from_path(p).ok())
-        .collect::<Vec<_>>();
+    file_paths.sort_unstable_by_key(|(a, b)| a.clone());
+    let (file_paths, detected_languages): (Vec<_>, Vec<_>) = file_paths.into_iter().unzip();
 
     // Check that there is at least two files
     if detected_languages.len() <= 1 {
@@ -97,7 +101,7 @@ fn validate_directory(
 
     // Set this directory as the current state directory, creating a data file for it if it doesn't exist
     let load = if path.join("dataset.json").exists() {
-        let data = fs::read_to_string(path.join("dataset.json"))?;
+        let data = fs::read_to_string(path.join(DATASET_FILE_NAME))?;
         let data = serde_json::from_str(&data)?;
         data
     } else {
@@ -205,21 +209,38 @@ fn load_pair(
     pair_index: usize,
     state: tauri::State<'_, AppState>,
 ) -> Result<PairData, DatasetError> {
-    let dataset = state.current_dataset.read().unwrap();
-    let dataset = dataset.as_ref().ok_or(DatasetError::NoDataset)?;
+    let (path, is_cached) = {
+        let dataset = state.current_dataset.read().unwrap();
+        let dataset = dataset.as_ref().ok_or(DatasetError::NoDataset)?;
+        (
+            dataset.path.clone(),
+            dataset.data.pairs.get(&pair_index).is_some(),
+        )
+    };
+    let (marks, a, b) = if is_cached {
+        let dataset = state.current_dataset.read().unwrap();
+        let dataset = dataset.as_ref().ok_or(DatasetError::NoDataset)?;
+        let d = dataset.data.pairs.get(&pair_index).unwrap();
+        (d.marks.clone(), PathBuf::from(&d.a), PathBuf::from(&d.b))
+    } else {
+        let mut dataset = state.current_dataset.write().unwrap();
+        let dataset = dataset.as_mut().ok_or(DatasetError::NoDataset)?;
+        let PairedIndices { i, j } =
+            find_paired_indices_from_pair_index(pair_index, dataset.items.len());
+        dataset.data.pairs.insert(
+            pair_index,
+            Pair {
+                a: dataset.items[i].to_string_lossy().into_owned(),
+                b: dataset.items[j].to_string_lossy().into_owned(),
+                marks: vec![],
+            },
+        );
 
-    let (marks, a, b) = match dataset.data.pairs.get(&pair_index) {
-        Some(d) => (d.marks.clone(), PathBuf::from(&d.a), PathBuf::from(&d.b)),
-        None => {
-            let PairedIndices { i, j } =
-                find_paired_indices_from_pair_index(pair_index, dataset.items.len());
-
-            (vec![], dataset.items[i].clone(), dataset.items[j].clone())
-        }
+        (vec![], dataset.items[i].clone(), dataset.items[j].clone())
     };
 
-    let a_full = dataset.path.join(&a);
-    let b_full = dataset.path.join(&b);
+    let a_full = path.join(&a);
+    let b_full = path.join(&b);
 
     let lang = match guess_language_from_path(&a_full)? {
         Language::C => "c",
@@ -247,7 +268,18 @@ fn load_pair(
 }
 
 #[tauri::command]
-fn set_spans(pair_index: usize, state: tauri::State<'_, AppState>) {}
+fn set_spans(
+    pair_index: usize,
+    marks: Vec<Mark>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), DatasetError> {
+    let mut state = state.current_dataset.write().unwrap();
+    let pairs = &mut state.as_mut().ok_or(DatasetError::NoDataset)?.data.pairs;
+    let item = pairs.get_mut(&pair_index).expect("some value to be in map");
+    item.marks = marks;
+
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -260,6 +292,26 @@ pub fn run() {
             set_spans,
             get_overview
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| match event {
+            tauri::RunEvent::Exit => {
+                let state = app.state::<AppState>();
+                let state = state.current_dataset.read().unwrap();
+                let Some(dataset) = state.as_ref() else {
+                    return;
+                };
+
+                let path = dataset.path.join(DATASET_FILE_NAME);
+                let mut f = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(path)
+                    .unwrap();
+                f.write_all(serde_json::to_string(&dataset.data).unwrap().as_bytes())
+                    .unwrap();
+            }
+            _ => {}
+        });
 }
