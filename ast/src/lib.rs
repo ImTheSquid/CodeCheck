@@ -17,6 +17,17 @@ macro_rules! visitor_result {
     };
 }
 
+#[cfg(test)]
+#[macro_export]
+macro_rules! test_parse {
+    ($name: ident, $lang: ident, $code: expr) => {
+        #[test]
+        fn $name() {
+            $lang::try_from($code.to_owned()).unwrap();
+        }
+    };
+}
+
 #[derive(Debug)]
 pub struct VisitorReturn<T>(Result<T, TreeParseError>);
 
@@ -29,9 +40,7 @@ impl<T> Default for VisitorReturn<T> {
 /// Represents any tree for a specific language
 pub trait SyntaxTree {
     type Item: PartialEq + Copy;
-    fn symbol_tree(
-        self,
-    ) -> Result<syntree::Tree<Self::Item, usize, usize>, TreeParseError>;
+    fn symbol_tree(self) -> Result<syntree::Tree<Self::Item, usize, usize>, TreeParseError>;
 }
 
 /// Any errors that may occur when generating a parse tree

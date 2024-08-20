@@ -1,7 +1,7 @@
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 use antlr_rust::InputStream;
-use syntree::Tree;
+use syntree::{Span, Tree};
 
 use crate::gen::javalexer::JavaLexer;
 use crate::gen::javaparser::*;
@@ -39,15 +39,10 @@ impl ParseTreeVisitorCompat<'_> for JavaTree {
     }
 
     fn visit_terminal(&mut self, node: &TerminalNode<'_, Self::Node>) -> Self::Return {
-        // if node.symbol.start - *self.symbol_tree.cursor() as isize > 0 {
-        //     visitor_result!(self.symbol_tree.token(JavaTreeItem::Whitespace, node.symbol.start as usize - self.symbol_tree.cursor()));
-        // }
-
-        visitor_result!(self.symbol_tree.token(JavaTreeItem::Terminal, node.symbol.text.len()));
-
-        // visitor_result!(self
-        //     .symbol_tree
-        //     .token_empty(UniqueItem::new(JavaTreeItem::Terminal)));
+        visitor_result!(self.symbol_tree.token_with(
+            JavaTreeItem::Terminal,
+            Span::new(node.symbol.start as usize, node.symbol.stop as usize + 1)
+        ));
 
         VisitorReturn(Ok(()))
     }
@@ -61,9 +56,7 @@ auto_visitor!(javaparser, JavaTree, JavaTreeItem);
 
 impl SyntaxTree for JavaTree {
     type Item = JavaTreeItem;
-    fn symbol_tree(
-        self,
-    ) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
+    fn symbol_tree(self) -> anyhow::Result<Tree<Self::Item, usize, usize>, TreeParseError> {
         Ok(self.symbol_tree.build()?)
     }
 }

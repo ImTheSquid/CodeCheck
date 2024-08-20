@@ -9,6 +9,6 @@ anyhow = "1.0.86"
 burn = "0.13.2"
 macros = { path = "../macros" }
 regex = "1.10.6"
-syntree = "0.17.0"
+syntree = "0.17.2"
 strum = { version = "0.26.2", features = ["derive"] }
 thiserror = "1.0.63"

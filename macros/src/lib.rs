@@ -111,9 +111,15 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     let trait_name = &visitor_trait.ident;
     let trait_name: Ident = syn::parse_str(&format!("{}Compat", trait_name)).unwrap();
     let res = quote! {
-        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr, Ord)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr)]
         pub enum #tree_enum {
             #(#generated_enum_cases),*
+        }
+
+        impl Ord for #tree_enum {
+            fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+                self.partial_cmp(other).unwrap()
+            }
         }
 
         impl PartialOrd for #tree_enum {
