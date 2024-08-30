@@ -15,7 +15,6 @@ nalgebra = "0.32.3"
 rayon = "1.8.0"
 uuid = { version = "1.7.0", features = ["fast-rng", "v4"] }
 fxhash = "0.2.1"
-burn = "0.13.2"
 ast = { path = "../ast" }
 
 [dev-dependencies]
