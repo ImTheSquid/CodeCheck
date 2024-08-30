@@ -132,7 +132,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             }
         }
 
-        impl<B: ::burn::prelude::Backend> From<#tree_enum> for ::burn::prelude::Tensor<B, 1, ::burn::prelude::Int> {
+        impl<B: ::burn::prelude::Backend> From<#tree_enum> for ::burn::prelude::Tensor<B, 1> {
             fn from(value: #tree_enum) -> Self {
                 use ::strum::IntoEnumIterator;
                 let num_cases = #tree_enum::iter().len();
@@ -141,7 +141,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
                 let pos = sorted.iter().position(|t| *t == value).expect("value to be part of enum");
 
                 let device = Default::default();
-                ::burn::prelude::Tensor::<B, 1>::one_hot(pos, num_cases, &device).int()
+                ::burn::prelude::Tensor::<B, 1>::one_hot(pos, num_cases, &device)
             }
         }
 

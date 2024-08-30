@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.205", features = ["derive"] }
+thiserror = "1.0.63"
+ast = { path = "../ast" }
+serde_json = "1.0.127"

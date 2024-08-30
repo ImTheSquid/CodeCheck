@@ -1,5 +1,7 @@
-pub mod batch;
+#![feature(new_range_api)]
+
 pub mod contrastive;
+pub mod data;
 pub mod gat;
 pub mod model;
 pub mod node_process;
