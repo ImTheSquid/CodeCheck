@@ -8,7 +8,7 @@ use burn::{
 
 // A simple preprocessor to get some very basic embeddings out of tree info
 #[derive(Debug, Module)]
-struct NodeProcessor<B: Backend> {
+pub struct NodeProcessor<B: Backend> {
     linear1: Linear<B>,
     // Leaky to allow for negatives but to an extent
     activation1: LeakyRelu<B>,

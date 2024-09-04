@@ -2,6 +2,7 @@
 
 pub mod contrastive;
 pub mod data;
+pub mod elu;
 pub mod gat;
 pub mod model;
 pub mod node_process;

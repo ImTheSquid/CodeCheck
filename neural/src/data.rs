@@ -6,6 +6,7 @@ use burn::{
 };
 use core::range::Range;
 use std::{
+    collections::HashMap,
     fs,
     marker::PhantomData,
     path::{Path, PathBuf},
@@ -124,7 +125,7 @@ impl<B: Backend> Batcher<AstDatasetSingle<'_>, AstBatch<B>> for AstBatcher<B> {
     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
         // Read each item in the dataset, loading in all of the files in each batch
         // This is gonna take a ton of memory but oh well
-        let (edge_indices, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
+        let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
             items
                 .into_iter()
                 .map(
@@ -135,13 +136,14 @@ impl<B: Backend> Batcher<AstDatasetSingle<'_>, AstBatch<B>> for AstBatcher<B> {
                          marks,
                      }| {
                         // Traverse the tree in the default order that syntree does, converting nodes to features
-                        let (a_edge, a_feature) = build_edge_indices_and_features::<B>(a, language)
+                        let (a_edge, a_feature) = build_edges_and_features::<B>(a, language, 0)
                             .expect("Valid tree build A");
-                        let (b_edge, b_feature) = build_edge_indices_and_features::<B>(b, language)
-                            .expect("Valid tree build B");
+                        let (b_edge, b_feature) =
+                            build_edges_and_features::<B>(b, language, a_edge.shape().dims[0])
+                                .expect("Valid tree build B");
 
-                        let edges: Tensor<B, 2> = Tensor::stack(vec![a_edge, b_edge], 0);
-                        let features: Tensor<B, 2> = Tensor::stack(vec![a_feature, b_feature], 0);
+                        let edge = Tensor::cat(vec![a_edge, b_edge], 0);
+                        let features = Tensor::cat(vec![a_feature, b_feature], 0);
 
                         // Load spans
                         assert!(
@@ -151,7 +153,7 @@ impl<B: Backend> Batcher<AstDatasetSingle<'_>, AstBatch<B>> for AstBatcher<B> {
 
                         let num_marks = marks.len();
 
-                        let marks = marks.into_iter().map(|m| {
+                        let marks = marks.iter().map(|m| {
                             Tensor::<B, 1>::from_floats(
                                 [
                                     m.a.start as f32,
@@ -173,14 +175,14 @@ impl<B: Backend> Batcher<AstDatasetSingle<'_>, AstBatch<B>> for AstBatcher<B> {
 
                         let spans = Tensor::cat(vec![marks, padding], 1);
 
-                        (edges, features, spans)
+                        (edge, features, spans)
                     },
                 )
                 .collect::<Vec<(_, _, _)>>(),
         );
 
         AstBatch {
-            edge_indices: Tensor::stack(edge_indices, 0),
+            edges: Tensor::stack(edges, 0),
             features: Tensor::stack(features, 0),
             spans: Tensor::stack(spans, 0),
         }
@@ -195,24 +197,25 @@ enum DataError {
     Tree(#[from] ast::TreeParseError),
 }
 
-fn build_edge_indices_and_features<B: Backend>(
+fn build_edges_and_features<B: Backend>(
     path: &Path,
     language: Language,
+    index_offset: usize,
 ) -> Result<(Tensor<B, 2>, Tensor<B, 2>), DataError> {
     let file_data = fs::read_to_string(path)?;
 
     Ok(match language {
         Language::C => {
             let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree)
+            convert_tree_to_tensor(tree, index_offset)
         }
         Language::Cpp => {
             let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree)
+            convert_tree_to_tensor(tree, index_offset)
         }
         Language::Java => {
             let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree)
+            convert_tree_to_tensor(tree, index_offset)
         }
         Language::Python => {
             todo!()
@@ -222,11 +225,15 @@ fn build_edge_indices_and_features<B: Backend>(
 
 fn convert_tree_to_tensor<B: Backend, T>(
     tree: syntree::Tree<T, usize, usize>,
+    index_offset: usize,
 ) -> (Tensor<B, 2>, Tensor<B, 2>)
 where
     T: Copy + Into<Tensor<B, 1>>,
 {
-    let mut edge_indices = Vec::with_capacity(tree.len());
+    let mut edge_indices = Range::from(0..tree.len())
+        .into_iter()
+        .map(|_| vec![])
+        .collect::<Vec<_>>();
     let mut features = Vec::with_capacity(tree.len());
     let mut last_index = 0;
     let mut parent_index_stack = vec![];
@@ -243,10 +250,7 @@ where
         }
 
         if let Some(parent_idx) = parent_index_stack.last() {
-            edge_indices.push(Tensor::from_floats(
-                [*parent_idx as f32, i as f32],
-                &B::Device::default(),
-            ));
+            edge_indices[*parent_idx].push(i);
         }
 
         features.push(node.value().into());
@@ -254,15 +258,26 @@ where
         last_index = i;
     }
 
-    (Tensor::stack(edge_indices, 0), Tensor::stack(features, 0))
+    let mut paired_indices = vec![];
+
+    for (from, list) in edge_indices.iter().enumerate() {
+        for to in list {
+            paired_indices.push(Tensor::from_floats(
+                [(from + index_offset) as f32, (*to + index_offset) as f32],
+                &B::Device::default(),
+            ))
+        }
+    }
+
+    (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))
 }
 
 /// Represents a batch of ASTs for training
-/// Fastest dimensions are the actual data
-/// Second slowest dimension is each pair (doesn't exist for spans)
-/// Slowest dimension is a vector of pairs
 pub struct AstBatch<B: Backend> {
-    edge_indices: Tensor<B, 4>,
-    features: Tensor<B, 4>,
+    /// [batch_size, E * 2, 2]
+    edges: Tensor<B, 3>,
+    /// [batch_size, N * 2, F]
+    features: Tensor<B, 3>,
+    /// [batch_size, MAX_SPANS, 4]
     spans: Tensor<B, 3>,
 }
