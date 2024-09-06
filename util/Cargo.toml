@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.205", features = ["derive"] }
+serde = { version = "1.0.209", features = ["derive"] }
 thiserror = "1.0.63"
 ast = { path = "../ast" }
 serde_json = "1.0.127"

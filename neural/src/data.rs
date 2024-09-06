@@ -258,7 +258,7 @@ where
         last_index = i;
     }
 
-    let mut paired_indices = vec![];
+    let mut paired_indices: Vec<Tensor<B, 1>> = vec![];
 
     for (from, list) in edge_indices.iter().enumerate() {
         for to in list {
@@ -267,6 +267,14 @@ where
                 &B::Device::default(),
             ))
         }
+    }
+
+    // Self-attention
+    for i in Range::from(0..tree.len())
+        .into_iter()
+        .map(|i| (i + index_offset) as f32)
+    {
+        paired_indices.push(Tensor::from_floats([i, i], &B::Device::default()));
     }
 
     (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))

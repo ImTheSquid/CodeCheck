@@ -9,6 +9,6 @@ anyhow = "1.0.86"
 burn = { git = "https://github.com/tracel-ai/burn.git" }
 macros = { path = "../macros" }
 regex = "1.10.6"
-syntree = "0.17.2"
-strum = { version = "0.26.2", features = ["derive"] }
+syntree = "0.17.4"
+strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.63"
