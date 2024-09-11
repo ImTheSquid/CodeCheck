@@ -1,4 +1,30 @@
-fn loss(truth: &[i32; 4], predict: &[i32; 4]) -> f64 {
+fn loss_sum(truths: &mut Vec<Vec<f64>>, predicts: &[[f64; 4]]) -> f64 {
+    let mut sum = 0.0;
+    let len = truths.len();
+
+    for i in 0..len {
+        let mut max: f64 = loss(&truths[0], &predicts[i]);
+        let mut max_truth_idx = 0;
+        println!("Searching through truths: {:?} for better loss than loss: {}", truths, max);
+        for j in 0..truths.len() {
+            let loss = loss(&truths[j], &predicts[i]);
+            println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths[j], predicts[i], loss);
+            if loss > max {
+                println!("Found best match with loss: {}", loss);
+                max = loss;
+                max_truth_idx = j;
+            }
+        }
+        truths.remove(max_truth_idx);
+
+        sum += max;
+    }
+
+    return sum / len as f64;
+
+}
+
+fn loss(truth: &Vec<f64>, predict: &[f64; 4]) -> f64 {
     // Assign values
     let t_l1 = truth[0];
     let t_l2 = truth[1];
@@ -19,25 +45,25 @@ fn loss(truth: &[i32; 4], predict: &[i32; 4]) -> f64 {
     return loss;
 }
 
-fn giou(t1: i32, t2: i32, p1: i32, p2: i32) -> f64 {
+fn giou(t1: f64, t2: f64, p1: f64, p2: f64) -> f64 {
     // println!("t1: {}, t2: {}, p1: {}, p2: {}", t1, t2, p1, p2);
-    let intersection = (t2.min(p2) - t1.max(p1)).max(0);
+    let intersection = (t2.min(p2) - t1.max(p1)).max(0.0);
     // println!("Intersection: {}", intersection);
     let area = p2 - p1 + t2 - t1 - intersection;
     // println!("Area: {}", area);
-    let mut entire = 2.max(p2) - t1.min(p1);
+    let mut entire = p2.max(p2) - t1.min(p1);
     // println!("Entire: {}", entire);
 
     entire = entire / area; // this is where we would apply function f(C)
 
-    let overlap: f64 = ((intersection as f64 / area as f64) - (entire as f64)).into();
+    let overlap = ((intersection / area) - (entire)).into();
     // println!("Overlap: {}", overlap);
     return overlap;
 }
 
 fn main() {
-    let truth = [3, 9, 3, 9];
-    let predict = [3, 20, 3, 9];
-    let loss = loss(&truth, &predict);
+    let truth: &mut Vec<Vec<f64>> = &mut vec![vec![27.0, 33.0, 30.0, 35.0], vec![3.0, 9.0, 4.0, 10.0]];
+    let predict: [[f64; 4]; 3] = [[3.0, 10.5, 4.0, 10.0], [27.5, 33.01, 29.99, 34.45], [12.3, 14.2, 33.5, 33.7]];
+    let loss = loss_sum(truth, &predict);
     println!("Loss: {}", loss);
 }
