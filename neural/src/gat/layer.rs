@@ -87,11 +87,8 @@ impl<B: Backend> GatLayer<B> {
     /// Input:
     /// Edges: [batch_size, E * 2, 2]
     /// Features: [batch_size, N * 2, F]
-    pub fn forward(
-        &self,
-        edges: Tensor<B, 3, Int>,
-        features: Tensor<B, 3>,
-    ) -> (Tensor<B, 2>, Tensor<B, 2>) {
+    pub fn forward(&self, edges: &Tensor<B, 3, Int>, features: Tensor<B, 3>) -> Tensor<B, 3> {
+        let in_skip = features.clone();
         // Linear projection and regularization
         let features_dims = features.dims();
         let features = self.dropout.forward(features);
@@ -134,11 +131,17 @@ impl<B: Backend> GatLayer<B> {
             features_dims[1],
         );
         let attentions_per_edge = self.dropout.forward(attentions_per_edge);
+        let attns = attentions_per_edge.clone();
 
         // Neighborhood aggregation
         let node_features_projected_lifted_weighted = features_proj * attentions_per_edge;
+        let out_node_features = self.aggregate_neighbors(
+            node_features_projected_lifted_weighted,
+            edges.clone(),
+            features_dims[1],
+        );
 
-        todo!()
+        self.skip_concat_bias(attns, in_skip, out_node_features)
     }
 
     fn lift(
@@ -192,18 +195,45 @@ impl<B: Backend> GatLayer<B> {
 
     fn skip_concat_bias(
         &self,
-        attention_coefficients: Tensor<B, 2>,
+        attention_coefficients: Tensor<B, 4>,
         in_node_features: Tensor<B, 3>,
-        out_node_features: Tensor<B, 3>,
+        mut out_node_features: Tensor<B, 4>,
     ) -> Tensor<B, 3> {
-        todo!()
+        if let Some(skip) = &self.skip_projection {
+            if out_node_features.dims()[3] == in_node_features.dims()[2] {
+                out_node_features = out_node_features + in_node_features.unsqueeze_dim(2);
+            } else {
+                out_node_features = out_node_features
+                    + skip.forward(in_node_features).reshape([
+                        -1,
+                        -1,
+                        self.num_heads as i32,
+                        self.out_features as i32,
+                    ])
+            }
+        }
+
+        let mut out_node_features: Tensor<B, 3> = if self.concat {
+            out_node_features.reshape([-1, -1, (self.num_heads * self.out_features) as i32])
+        } else {
+            out_node_features.mean_dim(2).squeeze_dims::<3>(&[])
+        };
+
+        if let Some(bias) = &self.bias {
+            out_node_features = out_node_features + bias.val().expand([-1, -1, -1]);
+        }
+
+        if let Some(activation) = &self.activation {
+            activation.forward(out_node_features)
+        } else {
+            out_node_features
+        }
     }
 
     fn aggregate_neighbors(
         &self,
         node_features_projected: Tensor<B, 4>,
         edge_indices: Tensor<B, 3, Int>,
-        in_node_features: Tensor<B, 3>,
         num_nodes: usize,
     ) -> Tensor<B, 4> {
         let mut size = node_features_projected.dims();

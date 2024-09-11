@@ -74,7 +74,7 @@ fn validate_directory(
             )),
         })
         .collect::<Vec<_>>();
-    file_paths.sort_unstable_by_key(|(a, b)| a.clone());
+    file_paths.sort_unstable_by_key(|(a, _b)| a.clone());
     let (file_paths, detected_languages): (Vec<_>, Vec<_>) = file_paths.into_iter().unzip();
 
     // Check that there is at least two files
