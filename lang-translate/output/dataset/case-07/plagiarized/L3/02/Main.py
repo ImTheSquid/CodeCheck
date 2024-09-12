@@ -1,0 +1,14 @@
+def sumMajorDiagonal(mtx):
+    sum = 0
+    for i in range(len(mtx)):
+        sum += mtx[i][i]
+    return sum
+
+mtx = [
+    [1, 2, 3, 4],
+    [5, 6, 7, 8],
+    [9, 10, 11, 12],
+    [13, 14, 15, 16]
+]
+
+print("Sum of the elements in the major diagonal is " + str(sumMajorDiagonal(mtx)))
