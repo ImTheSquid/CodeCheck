@@ -1,0 +1,7 @@
+[package]
+name = "loss-func"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+burn = { git = "https://github.com/tracel-ai/burn.git", features = ["dataset", "wgpu"] }

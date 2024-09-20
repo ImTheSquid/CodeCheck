@@ -62,6 +62,9 @@ fn giou(t1: f64, t2: f64, p1: f64, p2: f64) -> f64 {
 }
 
 fn main() {
+    // let truth_floats = [[27.0, 33.0, 30.0, 35.0], [3.0, 9.0, 4.0, 10.0]];
+    // let truth = Tensor::<Backend, 2>::from_floats()
+
     let truth: &mut Vec<Vec<f64>> = &mut vec![vec![27.0, 33.0, 30.0, 35.0], vec![3.0, 9.0, 4.0, 10.0]];
     let predict: [[f64; 4]; 3] = [[3.0, 10.5, 4.0, 10.0], [27.5, 33.01, 29.99, 34.45], [12.3, 14.2, 33.5, 33.7]];
     let loss = loss_sum(truth, &predict);
