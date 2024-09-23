@@ -13,12 +13,12 @@ pub mod layer;
 #[derive(Debug, Config)]
 pub struct GatConfig {
     // Vector of size num_layers + 1
-    num_features: Vec<usize>,
+    pub num_features: Vec<usize>,
     // Vector of size num_layers
-    num_heads: Vec<usize>,
-    add_skip_connection: bool,
-    bias: bool,
-    dropout: f64,
+    pub num_heads: Vec<usize>,
+    pub add_skip_connection: bool,
+    pub bias: bool,
+    pub dropout: f64,
 }
 
 impl GatConfig {
