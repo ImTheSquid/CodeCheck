@@ -6,13 +6,14 @@ use burn::{
         Linear, LinearConfig,
     },
     prelude::Backend,
-    tensor::{Int, Tensor},
-    train::RegressionOutput,
+    tensor::{backend::AutodiffBackend, Int, Tensor},
+    train::{RegressionOutput, TrainStep, ValidStep},
 };
 
 use crate::{
-    data::{MAX_NODES, MAX_SPANS},
+    data::{AstBatch, MAX_NODES, MAX_SPANS},
     gat::{Gat, GatConfig},
+    loss::{BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
     node_process::{NodeProcessor, NodeProcessorConfig},
 };
 
@@ -90,8 +91,16 @@ impl<B: Backend> Model<B> {
             objectness,
         }
     }
+}
 
-    pub fn forward_regression_objectness(&self) -> RegressionOutput<B> {
+impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
+    fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
+        todo!()
+    }
+}
+
+impl<B: AutodiffBackend> ValidStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
+    fn step(&self, item: AstBatch<B>) -> ModelOutput<B> {
         todo!()
     }
 }
