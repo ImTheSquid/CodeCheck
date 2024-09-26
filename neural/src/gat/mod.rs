@@ -16,8 +16,11 @@ pub struct GatConfig {
     pub num_features: Vec<usize>,
     // Vector of size num_layers
     pub num_heads: Vec<usize>,
+    #[config(default = true)]
     pub add_skip_connection: bool,
+    #[config(default = false)]
     pub bias: bool,
+    #[config(default = 0.3)]
     pub dropout: f64,
 }
 

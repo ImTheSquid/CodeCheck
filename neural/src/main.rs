@@ -1,20 +1,24 @@
 use std::{
     fs::{create_dir_all, remove_dir_all},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use burn::{
-    backend::Wgpu,
+    backend::{wgpu::WgpuDevice, Wgpu},
     config::Config,
     data::dataloader::DataLoaderBuilder,
     module::Module,
     optim::AdamConfig,
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
-    train::{metric::LossMetric, LearnerBuilder},
+    train::{
+        metric::{CpuMemory, CpuTemperature, CpuUse, LossMetric},
+        LearnerBuilder,
+    },
 };
+use clap::Parser;
 use neural::{
-    data::{AnyDataset, AstBatcher, CollatedAstDataset},
+    data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset},
     model::ModelConfig,
 };
 
@@ -42,8 +46,12 @@ fn create_artifact_directory(path: &Path) {
     create_dir_all(path).expect("directory creation to succeed");
 }
 
-fn train<B: AutodiffBackend>(artifact_dir: &Path, config: TrainingConfig, device: B::Device)
-where
+fn train<B: AutodiffBackend>(
+    artifact_dir: &Path,
+    raw_datasets: Vec<RawAstDataset>,
+    config: TrainingConfig,
+    device: B::Device,
+) where
     <B as AutodiffBackend>::InnerBackend: AutodiffBackend,
 {
     create_artifact_directory(artifact_dir);
@@ -55,6 +63,10 @@ where
     B::seed(config.seed);
 
     let mut dataset = CollatedAstDataset::default();
+
+    for raw in raw_datasets {
+        dataset.include(raw);
+    }
 
     let dataset = dataset.to_arc();
 
@@ -76,6 +88,12 @@ where
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
+        .metric_train_numeric(CpuUse::new())
+        .metric_valid_numeric(CpuUse::new())
+        .metric_train_numeric(CpuMemory::new())
+        .metric_valid_numeric(CpuMemory::new())
+        .metric_train_numeric(CpuTemperature::new())
+        .metric_valid_numeric(CpuTemperature::new())
         .with_file_checkpointer(CompactRecorder::new())
         .devices(vec![device.clone()])
         .num_epochs(config.num_epochs)
@@ -93,4 +111,27 @@ where
         .expect("Trained model should be saved successfully");
 }
 
-fn main() {}
+#[derive(Debug, clap::Parser)]
+struct Args {
+    /// Where to store training artifacts.
+    /// Will be deleted and recreated if already exists!
+    artifact_dir: PathBuf,
+    /// The datasets to include in training.
+    /// Must all have a `dataset.json` file in the root!
+    datasets: Vec<PathBuf>,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let datasets = args
+        .datasets
+        .into_iter()
+        .map(|p| {
+            RawAstDataset::try_from(p.as_path())
+                .unwrap_or_else(|e| panic!("{e:?}: Valid dataset on path {p:?}"))
+        })
+        .collect::<Vec<_>>();
+
+    let device = Backend::default();
+}

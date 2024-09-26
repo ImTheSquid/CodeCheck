@@ -1,5 +1,5 @@
 use burn::{
-    config::Config,
+    config::{self, Config},
     module::Module,
     nn::{
         attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
@@ -20,10 +20,14 @@ use crate::{
 #[derive(Config)]
 pub struct ModelConfig {
     pub hidden_1_size: usize,
+    #[config(default = 0.01)]
     pub leaky_1_slope: f64,
+    #[config(default = 1_000)]
     pub hidden_2_size: usize,
+    #[config(default = 0.01)]
     pub leaky_2_slope: f64,
     pub gat: GatConfig,
+    #[config(default = 8)]
     pub attention_heads: usize,
 }
 
