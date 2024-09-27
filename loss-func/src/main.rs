@@ -23,15 +23,15 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> f64 {
         // let mut max: f64 = loss(&truths.select(0, Tensor::<Backend, 1>::from_floats()), &predicts.select(0, i));
         let idx_0 = Tensor::<Backend, 1, Int>::from_ints([0], &truths.device());
         let idx_i = Tensor::<Backend, 1, Int>::from_ints([i], &truths.device());
-        let mut max: f64 = loss(&truths.select(1, idx_0).flatten::<1>(0, 1), &predicts.select(0, idx_i).flatten::<1>(0, 1));
+        let mut max: f64 = loss(&truths.clone().select(1, idx_0.clone()).flatten::<1>(0, 1), &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1));
 
         let mut max_truth_idx = 0;
         println!("Searching through truths: {:?} for better loss than loss: {}", truths, max);
         for j in 0..truths.dims()[0] {
             if !used.contains(&j) {
                 let idx_j = Tensor::<Backend, 1, Int>::from_ints([j], &truths.device());
-                let loss = loss(&truths.select(0, idx_j).flatten::<1>(0, 1), &predicts.select(0, idx_i).flatten::<1>(0, 1));
-                println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.select(0, idx_j), predicts.select(0, idx_i), loss);
+                let loss = loss(&truths.clone().select(0, idx_j.clone()).flatten::<1>(0, 1), &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1));
+                println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.clone().select(0, idx_j.clone()), predicts.clone().select(0, idx_i.clone()), loss);
                 if loss > max {
                     println!("Found best match with loss: {}", loss);
                     max = loss;
@@ -58,15 +58,15 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> f64 {
 
 fn loss(truth: &Tensor<Backend, 1>, predict: &Tensor<Backend, 1>) -> f64 {
     // Assign values
-    let t_l1 = truth.select(0, Tensor::<Backend, 1, Int>::from_ints([0], &truth.device())).into_scalar();
-    let t_l2 = truth.select(0, Tensor::<Backend, 1, Int>::from_ints([1], &truth.device())).into_scalar();
-    let t_r1= truth.select(0, Tensor::<Backend, 1, Int>::from_ints([2], &truth.device())).into_scalar();
-    let t_r2= truth.select(0, Tensor::<Backend, 1, Int>::from_ints([3], &truth.device())).into_scalar();
+    let t_l1 = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([0], &truth.device())).into_scalar();
+    let t_l2 = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([1], &truth.device())).into_scalar();
+    let t_r1= truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([2], &truth.device())).into_scalar();
+    let t_r2= truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([3], &truth.device())).into_scalar();
 
-    let p_l1 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([0], &truth.device())).into_scalar();
-    let p_l2 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([1], &truth.device())).into_scalar();
-    let p_r1 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([2], &truth.device())).into_scalar();
-    let p_r2 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([3], &truth.device())).into_scalar();
+    let p_l1 = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([0], &truth.device())).into_scalar();
+    let p_l2 = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([1], &truth.device())).into_scalar();
+    let p_r1 = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([2], &truth.device())).into_scalar();
+    let p_r2 = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([3], &truth.device())).into_scalar();
 
 
 
@@ -121,18 +121,21 @@ fn main() {
     let predict = Tensor::<Backend, 2, Float>::from_floats(predict_floats, &device);
 
 
+    let loss = loss_sum(truth, &predict);
+    println!("Loss: {}", loss);
+
     // let floats = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     
     // print the predict tensor
-    let mut used: Vec<i32> = Vec::new();
-    used.push(1);
-    println!("{:?}", used);
-    if used.contains(&1) {
-        println!("Found 1 in used");
-    }
-    let tensor_str = predict.flatten::<1>(0, 1).select(0, Tensor::<Backend, 1, Int>::from_ints([2], &device)).into_scalar();
+    // let mut used: Vec<i32> = Vec::new();
+    // used.push(1);
+    // println!("{:?}", used);
+    // if used.contains(&1) {
+    //     println!("Found 1 in used");
+    // }
+    // let tensor_str = predict.flatten::<1>(0, 1).select(0, Tensor::<Backend, 1, Int>::from_ints([2], &device)).into_scalar();
 
-    println!("{}", tensor_str);
+    // println!("{}", tensor_str);
     // println!("{:?}", predict);
     
     // print the predict tensor flattened to 1d
