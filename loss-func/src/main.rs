@@ -1,7 +1,8 @@
 use burn::tensor::Tensor;
 use burn::backend::Wgpu;
 use burn::prelude::Float;
-// use burn::prelude::Int;
+use std::ops::Rem;
+use burn::prelude::Int;
 
 
 // mod giou_tensor;
@@ -11,52 +12,70 @@ use burn::prelude::Float;
 type Backend = Wgpu;
 
 
-// fn loss_sum(truths: &Tensor<B, 2>, predicts: &Tensor<B, 2>) -> f64 {
-//     let mut sum = 0.0;
-//     let len = truths.len();
+fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> f64 {
+    let mut sum = 0.0;
+    let len = truths.dims()[0];
+    println!("Length of truths matrix (num of truths): {}", len);
 
-//     for i in 0..len {
-//         let mut max: f64 = loss(&truths[0], &predicts[i]);
-//         let mut max_truth_idx = 0;
-//         println!("Searching through truths: {:?} for better loss than loss: {}", truths, max);
-//         for j in 0..truths.len() {
-//             let loss = loss(&truths[j], &predicts[i]);
-//             println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths[j], predicts[i], loss);
-//             if loss > max {
-//                 println!("Found best match with loss: {}", loss);
-//                 max = loss;
-//                 max_truth_idx = j;
-//             }
-//         }
-//         truths.remove(max_truth_idx);
+    for i in 0..len {
+        // let mut max: f64 = loss(&truths.select(0, Tensor::<Backend, 1>::from_floats()), &predicts.select(0, i));
+        let idx_0 = Tensor::<Backend, 1, Int>::from_ints([0, 1], &truths.device());
+        let idx_i = Tensor::<Backend, 1, Int>::from_ints([i, i+1], &truths.device());
+        let mut max: f64 = loss(&truths.select(1, idx_0), &predicts.select(0, idx_i));
 
-//         sum += max;
-//     }
+        let mut max_truth_idx = 0;
+        println!("Searching through truths: {:?} for better loss than loss: {}", truths, max);
+        for j in 0..truths.dims()[0] {
+            let idx_j = Tensor::<Backend, 1, Int>::from_ints([j, j+1], &truths.device());
+            let loss = loss(&truths.select(0, idx_j), &predicts.select(0, idx_i));
+            println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.select(0, idx_j), predicts.select(0, idx_i), loss);
+            if loss > max {
+                println!("Found best match with loss: {}", loss);
+                max = loss;
+                max_truth_idx = j;
+            }
+        }
+        truths.rem(max_truth_idx);
 
-//     return sum / len as f64;
+        sum += max;
+    }
 
-// }
+    return sum / len as f64;
 
-// fn loss(truth: &Vec<f64>, predict: &[f64; 4]) -> f64 {
-//     // Assign values
-//     let t_l1 = truth[0];
-//     let t_l2 = truth[1];
-//     let t_r1= truth[2];
-//     let t_r2= truth[3];
+}
 
-//     let p_l1 = predict[0];
-//     let p_l2 = predict[1];
-//     let p_r1 = predict[2];
-//     let p_r2 = predict[3];
+fn loss(truth: &Tensor<Backend, 2>, predict: &Tensor<Backend, 2>) -> f64 {
+    // Assign values
+    let t_l1 = truth.select(0, Tensor::<Backend, 1, Int>::from_ints([0 ,0+1], &truth.device()));
+    let t_l2 = truth.select(0, Tensor::<Backend, 1, Int>::from_ints([1 ,1+1], &truth.device()));
+    let t_r1= truth.select(0, Tensor::<Backend, 1, Int>::from_ints([ 2, 21], &truth.device()));
+    let t_r2= truth.select(0, Tensor::<Backend, 1, Int>::from_ints([ 3, 31], &truth.device()));
 
-//     // Calculate each loss
-//     let l_giou = giou(t_l1, t_l2, p_l1, p_l2); 
-//     let r_giou = giou(t_r1, t_r2, p_r1, p_r2);
+    let p_l1 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([0 ,0+1], &truth.device()));
+    let p_l2 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([1 ,1+1], &truth.device()));
+    let p_r1 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([2 ,2+1], &truth.device()));
+    let p_r2 = predict.select(0, Tensor::<Backend, 1, Int>::from_ints([3 ,3+1], &truth.device()));
 
-//     let loss = l_giou + r_giou; // this is where we would apply function g
+    
 
-//     return loss;
-// }
+    // let t_l1 = truth[0];
+    // let t_l2 = truth[1];
+    // let t_r1= truth[2];
+    // let t_r2= truth[3];
+
+    // let p_l1 = predict[0];
+    // let p_l2 = predict[1];
+    // let p_r1 = predict[2];
+    // let p_r2 = predict[3];
+
+    // Calculate each loss
+    let l_giou = giou(t_l1, t_l2, p_l1, p_l2); 
+    let r_giou = giou(t_r1, t_r2, p_r1, p_r2);
+
+    let loss = l_giou + r_giou; // this is where we would apply function g
+
+    return loss;
+}
 
 #[allow(dead_code)]
 fn giou(t1: f64, t2: f64, p1: f64, p2: f64) -> f64 {
@@ -97,16 +116,20 @@ fn main() {
 
 
 
-    let floats = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    // let floats = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
 
 
 
     // correct: Tensor is 1-Dimensional with 5 elements
-    let tensor_1 = Tensor::<Backend, 1, Float>::from_floats(floats, &device);
+    // let tensor_1 = Tensor::<Backend, 1, Float>::from_floats(floats, &device);
 
-    let num_predictions: usize = predict.dims().iter().product();
-    println!("Num Predictions: {}", num_predictions);
+    let num_predictions: usize = predict.dims()[0];
 
+    // let first_row = predict.slice(0);
+    // println!("{:?}", first_row);
+    // println!("length of preds (should be 3): {}", num_predictions);
+
+    // let loss = loss_sum(truth, &predict);
     
 
     // println!("{:?}", tensor_1.dims().iter().product());
