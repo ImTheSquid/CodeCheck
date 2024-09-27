@@ -238,6 +238,7 @@ pub struct AstBatcher<B: Backend> {
 
 pub const MAX_SPANS: usize = 50;
 pub const MAX_NODES: usize = 100_000;
+pub const MAX_FEATURES: usize = 200;
 pub const MAX_EDGES: usize = MAX_NODES - 1;
 
 impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {

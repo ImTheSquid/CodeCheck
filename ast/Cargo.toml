@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 antlr-rust = "0.3.0-beta"
 anyhow = "1.0.86"
-burn = { git = "https://github.com/tracel-ai/burn.git" }
+burn = { git = "https://github.com/tracel-ai/burn.git", features = ["wgpu"] }
 macros = { path = "../macros" }
 regex = "1.10.6"
 syntree = "0.17.4"

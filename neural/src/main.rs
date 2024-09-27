@@ -19,6 +19,7 @@ use burn::{
 use clap::Parser;
 use neural::{
     data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset},
+    gat::GatConfig,
     model::ModelConfig,
 };
 
@@ -133,5 +134,12 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
+    let gat_config = GatConfig::new(vec![100, 90, 80, 70], vec![8, 8, 1]);
+
     let device = Backend::default();
+
+    let config = ModelConfig::new(gat_config);
+    let config = TrainingConfig::new(config, AdamConfig::new());
+
+    train(&args.artifact_dir, datasets, config, device);
 }

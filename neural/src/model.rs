@@ -19,10 +19,11 @@ use crate::{
 
 #[derive(Config)]
 pub struct ModelConfig {
+    #[config(default = "crate::data::MAX_FEATURES")]
     pub hidden_1_size: usize,
     #[config(default = 0.01)]
     pub leaky_1_slope: f64,
-    #[config(default = 1_000)]
+    #[config(default = 100)]
     pub hidden_2_size: usize,
     #[config(default = 0.01)]
     pub leaky_2_slope: f64,
