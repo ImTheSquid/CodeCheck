@@ -4,7 +4,7 @@ use std::{
 };
 
 use burn::{
-    backend::{wgpu::WgpuDevice, Wgpu},
+    backend::{wgpu::WgpuDevice, Autodiff, Wgpu},
     config::Config,
     data::dataloader::DataLoaderBuilder,
     module::Module,
@@ -52,9 +52,7 @@ fn train<B: AutodiffBackend>(
     raw_datasets: Vec<RawAstDataset>,
     config: TrainingConfig,
     device: B::Device,
-) where
-    <B as AutodiffBackend>::InnerBackend: AutodiffBackend,
-{
+) {
     create_artifact_directory(artifact_dir);
 
     config
@@ -136,10 +134,10 @@ fn main() {
 
     let gat_config = GatConfig::new(vec![100, 90, 80, 70], vec![8, 8, 1]);
 
-    let device = Backend::default();
+    let device = WgpuDevice::default();
 
     let config = ModelConfig::new(gat_config);
     let config = TrainingConfig::new(config, AdamConfig::new());
 
-    train(&args.artifact_dir, datasets, config, device);
+    train::<Autodiff<Backend>>(&args.artifact_dir, datasets, config, device);
 }

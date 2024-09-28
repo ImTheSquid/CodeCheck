@@ -104,7 +104,7 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     }
 }
 
-impl<B: AutodiffBackend> ValidStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
+impl<B: Backend> ValidStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> ModelOutput<B> {
         todo!()
     }
