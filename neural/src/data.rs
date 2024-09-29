@@ -10,9 +10,12 @@ use std::{
     fs,
     marker::PhantomData,
     path::{Path, PathBuf},
+    rc::Rc,
+    sync::{Arc, Weak},
 };
 use util::{
-    find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError, Mark, PairedIndices,
+    find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError, Mark, Pair,
+    PairedIndices,
 };
 use walkdir::WalkDir;
 
@@ -23,6 +26,16 @@ pub struct RawAstDataset {
     language: Language,
     files: Vec<PathBuf>,
     dataset: MarkDataset,
+    self_ref: Weak<Self>,
+}
+
+impl RawAstDataset {
+    fn to_arc(mut self) -> Arc<Self> {
+        Arc::new_cyclic(|d| {
+            self.self_ref = d.clone();
+            self
+        })
+    }
 }
 
 impl TryFrom<&Path> for RawAstDataset {
@@ -50,41 +63,147 @@ impl TryFrom<&Path> for RawAstDataset {
             language: langs[0],
             files: entries,
             dataset,
+            self_ref: Default::default(),
         })
     }
 }
 
-impl RawAstDataset {
+#[derive(Debug, Clone)]
+pub struct LanguageBoundPath {
+    language: Language,
+    path: PathBuf,
+}
+
+// impl LanguageBoundPath {
+//     fn as_ref(&self) -> LanguageBoundPathRef<'_> {
+//         LanguageBoundPathRef {
+//             language: self.language,
+//             path: self.path.as_path(),
+//         }
+//     }
+// }
+
+// #[derive(Debug, Clone)]
+// pub struct LanguageBoundPathRef<'a> {
+//     language: Language,
+//     path: &'a Path,
+// }
+
+pub trait AnyDataset: Send + Sync {
+    fn num_comps(&self) -> usize;
+
+    fn train(&self) -> AstDataset<Self>;
+
+    fn test(&self) -> AstDataset<Self>;
+
+    fn file(&self, index: usize) -> LanguageBoundPath;
+
+    fn pair(&self, index: usize) -> Option<&Pair>;
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CollatedAstDataset {
+    files: Vec<LanguageBoundPath>,
+    dataset: HashMap<usize, Pair>,
+    self_ref: Weak<Self>,
+}
+
+impl CollatedAstDataset {
+    pub fn to_arc(mut self) -> Arc<Self> {
+        Arc::new_cyclic(|d| {
+            self.self_ref = d.clone();
+            self
+        })
+    }
+
+    pub fn include(&mut self, dataset: RawAstDataset) {
+        self.dataset.extend(
+            dataset
+                .dataset
+                .pairs
+                .into_iter()
+                .map(|(k, v)| (k + self.files.len(), v)),
+        );
+
+        self.files
+            .extend(dataset.files.into_iter().map(|p| LanguageBoundPath {
+                language: dataset.language,
+                path: p,
+            }));
+    }
+}
+
+impl AnyDataset for CollatedAstDataset {
     fn num_comps(&self) -> usize {
         self.files.len() * (self.files.len() - 1) / 2
     }
 
-    pub fn train(&self) -> AstDataset<'_> {
+    fn train(&self) -> AstDataset<Self> {
         AstDataset {
-            base: self,
+            base: self.self_ref.upgrade().expect("upgrade to allocted"),
             range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
         }
     }
 
-    pub fn test(&self) -> AstDataset<'_> {
+    fn test(&self) -> AstDataset<Self> {
         AstDataset {
-            base: self,
+            base: self.self_ref.upgrade().expect("upgrade to allocted"),
             range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
         }
     }
+
+    fn file(&self, index: usize) -> LanguageBoundPath {
+        self.files[index].clone()
+    }
+
+    fn pair(&self, index: usize) -> Option<&Pair> {
+        self.dataset.get(&index)
+    }
 }
 
-pub struct AstDataset<'a> {
-    base: &'a RawAstDataset,
+impl AnyDataset for RawAstDataset {
+    fn num_comps(&self) -> usize {
+        self.files.len() * (self.files.len() - 1) / 2
+    }
+
+    fn train(&self) -> AstDataset<Self> {
+        AstDataset {
+            base: self.self_ref.upgrade().expect("upgrade to allocated"),
+            range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
+        }
+    }
+
+    fn test(&self) -> AstDataset<Self> {
+        AstDataset {
+            base: self.self_ref.upgrade().expect("upgrade to allocated"),
+            range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
+        }
+    }
+
+    fn file(&self, index: usize) -> LanguageBoundPath {
+        LanguageBoundPath {
+            path: self.files[index].clone(),
+            language: self.language,
+        }
+    }
+
+    fn pair(&self, index: usize) -> Option<&Pair> {
+        self.dataset.pairs.get(&index)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AstDataset<Base: AnyDataset + ?Sized> {
+    base: Arc<Base>,
     range: Range<usize>,
 }
 
-impl<'a> Dataset<AstDatasetSingle<'a>> for AstDataset<'a> {
+impl<Base: AnyDataset + ?Sized> Dataset<AstDatasetSingle> for AstDataset<Base> {
     fn len(&self) -> usize {
         self.range.end - self.range.start
     }
 
-    fn get(&self, index: usize) -> Option<AstDatasetSingle<'a>> {
+    fn get(&self, index: usize) -> Option<AstDatasetSingle> {
         if !self.range.contains(&index) {
             return None;
         }
@@ -93,91 +212,89 @@ impl<'a> Dataset<AstDatasetSingle<'a>> for AstDataset<'a> {
             find_paired_indices_from_pair_index(index, self.base.num_comps());
 
         Some(AstDatasetSingle {
-            a: self.base.files[i].as_path(),
-            b: self.base.files[j].as_path(),
-            language: self.base.language,
+            a: self.base.file(i),
+            b: self.base.file(j),
             marks: self
                 .base
-                .dataset
-                .pairs
-                .get(&index)
-                .expect("dataset to exist")
-                .marks
-                .as_slice(),
+                .pair(index)
+                .cloned()
+                .map(|p| p.marks)
+                .unwrap_or_default(),
         })
     }
 }
 
-pub struct AstDatasetSingle<'a> {
-    a: &'a Path,
-    b: &'a Path,
-    language: Language,
-    marks: &'a [Mark],
+#[derive(Debug, Clone)]
+pub struct AstDatasetSingle {
+    a: LanguageBoundPath,
+    b: LanguageBoundPath,
+    marks: Vec<Mark>,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
 pub struct AstBatcher<B: Backend> {
     _device: PhantomData<B>,
 }
 
-const MAX_SPANS: usize = 50;
+pub const MAX_SPANS: usize = 50;
+pub const MAX_NODES: usize = 100_000;
+pub const MAX_FEATURES: usize = 200;
+pub const MAX_EDGES: usize = MAX_NODES - 1;
 
-impl<B: Backend> Batcher<AstDatasetSingle<'_>, AstBatch<B>> for AstBatcher<B> {
+impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
         // Read each item in the dataset, loading in all of the files in each batch
         // This is gonna take a ton of memory but oh well
         let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
             items
                 .into_iter()
-                .map(
-                    |AstDatasetSingle {
-                         a,
-                         b,
-                         language,
-                         marks,
-                     }| {
-                        // Traverse the tree in the default order that syntree does, converting nodes to features
-                        let (a_edge, a_feature) = build_edges_and_features::<B>(a, language, 0)
+                .map(|AstDatasetSingle { a, b, marks }| {
+                    // Traverse the tree in the default order that syntree does, converting nodes to features
+                    let (a_edge, a_feature) =
+                        build_edges_and_features::<B>(a.path.as_path(), a.language, 0)
                             .expect("Valid tree build A");
-                        let (b_edge, b_feature) =
-                            build_edges_and_features::<B>(b, language, a_edge.shape().dims[0])
-                                .expect("Valid tree build B");
+                    let (b_edge, b_feature) = build_edges_and_features::<B>(
+                        b.path.as_path(),
+                        b.language,
+                        a_edge.shape().dims[0],
+                    )
+                    .expect("Valid tree build B");
 
-                        let edge = Tensor::cat(vec![a_edge, b_edge], 0);
-                        let features = Tensor::cat(vec![a_feature, b_feature], 0);
+                    let edge = Tensor::cat(vec![a_edge, b_edge], 0);
+                    let features = Tensor::cat(vec![a_feature, b_feature], 0);
 
-                        // Load spans
-                        assert!(
-                            marks.len() <= MAX_SPANS,
-                            "Too many marks for files {a:?} {b:?}"
-                        );
+                    // Load spans
+                    assert!(
+                        marks.len() <= MAX_SPANS,
+                        "Too many marks for files {a:?} {b:?}"
+                    );
 
-                        let num_marks = marks.len();
+                    let num_marks = marks.len();
 
-                        let marks = marks.iter().map(|m| {
-                            Tensor::<B, 1>::from_floats(
-                                [
-                                    m.a.start as f32,
-                                    m.a.end as f32,
-                                    m.b.start as f32,
-                                    m.b.end as f32,
-                                ],
-                                &B::Device::default(),
-                            )
-                        });
-
-                        let marks = Tensor::stack(marks.collect(), 0);
-
-                        let padding = Tensor::<B, 2>::full(
-                            [MAX_SPANS - num_marks, 4],
-                            -1.0,
+                    let marks = marks.iter().map(|m| {
+                        Tensor::<B, 1>::from_floats(
+                            [
+                                m.a.start as f32,
+                                m.a.end as f32,
+                                m.b.start as f32,
+                                m.b.end as f32,
+                            ],
                             &B::Device::default(),
-                        );
+                        )
+                    });
 
-                        let spans = Tensor::cat(vec![marks, padding], 1);
+                    let marks = Tensor::stack(marks.collect(), 0);
 
-                        (edge, features, spans)
-                    },
-                )
+                    let padding = Tensor::<B, 2>::full(
+                        [MAX_SPANS - num_marks, 4],
+                        -1.0,
+                        &B::Device::default(),
+                    );
+
+                    let spans = Tensor::cat(vec![marks, padding], 1);
+
+                    (edge, features, spans)
+                })
                 .collect::<Vec<(_, _, _)>>(),
         );
 
@@ -281,6 +398,7 @@ where
 }
 
 /// Represents a batch of ASTs for training
+#[derive(Debug, Clone)]
 pub struct AstBatch<B: Backend> {
     /// [batch_size, E * 2, 2]
     edges: Tensor<B, 3>,

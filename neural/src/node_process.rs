@@ -19,7 +19,7 @@ pub struct NodeProcessor<B: Backend> {
 }
 
 impl<B: Backend> NodeProcessor<B> {
-    pub fn forward(&self, x: Tensor<B, 1>) -> Tensor<B, 1> {
+    pub fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
         let x = self.linear1.forward(x);
         let x = self.linear2.forward(self.activation1.forward(x));
         let x = self.linear3.forward(self.activation2.forward(x));
@@ -29,11 +29,11 @@ impl<B: Backend> NodeProcessor<B> {
 
 #[derive(Debug, Config)]
 pub struct NodeProcessorConfig {
-    hidden_1_size: usize,
-    leaky_1_slope: f64,
-    hidden_2_size: usize,
-    leaky_2_slope: f64,
-    output_size: usize,
+    pub hidden_1_size: usize,
+    pub leaky_1_slope: f64,
+    pub hidden_2_size: usize,
+    pub leaky_2_slope: f64,
+    pub output_size: usize,
 }
 
 const MAX_ONE_HOT_TREE_ENCODING_LEN: usize = 5_000;
