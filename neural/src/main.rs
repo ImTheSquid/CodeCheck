@@ -49,6 +49,7 @@ fn create_artifact_directory(path: &Path) {
 
 fn train<B: AutodiffBackend>(
     artifact_dir: &Path,
+    config_dir: &Path,
     raw_datasets: Vec<RawAstDataset>,
     config: TrainingConfig,
     device: B::Device,
@@ -56,7 +57,7 @@ fn train<B: AutodiffBackend>(
     create_artifact_directory(artifact_dir);
 
     config
-        .save(artifact_dir.join("config.json"))
+        .save(config_dir.join("config.json"))
         .expect("config to save successfully");
 
     B::seed(config.seed);
@@ -115,6 +116,9 @@ struct Args {
     /// Where to store training artifacts.
     /// Will be deleted and recreated if already exists!
     artifact_dir: PathBuf,
+    /// Where to store the training configuration.
+    /// config_dir/config.json will be overwritten!
+    config_dir: PathBuf,
     /// The datasets to include in training.
     /// Must all have a `dataset.json` file in the root!
     datasets: Vec<PathBuf>,
@@ -139,5 +143,11 @@ fn main() {
     let config = ModelConfig::new(gat_config);
     let config = TrainingConfig::new(config, AdamConfig::new());
 
-    train::<Autodiff<Backend>>(&args.artifact_dir, datasets, config, device);
+    train::<Autodiff<Backend>>(
+        &args.artifact_dir,
+        &args.config_dir,
+        datasets,
+        config,
+        device,
+    );
 }
