@@ -11,48 +11,56 @@ use burn::prelude::Int;
 type Backend = Wgpu;
 
 
-fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> f64 {
-    let mut sum = 0.0;
-    let len = truths.dims()[0];
-    println!("Length of truths matrix (num of truths): {}", len);
+fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tensor<Backend, 1> {
+    // let mut sum = 0.0;
+    let len = predicts.dims()[0];
+
+    // the results loss tensor will be of equal length to the number of predictions
+    // for predictions made after all truths are exausted, a loss of n will be applied with n>>0
+    let max_loss = 100.0;
+
+    let mut loss_floats = [0.0; 3];
+    // let loss = Tensor::<Backend, 1, Float>::from_floats([0.0], &truths.device());
+
+    println!("Length of predict matrix (num of truths): {}", len);
 
     let mut used = <Vec<usize>>::new();
     // let mut used = <Vec<i32>>::new();
 
     for i in 0..len {
+        if used.len() + 1 == truths.dims()[0] {
+            println!("All truths have been used");
+            loss_floats[i] = max_loss;
+            break;
+        }
+
         // let mut max: f64 = loss(&truths.select(0, Tensor::<Backend, 1>::from_floats()), &predicts.select(0, i));
         let idx_0 = Tensor::<Backend, 1, Int>::from_ints([0], &truths.device());
         let idx_i = Tensor::<Backend, 1, Int>::from_ints([i], &truths.device());
         let mut max: f64 = loss(&truths.clone().select(1, idx_0.clone()).flatten::<1>(0, 1), &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1));
 
         let mut max_truth_idx = 0;
-        println!("Searching through truths: {:?} for better loss than loss: {}", truths, max);
+        println!("Searching through truths for better loss than loss: {}", max);
         for j in 0..truths.dims()[0] {
             if !used.contains(&j) {
                 let idx_j = Tensor::<Backend, 1, Int>::from_ints([j], &truths.device());
                 let loss = loss(&truths.clone().select(0, idx_j.clone()).flatten::<1>(0, 1), &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1));
-                println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.clone().select(0, idx_j.clone()), predicts.clone().select(0, idx_i.clone()), loss);
+                // println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.clone().select(0, idx_j.clone()), predicts.clone().select(0, idx_i.clone()), loss);
                 if loss > max {
                     println!("Found best match with loss: {}", loss);
                     max = loss;
                     max_truth_idx = j;
                 }
             }
-
+            loss_floats[i] = max;
         }
         
         used.push(max_truth_idx);
 
-        // truths = truths.dims().iter()
-        //     .enumerate()
-        //     .filter(|&(i, _)| i != max_truth_idx)
-        //     .map(|(_, row)| row.clone())
-        //     .collect();
-
-        sum += max;
+        // sum += max;
     }
-
-    return sum / len as f64;
+    return Tensor::<Backend, 1, Float>::from_floats(loss_floats, &truths.device());
+    // return sum / len as f64;
 
 }
 
@@ -106,6 +114,18 @@ fn giou(t1: f32, t2: f32, p1: f32, p2: f32) -> f32 {
     return overlap;
 }
 
+// impl<B: Backend> iou_loss<B> {
+//     pub forward<const D: usize>(
+//         &self,
+//         truth: &Tensor<B, D, Float>,
+//         predict: &Tensor<B, D, Float>,
+//     ) -> Tensor<B, D-1> {
+//         let dim = truth.dims();
+
+//     }
+// }
+
+
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn main() {
@@ -116,13 +136,47 @@ fn main() {
     let device = Default::default();
 
     let truth_floats = [[27.0, 33.0, 30.0, 35.0], [3.0, 9.0, 4.0, 10.0]];
+    let truth_floats = [[3.0, 10.5, 4.0, 10.0], [27.5, 33.01, 29.99, 34.45], [12.3, 14.2, 33.5, 33.7]];
+
     let predict_floats = [[3.0, 10.5, 4.0, 10.0], [27.5, 33.01, 29.99, 34.45], [12.3, 14.2, 33.5, 33.7]];
     let truth = &mut Tensor::<Backend, 2, Float>::from_floats(truth_floats, &device);
     let predict = Tensor::<Backend, 2, Float>::from_floats(predict_floats, &device);
 
 
     let loss = loss_sum(truth, &predict);
-    println!("Loss: {}", loss);
+    println!("Loss: {}", loss); 
+
+    let dim_ten_floats = 
+    [
+        [
+            [[1.3, 2.3, 1.2, 2.2], [1.0, 5.0, 10.2, 11.2]], 
+            [[34.0, 39.0, 11.3, 11.7], [99.1, 100.1, 3.3, 5.5]]
+        ], 
+        [
+            [[27.0, 33.0, 30.0, 35.0], [3.0, 9.0, 4.0, 10.0]], 
+            [[27.0, 33.0, 30.0, 35.0], [3.0, 10.5, 4.0, 10.0]]
+        ], 
+        [
+            [[34.0, 39.0, 11.3, 11.7], [12.3, 14.2, 33.5, 33.7]], 
+            [[12.3, 14.2, 33.5, 33.7], [34.0, 39.0, 11.3, 11.7]]
+        ]
+    ]; 
+
+    let dim_ten = Tensor::<Backend, 4, Float>::from_floats(dim_ten_floats, &device);
+
+    // let shape = dim_ten.dims();
+    // // iterate over sub-tensors
+    // for i in 0..shape[0] {
+    //     for j in 0..shape[1] {
+    //         let sub_tensor = dim_ten.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &device))
+    //             .select(0, Tensor::<Backend, 1, Int>::from_ints([j], &device));
+    //         println!("Sub-tensor: {:?}", sub_tensor);
+    //     }
+    // }
+    
+    // println!("Shape: {:?}", shape);
+
+    // 3 by 2 by 2 by 4 vector = dim 4
 
     // let floats = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     
