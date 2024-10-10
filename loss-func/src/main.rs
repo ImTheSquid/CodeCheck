@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+
+
 use burn::tensor::Tensor;
 use burn::backend::Wgpu;
 use burn::prelude::Float;
@@ -9,6 +12,8 @@ use burn::prelude::Int;
 
 // Type alias for the backend to use.
 type Backend = Wgpu;
+
+
 
 
 fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tensor<Backend, 1> {
@@ -125,6 +130,81 @@ fn giou(t1: f32, t2: f32, p1: f32, p2: f32) -> f32 {
 //     }
 // }
 
+// #![feature(generic_const_exprs)]
+
+
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+fn get_index<const D: usize>(array: &Tensor<Backend, {D}, Float>, mut index: i32) -> Tensor<Backend, {D}, Int> {
+    let mut total = array.dims().iter().product::<usize>() as i32;
+
+    if index < 0 || index >= total {
+        panic!("Index out of bounds");
+    }
+
+    let mut idx = vec![];
+
+    for i in 0..D {
+        total = (total as f64 / array.dims()[i] as f64).floor() as i32;
+        idx.push((index as f64/ total as f64).floor() as i32);
+        index = index % total;
+    }
+
+    println!("Index: {:?}", idx);   
+
+    return Tensor::<Backend, {D}, Int>::from_ints(idx.as_slice(), &array.device());
+}
+
+fn forward<const D: usize>(predict: &Tensor<Backend, D, Float>, truth: &Tensor<Backend, D, Float>) -> Tensor<Backend, {D - 1}, Float> {
+    
+    // let shape = predict.dims();
+    let shape: [usize; D] = predict.dims();
+    println!("Shape: {:?}", shape);
+
+    for i in 0..shape.iter().product::<usize>() as i32{
+        let idx = get_index(predict, i as i32);
+        println!("Index: {:?}", idx);
+    }
+
+    let loss_arr = vec![0.0; shape[shape.len() - 1]];
+    
+    println!("Loss array: {:?}", loss_arr);
+
+    let loss_vec = Tensor::<Backend, {D - 1}, Float>::from_floats(loss_arr.as_slice(), &truth.device());
+    return loss_vec;
+
+    // create a loss_vec that is a copy of the predict tensor, but with all values set to 0
+    // let mut loss_vec = predict.clone();
+
+    // let mut loss_vec = Tensor::<Backend, {3}, Float>::from_floats([0.0; shape[shape.len() - 1]], &truth.device());
+
+    // shape = [3, 2, 2, 4]
+    // we want to iterate through each of the first three dimentions, call them i
+    // so we basically have [i_1, i_2, i_3, 4] where i_1 = 3, i_2 = 2, i_3 = 2
+    // this has to be recursuve
+    
+    // // base case
+    // if shape.len() == 1 {
+    //     return loss_vec;
+    // } 
+    // else {
+    //     for i in 0..shape[0] {
+    //         println!("i: {}", i);
+    //         let new_truth : Tensor::<Backend, {D - 1}> = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze(0);
+    //         let new_predict : Tensor::<Backend, {D - 1}> = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze(0);
+
+    //         // print the values in the tensor
+            
+    //         println!("New truth: {}", new_truth);
+    //         println!("New predict: {}", new_predict);
+
+    //         let new_loss = forward(&new_predict, &new_truth);
+    //     }
+    //     return loss_vec.squeeze(0);
+    // }
+}
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -143,8 +223,8 @@ fn main() {
     let predict = Tensor::<Backend, 2, Float>::from_floats(predict_floats, &device);
 
 
-    let loss = loss_sum(truth, &predict);
-    println!("Loss: {}", loss); 
+    // let loss = loss_sum(truth, &predict);
+    // println!("Loss: {}", loss); 
 
     let dim_ten_floats = 
     [
@@ -163,9 +243,18 @@ fn main() {
     ]; 
 
     let dim_ten = Tensor::<Backend, 4, Float>::from_floats(dim_ten_floats, &device);
+    let dim_ten2 = &mut Tensor::<Backend, 4, Float>::from_floats(dim_ten_floats, &device);
 
-    // let shape = dim_ten.dims();
-    // // iterate over sub-tensors
+
+    print_type_of(&dim_ten.dims());
+
+    // println!("{:?}", [0.0; [2, 3]]);
+
+    // let loss = forward(&predict, truth);
+    let loss = forward(&dim_ten, dim_ten2);
+    println!("Loss: {:?}", loss);
+
+    // iterate over sub-tensors
     // for i in 0..shape[0] {
     //     for j in 0..shape[1] {
     //         let sub_tensor = dim_ten.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &device))
