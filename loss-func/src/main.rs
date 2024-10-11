@@ -26,7 +26,8 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tenso
     // for predictions made after all truths are exausted, a loss of n will be applied with n>>0
     let max_loss = 100.0;
 
-    let mut loss_floats = [0.0];
+    // let mut loss_floats = [0.0; 2];
+    let mut loss_floats = Vec::new();
     // let loss = Tensor::<Backend, 1, Float>::from_floats([0.0], &truths.device());
 
     println!("Length of predict matrix (num of truths): {}", len);
@@ -37,7 +38,7 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tenso
     for i in 0..len {
         if used.len() + 1 == truths.dims()[0] {
             println!("All truths have been used");
-            loss_floats[i] = max_loss;
+            loss_floats.push(max_loss);
             break;
         }
 
@@ -59,7 +60,7 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tenso
                     max_truth_idx = j;
                 }
             }
-            loss_floats[i] = max;
+            loss_floats.push(max);
         }
         
         used.push(max_truth_idx);
@@ -67,7 +68,7 @@ fn loss_sum(truths: &Tensor<Backend, 2>, predicts: &Tensor<Backend, 2>) -> Tenso
         // sum += max;
     }
     println!("loss_floats: {:?}", loss_floats);
-    return Tensor::<Backend, 1, Float>::from_floats(loss_floats, &truths.device());
+    return Tensor::<Backend, 1, Float>::from_floats(loss_floats.as_slice(), &truths.device());
     // return sum / len as f64;
 
 }
@@ -150,68 +151,88 @@ fn get_index<const D: usize>(array: &Tensor<Backend, {D}, Float>, mut index: i32
 }
 
 
-
 fn forward<const D: usize>(predict: &Tensor<Backend, D, Float>, truth: &Tensor<Backend, D, Float>) -> Tensor<Backend, {D - 1}, Float> {
-    
-    // let shape = predict.dims();
+    let mut loss_arr: Vec<f32> = Vec::new();
+
     let shape: [usize; D] = predict.dims();
-    let idx_iter = &shape[..shape.len() - 1];
     println!("Shape: {:?}", shape);
 
-    let mut loss_arr = vec![0.0];
-    // let shaped_arr = Tensor::<Backend, 1, Int>::from_ints(Array::from_elem(&shape[..shape.len() - 1], 0.0), &truth.device());
-    // let loss_arr = Array::<f32, 2>::default(&shape[..shape.len() - 1]);
+    if shape.len() > 3 {
+        panic!("Only 3D tensors are supported");
+    }
+    
 
-    for i in 0..idx_iter.iter().product::<usize>() as i32{
-        let idx = get_index(predict, i*4 as i32);
-        println!("Index: {:?}", idx);
+    for i in 0..shape[0] {
+        println!("dim0 idx: {}", i);
 
-        let new_truth = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([2, 1], &truth.device()));
+        let mut new_truth = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze::<2>(0);
+        let mut new_predict = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze::<2>(0);
+
         println!("New truth: {}", new_truth);
-        // let loss = loss_sum(&truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints(idx.clone().as_slice(), &truth.device()).flatten::<1>(0, 1)), &predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints(idx.clone().as_slice(), &truth.device()).flatten::<1>(0, 1)));
-        // println!("Loss: {}", loss);
+        println!("New predict: {}", new_predict);
 
-        // loss_arr.insert(idx, 99.9);
-        // loss_arr.push(loss(&truth.clone().select(0, idx.clone()).flatten::<1>(0, 1), &predict.clone().select(0, idx.clone()).flatten::<1>(0, 1)));
-        // println!("Index: {:?}", idx);
+        let loss = loss_sum(&new_truth, &new_predict);
+        println!("Loss: {}", loss);
+
+        loss_arr.push(loss);
+
     }
 
-    
-    println!("Loss array: {:?}", loss_arr);
 
+    
     let loss_vec = Tensor::<Backend, {D - 1}, Float>::from_floats(loss_arr.as_slice(), &truth.device());
     return loss_vec;
-    
-    // create a loss_vec that is a copy of the predict tensor, but with all values set to 0
-    // let mut loss_vec = predict.clone();
-
-    // let mut loss_vec = Tensor::<Backend, {3}, Float>::from_floats([0.0; shape[shape.len() - 1]], &truth.device());
-
-    // shape = [3, 2, 2, 4]
-    // we want to iterate through each of the first three dimentions, call them i
-    // so we basically have [i_1, i_2, i_3, 4] where i_1 = 3, i_2 = 2, i_3 = 2
-    // this has to be recursuve
-    
-    // // base case
-    // if shape.len() == 1 {
-    //     return loss_vec;
-    // } 
-    // else {
-    //     for i in 0..shape[0] {
-    //         println!("i: {}", i);
-    //         let new_truth : Tensor::<Backend, {D - 1}> = truth.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze(0);
-    //         let new_predict : Tensor::<Backend, {D - 1}> = predict.clone().select(0, Tensor::<Backend, 1, Int>::from_ints([i], &truth.device())).squeeze(0);
-
-    //         // print the values in the tensor
-            
-    //         println!("New truth: {}", new_truth);
-    //         println!("New predict: {}", new_predict);
-
-    //         let new_loss = forward(&new_predict, &new_truth);
-    //     }
-    //     return loss_vec.squeeze(0);
-    // }
 }
+
+
+// fn forward<const D: usize>(predict: &Tensor<Backend, D, Float>, truth: &Tensor<Backend, D, Float>) -> Tensor<Backend, {D - 1}, Float> {
+    
+//     if shape.len() > 3 {
+//         panic!("Only 3D tensors are supported");
+//     }
+
+
+
+//     // let shape = predict.dims();
+//     let shape: [usize; D] = predict.dims();
+//     let idx_iter = &shape[..shape.len() - 1];
+//     println!("Shape: {:?}", shape);
+
+//     let mut loss_arr = vec![0.0];
+//     // let shaped_arr = Tensor::<Backend, 1, Int>::from_ints(Array::from_elem(&shape[..shape.len() - 1], 0.0), &truth.device());
+//     // let loss_arr = Array::<f32, 2>::default(&shape[..shape.len() - 1]);
+
+//     for i in 0..idx_iter.iter().product::<usize>() as i32{
+//         let mut idx = get_index(predict, i*4 as i32);
+//         idx = (&idx[..idx.len() - 1]).to_vec();
+//         println!("Index: {:?}", idx);
+
+//         let mut gather_idx = Vec::new();
+//         for j in 0..shape[D - 2] {
+//             gather_idx.push([0, 1, 2, 3]);
+//         }
+
+//         println!("Gather index: {:?}", gather_idx);
+
+//         // we want to be selecting [[1.3, 2.3, 1.2, 2.2], [1.0, 5.0, 10.2, 11.2]], an Nx4 matrix where N is 2
+
+//         // let new_truth = truth.clone().select(D-2, Tensor::<Backend, 1, Int>::from_ints([0, 1], &truth.device()));
+//         let new_truth = truth.clone();
+
+//         // let loss = loss_sum(&new_truth, &new_predict);
+//         // println!("Loss: {}", loss);
+        
+//         println!("New truth: {}", new_truth);
+//     }
+
+    
+//     println!("Loss array: {:?}", loss_arr);
+
+//     let loss_vec = Tensor::<Backend, {D - 1}, Float>::from_floats(loss_arr.as_slice(), &truth.device());
+//     return loss_vec;
+    
+
+// }
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -233,7 +254,7 @@ fn main() {
     // let loss = loss_sum(truth, &predict);
     // println!("Loss: {}", loss); 
 
-    let dim_ten_floats = 
+    let dim_ten_floats_2 = 
     [
         [
             [[1.3, 2.3, 1.2, 2.2], [1.0, 5.0, 10.2, 11.2]], 
@@ -249,8 +270,21 @@ fn main() {
         ]
     ]; 
 
-    let dim_ten = Tensor::<Backend, 4, Float>::from_floats(dim_ten_floats, &device);
-    let dim_ten2 = &mut Tensor::<Backend, 4, Float>::from_floats(dim_ten_floats, &device);
+
+    let dim_ten_floats = 
+    [
+        [[1.3, 2.3, 1.2, 2.2], [1.0, 5.0, 10.2, 11.2]], 
+        [[34.0, 39.0, 11.3, 11.7], [99.1, 100.1, 3.3, 5.5]]
+    ]; 
+
+    let dim_ten_floats_tru = 
+    [
+        [[34.0, 39.0, 11.3, 11.7], [12.3, 14.2, 33.5, 33.7]], 
+        [[12.3, 14.2, 33.5, 33.7], [34.0, 39.0, 11.3, 11.7]]
+    ]; 
+
+    let dim_ten = Tensor::<Backend, 3, Float>::from_floats(dim_ten_floats, &device);
+    let dim_ten2 = &mut Tensor::<Backend, 3, Float>::from_floats(dim_ten_floats_tru, &device);
 
 
     print_type_of(&dim_ten.dims());
