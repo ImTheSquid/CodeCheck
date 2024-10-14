@@ -7,7 +7,7 @@ use burn::{
 
 // added this impl - basically all the same functions as main.rs, but changed all calls to be self.function_name
 // I dont really have a way to test it
-// TODO - clean print statements, remove unnecessary code, document code better
+// TODO - clean print statements, remove unnecessary code, document code bett
 impl<B: Backend> GIOULoss<B> {
     pub fn forward<const D: usize>(predict: &Tensor<Backend, D, Float>, truth: &Tensor<Backend, D, Float>) -> Tensor<Backend, {D - 1}, Float> {
         let mut loss_arr: Vec<Tensor<Backend, 1>> = Vec::new();
