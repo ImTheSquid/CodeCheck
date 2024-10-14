@@ -5,6 +5,9 @@ use burn::{
 };
 
 #[derive(Debug, Clone)]
+pub struc
+
+#[derive(Debug, Clone)]
 pub struct ObjectnessOutput<B: Backend> {
     pub output: Tensor<B, 2>,
     pub targets: Tensor<B, 2, Int>,
