@@ -2,7 +2,7 @@ use ast::{guess_language_from_path, Language, SyntaxTree};
 use burn::{
     data::{dataloader::batcher::Batcher, dataset::Dataset},
     prelude::Backend,
-    tensor::Tensor,
+    tensor::{Int, Tensor},
 };
 use core::range::Range;
 use std::{
@@ -318,7 +318,7 @@ fn build_edges_and_features<B: Backend>(
     path: &Path,
     language: Language,
     index_offset: usize,
-) -> Result<(Tensor<B, 2>, Tensor<B, 2>), DataError> {
+) -> Result<(Tensor<B, 2, Int>, Tensor<B, 2>), DataError> {
     let file_data = fs::read_to_string(path)?;
 
     Ok(match language {
@@ -343,7 +343,7 @@ fn build_edges_and_features<B: Backend>(
 fn convert_tree_to_tensor<B: Backend, T>(
     tree: syntree::Tree<T, usize, usize>,
     index_offset: usize,
-) -> (Tensor<B, 2>, Tensor<B, 2>)
+) -> (Tensor<B, 2, burn::tensor::Int>, Tensor<B, 2>)
 where
     T: Copy + Into<Tensor<B, 1>>,
 {
@@ -375,12 +375,12 @@ where
         last_index = i;
     }
 
-    let mut paired_indices: Vec<Tensor<B, 1>> = vec![];
+    let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];
 
     for (from, list) in edge_indices.iter().enumerate() {
         for to in list {
-            paired_indices.push(Tensor::from_floats(
-                [(from + index_offset) as f32, (*to + index_offset) as f32],
+            paired_indices.push(Tensor::from_ints(
+                [(from + index_offset), (*to + index_offset)],
                 &B::Device::default(),
             ))
         }
@@ -389,9 +389,9 @@ where
     // Self-attention
     for i in Range::from(0..tree.len())
         .into_iter()
-        .map(|i| (i + index_offset) as f32)
+        .map(|i| (i + index_offset))
     {
-        paired_indices.push(Tensor::from_floats([i, i], &B::Device::default()));
+        paired_indices.push(Tensor::from_ints([i, i], &B::Device::default()));
     }
 
     (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))
@@ -401,9 +401,9 @@ where
 #[derive(Debug, Clone)]
 pub struct AstBatch<B: Backend> {
     /// [batch_size, E * 2, 2]
-    edges: Tensor<B, 3>,
+    pub edges: Tensor<B, 3, burn::tensor::Int>,
     /// [batch_size, N * 2, F]
-    features: Tensor<B, 3>,
+    pub features: Tensor<B, 3>,
     /// [batch_size, MAX_SPANS, 4]
-    spans: Tensor<B, 3>,
+    pub spans: Tensor<B, 3>,
 }

@@ -1,4 +1,5 @@
 #![feature(new_range_api)]
+#![feature(generic_const_exprs)]
 
 pub mod contrastive;
 pub mod data;

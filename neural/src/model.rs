@@ -3,17 +3,18 @@ use burn::{
     module::Module,
     nn::{
         attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
+        loss::{BinaryCrossEntropyLoss, BinaryCrossEntropyLossConfig},
         Linear, LinearConfig,
     },
     prelude::Backend,
     tensor::{backend::AutodiffBackend, Int, Tensor},
-    train::{RegressionOutput, TrainStep, ValidStep},
+    train::{RegressionOutput, TrainOutput, TrainStep, ValidStep},
 };
 
 use crate::{
     data::{AstBatch, MAX_NODES, MAX_SPANS},
     gat::{Gat, GatConfig},
-    loss::{BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
+    loss::{self, BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
     node_process::{NodeProcessor, NodeProcessorConfig},
 };
 
@@ -48,6 +49,7 @@ impl ModelConfig {
             attention: MultiHeadAttentionConfig::new(gat_output, self.attention_heads).init(device),
             regression: LinearConfig::new(gat_output, MAX_SPANS * 4).init(device),
             objectness: LinearConfig::new(gat_output, MAX_SPANS).init(device),
+            bce_loss: BinaryCrossEntropyLossConfig::new().init(device),
         }
     }
 }
@@ -59,6 +61,7 @@ pub struct Model<B: Backend> {
     attention: MultiHeadAttention<B>,
     regression: Linear<B>,
     objectness: Linear<B>,
+    bce_loss: BinaryCrossEntropyLoss<B>,
 }
 
 pub struct ModelResult<B: Backend> {
@@ -100,12 +103,40 @@ impl<B: Backend> Model<B> {
 
 impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
-        todo!()
+        let out = self.forward(item.features, item.edges);
+        let regression_loss: Tensor<B, 1> = loss::GIOULoss::default()
+            .forward(&out.regression, &item.spans)
+            .mean();
+        let objectness_spans = item
+            .spans
+            .clone()
+            .sum_dim(2)
+            .squeeze_dims::<2>(&[])
+            .bool()
+            .int();
+        let objectness_loss = self
+            .bce_loss
+            .forward(out.objectness.clone(), objectness_spans.clone());
+        TrainOutput::new(
+            self,
+            (regression_loss.clone() * 5.0 + objectness_loss.clone()).backward(),
+            loss::ModelOutput {
+                loss: regression_loss * 5.0 + objectness_loss,
+                regression: BatchedRegressionOutput {
+                    output: out.regression,
+                    targets: item.spans,
+                },
+                objectness: ObjectnessOutput {
+                    output: out.objectness,
+                    targets: objectness_spans,
+                },
+            },
+        )
     }
 }
 
-impl<B: Backend> ValidStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
-    fn step(&self, item: AstBatch<B>) -> ModelOutput<B> {
-        todo!()
+impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
+    fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
+        self.forward(item.features, item.edges)
     }
 }

@@ -32,8 +32,6 @@ use burn::{
     prelude::*,
 };
 
-
-
 type Backend = Wgpu;
 
 #[derive(Config)]
@@ -98,7 +96,7 @@ fn train<B: AutodiffBackend>(
 
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(LossMetric::new())
-        .metric_valid_numeric(LossMetric::new())
+        // .metric_valid_numeric(LossMetric::new())
         .metric_train_numeric(CpuUse::new())
         .metric_valid_numeric(CpuUse::new())
         .metric_train_numeric(CpuMemory::new())
