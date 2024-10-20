@@ -62,21 +62,35 @@ impl GatLayerConfig {
                 None
             },
             bias: if self.bias {
-                Some(Initializer::XavierUniform { gain: 1.0 }.init(
+                Some(Initializer::XavierUniform { gain: 1.0 }.init_with(
                     [if self.concat {
                         self.num_heads * self.out_features
                     } else {
                         self.num_heads
                     }],
+                    Some(self.in_features),
+                    Some(if self.concat {
+                        self.num_heads * self.out_features
+                    } else {
+                        self.num_heads
+                    }),
                     device,
                 ))
             } else {
                 None
             },
-            scoring_fn_target: Initializer::XavierUniform { gain: 1.0 }
-                .init([1, self.num_heads, self.out_features], device),
-            scoring_fn_source: Initializer::XavierUniform { gain: 1.0 }
-                .init([1, self.num_heads, self.out_features], device),
+            scoring_fn_target: Initializer::XavierUniform { gain: 1.0 }.init_with(
+                [1, self.num_heads, self.out_features],
+                Some(self.num_heads),
+                Some(self.out_features),
+                device,
+            ),
+            scoring_fn_source: Initializer::XavierUniform { gain: 1.0 }.init_with(
+                [1, self.num_heads, self.out_features],
+                Some(self.num_heads),
+                Some(self.out_features),
+                device,
+            ),
             num_heads: self.num_heads,
             out_features: self.out_features,
         }

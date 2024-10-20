@@ -23,15 +23,6 @@ use neural::{
     model::ModelConfig,
 };
 
-use burn::{
-    nn::{
-        conv::{Conv2d, Conv2dConfig},
-        pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
-        Dropout, DropoutConfig, Linear, LinearConfig, Relu,
-    },
-    prelude::*,
-};
-
 type Backend = Wgpu;
 
 #[derive(Config)]
@@ -150,7 +141,7 @@ fn main() {
     let device = WgpuDevice::default();
 
     let config = ModelConfig::new(gat_config);
-    let config = TrainingConfig::new(config, AdamConfig::new());
+    let config = TrainingConfig::new(config, AdamConfig::new()).with_num_workers(num_cpus::get());
 
     train::<Autodiff<Backend>>(
         &args.artifact_dir,

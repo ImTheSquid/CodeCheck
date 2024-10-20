@@ -99,6 +99,8 @@ pub trait AnyDataset: Send + Sync {
     fn file(&self, index: usize) -> LanguageBoundPath;
 
     fn pair(&self, index: usize) -> Option<&Pair>;
+
+    fn num_files(&self) -> usize;
 }
 
 #[derive(Debug, Default, Clone)]
@@ -159,6 +161,10 @@ impl AnyDataset for CollatedAstDataset {
     fn pair(&self, index: usize) -> Option<&Pair> {
         self.dataset.get(&index)
     }
+
+    fn num_files(&self) -> usize {
+        self.files.len()
+    }
 }
 
 impl AnyDataset for RawAstDataset {
@@ -190,6 +196,10 @@ impl AnyDataset for RawAstDataset {
     fn pair(&self, index: usize) -> Option<&Pair> {
         self.dataset.pairs.get(&index)
     }
+
+    fn num_files(&self) -> usize {
+        self.files.len()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -209,7 +219,7 @@ impl<Base: AnyDataset + ?Sized> Dataset<AstDatasetSingle> for AstDataset<Base> {
         }
 
         let PairedIndices { i, j } =
-            find_paired_indices_from_pair_index(index, self.base.num_comps());
+            find_paired_indices_from_pair_index(index, self.base.num_files());
 
         Some(AstDatasetSingle {
             a: self.base.file(i),
@@ -260,6 +270,14 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                     )
                     .expect("Valid tree build B");
 
+                    println!(
+                        "Loaded features and edges:\nA:{:?} F {:?} E\nB:{:?} F {:?} E",
+                        a_feature.dims(),
+                        a_edge.dims(),
+                        b_feature.dims(),
+                        b_edge.dims()
+                    );
+
                     let edge = Tensor::cat(vec![a_edge, b_edge], 0);
                     let features = Tensor::cat(vec![a_feature, b_feature], 0);
 
@@ -271,32 +289,81 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
 
                     let num_marks = marks.len();
 
-                    let marks = marks.iter().map(|m| {
-                        Tensor::<B, 1>::from_floats(
-                            [
-                                m.a.start as f32,
-                                m.a.end as f32,
-                                m.b.start as f32,
-                                m.b.end as f32,
-                            ],
+                    let spans = if num_marks > 0 {
+                        let marks = marks.iter().map(|m| {
+                            Tensor::<B, 1>::from_floats(
+                                [
+                                    m.a.start as f32,
+                                    m.a.end as f32,
+                                    m.b.start as f32,
+                                    m.b.end as f32,
+                                ],
+                                &B::Device::default(),
+                            )
+                        });
+
+                        let marks = Tensor::stack(marks.collect(), 0);
+
+                        let padding = Tensor::<B, 2>::full(
+                            [MAX_SPANS - num_marks, 4],
+                            -1.0,
                             &B::Device::default(),
-                        )
-                    });
+                        );
 
-                    let marks = Tensor::stack(marks.collect(), 0);
-
-                    let padding = Tensor::<B, 2>::full(
-                        [MAX_SPANS - num_marks, 4],
-                        -1.0,
-                        &B::Device::default(),
-                    );
-
-                    let spans = Tensor::cat(vec![marks, padding], 1);
+                        Tensor::cat(vec![marks, padding], 0)
+                    } else {
+                        Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &B::Device::default())
+                    };
 
                     (edge, features, spans)
                 })
                 .collect::<Vec<(_, _, _)>>(),
         );
+
+        // Find the maximum values for features and edges, padding each tensor to the correct size
+        let max_nodes = features
+            .iter()
+            .map(|t| t.dims()[0])
+            .max()
+            .expect("some max feature value");
+        let max_edges = edges
+            .iter()
+            .map(|t| t.dims()[0])
+            .max()
+            .expect("some max edges value");
+
+        let edges = edges
+            .into_iter()
+            .map(|edge| {
+                if edge.dims()[0] < max_edges {
+                    let difference = max_edges - edge.dims()[0];
+                    let padding =
+                        Tensor::<B, 2, Int>::full([difference, 2], -1, &B::Device::default());
+
+                    Tensor::cat(vec![edge, padding], 0)
+                } else {
+                    edge
+                }
+            })
+            .collect();
+
+        let features = features
+            .into_iter()
+            .map(|feature| {
+                if feature.dims()[0] < max_nodes {
+                    let difference = max_nodes - feature.dims()[0];
+                    let padding = Tensor::<B, 2>::full(
+                        [difference, MAX_FEATURES],
+                        -1.0,
+                        &B::Device::default(),
+                    );
+
+                    Tensor::cat(vec![feature, padding], 0)
+                } else {
+                    feature
+                }
+            })
+            .collect();
 
         AstBatch {
             edges: Tensor::stack(edges, 0),
@@ -324,15 +391,15 @@ fn build_edges_and_features<B: Backend>(
     Ok(match language {
         Language::C => {
             let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset)
+            convert_tree_to_tensor(tree, index_offset, 0.0)
         }
         Language::Cpp => {
             let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset)
+            convert_tree_to_tensor(tree, index_offset, 1.0)
         }
         Language::Java => {
             let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset)
+            convert_tree_to_tensor(tree, index_offset, 2.0)
         }
         Language::Python => {
             todo!()
@@ -343,6 +410,7 @@ fn build_edges_and_features<B: Backend>(
 fn convert_tree_to_tensor<B: Backend, T>(
     tree: syntree::Tree<T, usize, usize>,
     index_offset: usize,
+    language_index: f64,
 ) -> (Tensor<B, 2, burn::tensor::Int>, Tensor<B, 2>)
 where
     T: Copy + Into<Tensor<B, 1>>,
@@ -354,11 +422,16 @@ where
     let mut features = Vec::with_capacity(tree.len());
     let mut last_index = 0;
     let mut parent_index_stack = vec![];
+    let mut i = 0;
 
-    for (i, (event, node)) in tree.walk_events().enumerate() {
+    for (event, node) in tree.walk_events() {
         match event {
             syntree::node::Event::Up => {
-                parent_index_stack.pop();
+                last_index = parent_index_stack
+                    .pop()
+                    .expect("pop always comes after push");
+                // An Up event will revisit a previously visited node! Skip the rest of this iteration
+                continue;
             }
             syntree::node::Event::Down => {
                 parent_index_stack.push(last_index);
@@ -370,9 +443,21 @@ where
             edge_indices[*parent_idx].push(i);
         }
 
-        features.push(node.value().into());
+        let node_feature = {
+            let node = node.value().into();
+            let language_identifier =
+                Tensor::<B, 1>::from_floats([language_index], &B::Device::default());
+            let padding = Tensor::<B, 1>::full(
+                [MAX_FEATURES - node.dims()[0] - 1],
+                -1.0,
+                &B::Device::default(),
+            );
+            Tensor::cat(vec![language_identifier, node, padding], 0)
+        };
+        features.push(node_feature);
 
         last_index = i;
+        i += 1;
     }
 
     let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];

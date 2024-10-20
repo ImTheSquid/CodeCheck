@@ -6,14 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.90"
 lazy_static = "1.5.0"
-regex = "1.10.6"
+regex = "1.11.0"
 syntree = "0.14.5"
-thiserror = "1.0.63"
+thiserror = "1.0.64"
 nalgebra = "0.32.6"
 rayon = "1.10.0"
-uuid = { version = "1.10.0", features = ["fast-rng", "v4"] }
+uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
 fxhash = "0.2.1"
 ast = { path = "../ast" }
 

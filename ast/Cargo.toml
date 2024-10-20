@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 antlr-rust = "0.3.0-beta"
-anyhow = "1.0.86"
+anyhow = "1.0.90"
 burn = { git = "https://github.com/tracel-ai/burn.git", features = ["wgpu"] }
 macros = { path = "../macros" }
-regex = "1.10.6"
-syntree = "0.17.4"
+regex = "1.11.0"
+syntree = "0.17.5"
 strum = { version = "0.26.3", features = ["derive"] }
-thiserror = "1.0.63"
+thiserror = "1.0.64"
