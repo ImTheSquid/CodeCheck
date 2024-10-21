@@ -4,7 +4,7 @@ use std::{
 };
 
 use burn::{
-    backend::{wgpu::WgpuDevice, Autodiff, Wgpu},
+    backend::{wgpu::WgpuDevice, Autodiff},
     config::Config,
     data::dataloader::DataLoaderBuilder,
     module::Module,
@@ -23,7 +23,7 @@ use neural::{
     model::ModelConfig,
 };
 
-type Backend = Wgpu;
+type Backend = ::burn::backend::Wgpu;
 
 #[derive(Config)]
 pub struct TrainingConfig {
@@ -138,6 +138,10 @@ fn main() {
 
     let gat_config = GatConfig::new(vec![100, 90, 80, 70], vec![8, 8, 1]);
 
+    #[cfg(target_os = "linux")]
+    let device = WgpuDevice::DiscreteGpu(0);
+
+    #[cfg(not(target_os = "linux"))]
     let device = WgpuDevice::default();
 
     let config = ModelConfig::new(gat_config);

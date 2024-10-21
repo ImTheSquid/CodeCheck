@@ -6,6 +6,8 @@ use burn::{
     tensor::Tensor,
 };
 
+use crate::data::MAX_FEATURES;
+
 // A simple preprocessor to get some very basic embeddings out of tree info
 #[derive(Debug, Module)]
 pub struct NodeProcessor<B: Backend> {
@@ -36,13 +38,11 @@ pub struct NodeProcessorConfig {
     pub output_size: usize,
 }
 
-const MAX_ONE_HOT_TREE_ENCODING_LEN: usize = 5_000;
-
 impl NodeProcessorConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> NodeProcessor<B> {
         NodeProcessor {
             // Add one for language identifier
-            linear1: LinearConfig::new(MAX_ONE_HOT_TREE_ENCODING_LEN + 1, self.hidden_1_size)
+            linear1: LinearConfig::new(MAX_FEATURES, self.hidden_1_size)
                 .init(device),
             activation1: LeakyReluConfig::new()
                 .with_negative_slope(self.leaky_1_slope)
