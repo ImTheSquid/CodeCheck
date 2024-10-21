@@ -270,14 +270,6 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                     )
                     .expect("Valid tree build B");
 
-                    println!(
-                        "Loaded features and edges:\nA:{:?} F {:?} E\nB:{:?} F {:?} E",
-                        a_feature.dims(),
-                        a_edge.dims(),
-                        b_feature.dims(),
-                        b_edge.dims()
-                    );
-
                     let edge = Tensor::cat(vec![a_edge, b_edge], 0);
                     let features = Tensor::cat(vec![a_feature, b_feature], 0);
 
