@@ -42,7 +42,7 @@ impl ModelConfig {
                 self.leaky_1_slope,
                 self.hidden_2_size,
                 self.leaky_2_slope,
-                self.gat.num_features[0] / 2,
+                self.gat.num_features[0],
             )
             .init(device),
             gat: self.gat.init(device),

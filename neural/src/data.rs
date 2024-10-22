@@ -320,7 +320,7 @@ impl<B: Backend> AstBatcher<B> {
                 let language_identifier =
                     Tensor::<B, 1>::from_floats([language_index], &self.device);
                 let padding =
-                    Tensor::<B, 1>::full([MAX_FEATURES - node.dims()[0] - 1], -1.0, &self.device);
+                    Tensor::<B, 1>::full([MAX_FEATURES - node.dims()[0] - 1], 0.0, &self.device);
                 Tensor::cat(vec![language_identifier, node, padding], 0)
             };
             features.push(node_feature);
@@ -448,7 +448,7 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                 if feature.dims()[0] < max_nodes {
                     let difference = max_nodes - feature.dims()[0];
                     let padding =
-                        Tensor::<B, 2>::full([difference, MAX_FEATURES], -1.0, &self.device);
+                        Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, &self.device);
 
                     Tensor::cat(vec![feature, padding], 0)
                 } else {

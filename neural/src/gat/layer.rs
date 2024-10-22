@@ -102,6 +102,14 @@ impl<B: Backend> GatLayer<B> {
     /// Edges: [batch_size, E * 2, 2]
     /// Features: [batch_size, N * 2, F]
     pub fn forward(&self, edges: &Tensor<B, 3, Int>, features: Tensor<B, 3>) -> Tensor<B, 3> {
+        println!(
+            "LAYER FORWARD: E {:?} F {:?} LP {:?} OF {} NH {}",
+            edges.dims(),
+            features.dims(),
+            self.linear_projection.weight.dims(),
+            self.out_features,
+            self.num_heads,
+        );
         let in_skip = features.clone();
         // Linear projection and regularization
         let features_dims = features.dims();
@@ -170,7 +178,7 @@ impl<B: Backend> GatLayer<B> {
             .slice([None, None, Some((0, 1))])
             .squeeze_dims(&[]);
         let target_node_indices: Tensor<B, 2, Int> = edge_indices
-            .slice([None, None, Some((1, -1))])
+            .slice([None, None, Some((1, 2))])
             .squeeze_dims(&[]);
 
         let source_node_dims = source_node_indices.dims();

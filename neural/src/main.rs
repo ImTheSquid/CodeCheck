@@ -18,7 +18,7 @@ use burn::{
 };
 use clap::Parser;
 use neural::{
-    data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset},
+    data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset, MAX_FEATURES},
     gat::GatConfig,
     model::ModelConfig,
 };
@@ -136,7 +136,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let gat_config = GatConfig::new(vec![100, 90, 80, 70], vec![8, 8, 1]);
+    let gat_config = GatConfig::new(vec![50, 40, 40, 30], vec![8, 8, 1]);
 
     #[cfg(target_os = "linux")]
     let device = WgpuDevice::DiscreteGpu(0);
