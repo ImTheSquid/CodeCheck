@@ -70,8 +70,8 @@ fn train<B: AutodiffBackend>(
 
     let dataset = dataset.to_arc();
 
-    let batcher_train = AstBatcher::<B>::default();
-    let batcher_valid = AstBatcher::<B::InnerBackend>::default();
+    let batcher_train = AstBatcher::<B>::new(device.clone());
+    let batcher_valid = AstBatcher::<B::InnerBackend>::new(device.clone());
 
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
         .batch_size(config.batch_size)

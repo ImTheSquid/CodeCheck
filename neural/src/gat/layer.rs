@@ -252,7 +252,8 @@ impl<B: Backend> GatLayer<B> {
     ) -> Tensor<B, 4> {
         let mut size = node_features_projected.dims();
         size[1] = num_nodes;
-        let out_node_features: Tensor<B, 4> = Tensor::zeros(size, &B::Device::default());
+        let out_node_features: Tensor<B, 4> =
+            Tensor::zeros(size, &node_features_projected.device());
         let target_index_broadcasted = edge_indices
             .slice([None, None, Some((0, 1))])
             .squeeze_dims::<2>(&[])
@@ -292,7 +293,7 @@ impl<B: Backend> GatLayer<B> {
 
         let mut size = exp_scores_per_edge.dims();
         size[1] = num_nodes;
-        let neighborhood_sums = Tensor::zeros(size, &B::Device::default());
+        let neighborhood_sums = Tensor::zeros(size, &exp_scores_per_edge.device());
         let neighborhood_sums =
             neighborhood_sums.scatter(1, target_index_broadcasted, exp_scores_per_edge);
 

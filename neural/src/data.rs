@@ -241,9 +241,115 @@ pub struct AstDatasetSingle {
     marks: Vec<Mark>,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct AstBatcher<B: Backend> {
-    _device: PhantomData<B>,
+    device: B::Device,
+}
+
+impl<B: Backend> AstBatcher<B> {
+    pub fn new(device: B::Device) -> Self {
+        AstBatcher { device }
+    }
+
+    fn build_edges_and_features(
+        &self,
+        path: &Path,
+        language: Language,
+        index_offset: usize,
+    ) -> Result<(Tensor<B, 2, Int>, Tensor<B, 2>), DataError> {
+        let file_data = fs::read_to_string(path)?;
+
+        Ok(match language {
+            Language::C => {
+                let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
+                self.convert_tree_to_tensor(tree, index_offset, 0.0)
+            }
+            Language::Cpp => {
+                let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
+                self.convert_tree_to_tensor(tree, index_offset, 1.0)
+            }
+            Language::Java => {
+                let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
+                self.convert_tree_to_tensor(tree, index_offset, 2.0)
+            }
+            Language::Python => {
+                todo!()
+            }
+        })
+    }
+
+    fn convert_tree_to_tensor<T>(
+        &self,
+        tree: syntree::Tree<T, usize, usize>,
+        index_offset: usize,
+        language_index: f64,
+    ) -> (Tensor<B, 2, burn::tensor::Int>, Tensor<B, 2>)
+    where
+        T: Copy + Into<Tensor<B, 1>>,
+    {
+        let mut edge_indices = Range::from(0..tree.len())
+            .into_iter()
+            .map(|_| vec![])
+            .collect::<Vec<_>>();
+        let mut features = Vec::with_capacity(tree.len());
+        let mut last_index = 0;
+        let mut parent_index_stack = vec![];
+        let mut i = 0;
+
+        for (event, node) in tree.walk_events() {
+            match event {
+                syntree::node::Event::Up => {
+                    last_index = parent_index_stack
+                        .pop()
+                        .expect("pop always comes after push");
+                    // An Up event will revisit a previously visited node! Skip the rest of this iteration
+                    continue;
+                }
+                syntree::node::Event::Down => {
+                    parent_index_stack.push(last_index);
+                }
+                syntree::node::Event::Next => {}
+            }
+
+            if let Some(parent_idx) = parent_index_stack.last() {
+                edge_indices[*parent_idx].push(i);
+            }
+
+            let node_feature = {
+                let node = node.value().into();
+                let language_identifier =
+                    Tensor::<B, 1>::from_floats([language_index], &self.device);
+                let padding =
+                    Tensor::<B, 1>::full([MAX_FEATURES - node.dims()[0] - 1], -1.0, &self.device);
+                Tensor::cat(vec![language_identifier, node, padding], 0)
+            };
+            features.push(node_feature);
+
+            last_index = i;
+            i += 1;
+        }
+
+        let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];
+
+        for (from, list) in edge_indices.iter().enumerate() {
+            for to in list {
+                paired_indices.push(Tensor::from_ints(
+                    [(from + index_offset), (*to + index_offset)],
+                    &self.device,
+                ))
+            }
+        }
+
+        // Self-attention
+        for i in Range::from(0..tree.len())
+            .into_iter()
+            .map(|i| (i + index_offset))
+        {
+            paired_indices.push(Tensor::from_ints([i, i], &self.device));
+        }
+
+        (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))
+    }
 }
 
 pub const MAX_SPANS: usize = 50;
@@ -260,15 +366,16 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                 .into_iter()
                 .map(|AstDatasetSingle { a, b, marks }| {
                     // Traverse the tree in the default order that syntree does, converting nodes to features
-                    let (a_edge, a_feature) =
-                        build_edges_and_features::<B>(a.path.as_path(), a.language, 0)
-                            .expect("Valid tree build A");
-                    let (b_edge, b_feature) = build_edges_and_features::<B>(
-                        b.path.as_path(),
-                        b.language,
-                        a_edge.shape().dims[0],
-                    )
-                    .expect("Valid tree build B");
+                    let (a_edge, a_feature) = self
+                        .build_edges_and_features(a.path.as_path(), a.language, 0)
+                        .expect("Valid tree build A");
+                    let (b_edge, b_feature) = self
+                        .build_edges_and_features(
+                            b.path.as_path(),
+                            b.language,
+                            a_edge.shape().dims[0],
+                        )
+                        .expect("Valid tree build B");
 
                     let edge = Tensor::cat(vec![a_edge, b_edge], 0);
                     let features = Tensor::cat(vec![a_feature, b_feature], 0);
@@ -290,21 +397,18 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                                     m.b.start as f32,
                                     m.b.end as f32,
                                 ],
-                                &B::Device::default(),
+                                &self.device,
                             )
                         });
 
                         let marks = Tensor::stack(marks.collect(), 0);
 
-                        let padding = Tensor::<B, 2>::full(
-                            [MAX_SPANS - num_marks, 4],
-                            -1.0,
-                            &B::Device::default(),
-                        );
+                        let padding =
+                            Tensor::<B, 2>::full([MAX_SPANS - num_marks, 4], -1.0, &self.device);
 
                         Tensor::cat(vec![marks, padding], 0)
                     } else {
-                        Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &B::Device::default())
+                        Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &self.device)
                     };
 
                     (edge, features, spans)
@@ -329,8 +433,7 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             .map(|edge| {
                 if edge.dims()[0] < max_edges {
                     let difference = max_edges - edge.dims()[0];
-                    let padding =
-                        Tensor::<B, 2, Int>::full([difference, 2], -1, &B::Device::default());
+                    let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
 
                     Tensor::cat(vec![edge, padding], 0)
                 } else {
@@ -344,11 +447,8 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             .map(|feature| {
                 if feature.dims()[0] < max_nodes {
                     let difference = max_nodes - feature.dims()[0];
-                    let padding = Tensor::<B, 2>::full(
-                        [difference, MAX_FEATURES],
-                        -1.0,
-                        &B::Device::default(),
-                    );
+                    let padding =
+                        Tensor::<B, 2>::full([difference, MAX_FEATURES], -1.0, &self.device);
 
                     Tensor::cat(vec![feature, padding], 0)
                 } else {
@@ -371,107 +471,6 @@ enum DataError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Tree(#[from] ast::TreeParseError),
-}
-
-fn build_edges_and_features<B: Backend>(
-    path: &Path,
-    language: Language,
-    index_offset: usize,
-) -> Result<(Tensor<B, 2, Int>, Tensor<B, 2>), DataError> {
-    let file_data = fs::read_to_string(path)?;
-
-    Ok(match language {
-        Language::C => {
-            let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset, 0.0)
-        }
-        Language::Cpp => {
-            let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset, 1.0)
-        }
-        Language::Java => {
-            let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, index_offset, 2.0)
-        }
-        Language::Python => {
-            todo!()
-        }
-    })
-}
-
-fn convert_tree_to_tensor<B: Backend, T>(
-    tree: syntree::Tree<T, usize, usize>,
-    index_offset: usize,
-    language_index: f64,
-) -> (Tensor<B, 2, burn::tensor::Int>, Tensor<B, 2>)
-where
-    T: Copy + Into<Tensor<B, 1>>,
-{
-    let mut edge_indices = Range::from(0..tree.len())
-        .into_iter()
-        .map(|_| vec![])
-        .collect::<Vec<_>>();
-    let mut features = Vec::with_capacity(tree.len());
-    let mut last_index = 0;
-    let mut parent_index_stack = vec![];
-    let mut i = 0;
-
-    for (event, node) in tree.walk_events() {
-        match event {
-            syntree::node::Event::Up => {
-                last_index = parent_index_stack
-                    .pop()
-                    .expect("pop always comes after push");
-                // An Up event will revisit a previously visited node! Skip the rest of this iteration
-                continue;
-            }
-            syntree::node::Event::Down => {
-                parent_index_stack.push(last_index);
-            }
-            syntree::node::Event::Next => {}
-        }
-
-        if let Some(parent_idx) = parent_index_stack.last() {
-            edge_indices[*parent_idx].push(i);
-        }
-
-        let node_feature = {
-            let node = node.value().into();
-            let language_identifier =
-                Tensor::<B, 1>::from_floats([language_index], &B::Device::default());
-            let padding = Tensor::<B, 1>::full(
-                [MAX_FEATURES - node.dims()[0] - 1],
-                -1.0,
-                &B::Device::default(),
-            );
-            Tensor::cat(vec![language_identifier, node, padding], 0)
-        };
-        features.push(node_feature);
-
-        last_index = i;
-        i += 1;
-    }
-
-    let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];
-
-    for (from, list) in edge_indices.iter().enumerate() {
-        for to in list {
-            paired_indices.push(Tensor::from_ints(
-                [(from + index_offset), (*to + index_offset)],
-                &B::Device::default(),
-            ))
-        }
-    }
-
-    // Self-attention
-    for i in Range::from(0..tree.len())
-        .into_iter()
-        .map(|i| (i + index_offset))
-    {
-        paired_indices.push(Tensor::from_ints([i, i], &B::Device::default()));
-    }
-
-    (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))
 }
 
 /// Represents a batch of ASTs for training
