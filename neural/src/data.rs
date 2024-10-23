@@ -439,6 +439,7 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                 } else {
                     edge
                 }
+                .transpose()
             })
             .collect();
 

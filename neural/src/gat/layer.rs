@@ -146,14 +146,10 @@ impl<B: Backend> GatLayer<B> {
 
         let attentions_per_edge = self.neighborhood_aware_softmax(
             scores_per_edge,
-            edges
-                .clone()
-                .slice([None, None, Some((1, -1))])
-                .squeeze_dims(&[]),
+            edges.clone().slice([None, Some((1, 2)), None]).squeeze(1),
             features_dims[1],
         );
         let attentions_per_edge = self.dropout.forward(attentions_per_edge);
-        let attns = attentions_per_edge.clone();
 
         // Neighborhood aggregation
         let node_features_projected_lifted_weighted = features_proj * attentions_per_edge;
@@ -163,7 +159,7 @@ impl<B: Backend> GatLayer<B> {
             features_dims[1],
         );
 
-        self.skip_concat_bias(attns, in_skip, out_node_features)
+        self.skip_concat_bias(in_skip, out_node_features)
     }
 
     fn lift(
@@ -173,51 +169,62 @@ impl<B: Backend> GatLayer<B> {
         node_features_projected: Tensor<B, 4>,
         edge_indices: Tensor<B, 3, Int>,
     ) -> (Tensor<B, 3>, Tensor<B, 3>, Tensor<B, 4>) {
+        let edge_indices_dims = edge_indices.dims();
         let source_node_indices: Tensor<B, 2, Int> = edge_indices
             .clone()
-            .slice([None, None, Some((0, 1))])
-            .squeeze_dims(&[]);
-        let target_node_indices: Tensor<B, 2, Int> = edge_indices
-            .slice([None, None, Some((1, 2))])
-            .squeeze_dims(&[]);
+            .slice([None, Some((0, 1)), None])
+            .squeeze(1);
+        let target_node_indices: Tensor<B, 2, Int> =
+            edge_indices.slice([None, Some((1, 2)), None]).squeeze(1);
 
         let source_node_dims = source_node_indices.dims();
         let target_node_dims = target_node_indices.dims();
 
-        let scores_source: Tensor<B, 3> = Tensor::stack(
-            scores_source
-                .chunk(source_node_dims[0], 0)
-                .into_iter()
-                .zip(source_node_indices.clone().chunk(source_node_dims[0], 0))
-                .map(|(c, i)| c.select(2, i.squeeze_dims(&[])))
-                .collect::<Vec<_>>(),
-            0,
-        );
-        let scores_target: Tensor<B, 3> = Tensor::stack(
-            scores_target
-                .chunk(target_node_dims[0], 0)
-                .into_iter()
-                .zip(target_node_indices.chunk(target_node_dims[0], 0))
-                .map(|(c, i)| c.select(2, i.squeeze_dims(&[])))
-                .collect(),
-            0,
-        );
-        let node_features_projected: Tensor<B, 4> = Tensor::stack(
-            node_features_projected
-                .chunk(source_node_dims[0], 0)
-                .into_iter()
-                .zip(source_node_indices.chunk(source_node_dims[0], 0))
-                .map(|(c, i)| c.select(2, i.squeeze_dims(&[])))
-                .collect(),
-            0,
-        );
+        // println!(
+        //     "SHAPES: SNI {source_node_dims:?} TNI {target_node_dims:?} NFP {:?} EI {edge_indices_dims:?} SS {:?} ST {:?}",
+        //     node_features_projected.dims(),
+        //     scores_source.dims(),
+        //     scores_target.dims(),
+        // );
+
+        let scores_source_selected = scores_source
+            .chunk(source_node_dims[0], 0)
+            .into_iter()
+            .zip(source_node_indices.clone().chunk(source_node_dims[0], 0))
+            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<2>(0))
+            .collect::<Vec<_>>();
+
+        let scores_target_selected = scores_target
+            .chunk(target_node_dims[0], 0)
+            .into_iter()
+            .zip(target_node_indices.chunk(target_node_dims[0], 0))
+            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<2>(0))
+            .collect();
+
+        let node_features_projected_selected = node_features_projected
+            .chunk(source_node_dims[0], 0)
+            .into_iter()
+            .zip(source_node_indices.chunk(source_node_dims[0], 0))
+            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<3>(0))
+            .collect();
+
+        let scores_source: Tensor<B, 3> = Tensor::stack(scores_source_selected, 0);
+        let scores_target: Tensor<B, 3> = Tensor::stack(scores_target_selected, 0);
+        let node_features_projected: Tensor<B, 4> =
+            Tensor::stack(node_features_projected_selected, 0);
+
+        // println!(
+        //     "AFTER SS {:?} ST {:?} NFP {:?}",
+        //     scores_source.dims(),
+        //     scores_target.dims(),
+        //     node_features_projected.dims()
+        // );
 
         (scores_source, scores_target, node_features_projected)
     }
 
     fn skip_concat_bias(
         &self,
-        attention_coefficients: Tensor<B, 4>,
         in_node_features: Tensor<B, 3>,
         mut out_node_features: Tensor<B, 4>,
     ) -> Tensor<B, 3> {
