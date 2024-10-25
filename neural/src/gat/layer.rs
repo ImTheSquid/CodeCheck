@@ -102,14 +102,14 @@ impl<B: Backend> GatLayer<B> {
     /// Edges: [batch_size, E * 2, 2]
     /// Features: [batch_size, N * 2, F]
     pub fn forward(&self, edges: &Tensor<B, 3, Int>, features: Tensor<B, 3>) -> Tensor<B, 3> {
-        println!(
-            "LAYER FORWARD: E {:?} F {:?} LP {:?} OF {} NH {}",
-            edges.dims(),
-            features.dims(),
-            self.linear_projection.weight.dims(),
-            self.out_features,
-            self.num_heads,
-        );
+        // println!(
+        //     "LAYER FORWARD: E {:?} F {:?} LP {:?} OF {} NH {}",
+        //     edges.dims(),
+        //     features.dims(),
+        //     self.linear_projection.weight.dims(),
+        //     self.out_features,
+        //     self.num_heads,
+        // );
         let in_skip = features.clone();
         // Linear projection and regularization
         let features_dims = features.dims();
@@ -117,8 +117,13 @@ impl<B: Backend> GatLayer<B> {
 
         let features = self.linear_projection.forward(features);
 
-        let features: Tensor<B, 4> =
-            features.reshape([0, 0, self.num_heads as i32, self.out_features as i32]);
+        let f = features.dims();
+        let features: Tensor<B, 4> = features.reshape([
+            f[0] as i32,
+            -1,
+            self.num_heads as i32,
+            self.out_features as i32,
+        ]);
 
         let features_proj = self.dropout.forward(features);
 
@@ -128,17 +133,17 @@ impl<B: Backend> GatLayer<B> {
         let scores_source = self
             .scoring_fn_source
             .val()
-            .expand(features_proj.shape())
+            .expand::<4, _>(features_proj.shape())
             .mul(features_proj.clone())
             .sum_dim(3);
-        let scores_source = scores_source.squeeze_dims::<3>(&[]);
+        let scores_source = scores_source.squeeze::<3>(3);
         let scores_target = self
             .scoring_fn_target
             .val()
-            .expand(features_proj.shape())
+            .expand::<4, _>(features_proj.shape())
             .mul(features_proj.clone())
             .sum_dim(3);
-        let scores_target = scores_target.squeeze_dims::<3>(&[]);
+        let scores_target = scores_target.squeeze::<3>(3);
 
         let (scores_source, scores_target, features_proj) =
             self.lift(scores_source, scores_target, features_proj, edges.clone());
@@ -228,13 +233,14 @@ impl<B: Backend> GatLayer<B> {
         in_node_features: Tensor<B, 3>,
         mut out_node_features: Tensor<B, 4>,
     ) -> Tensor<B, 3> {
+        let inf_dims = in_node_features.dims();
         if let Some(skip) = &self.skip_projection {
             if out_node_features.dims()[3] == in_node_features.dims()[2] {
                 out_node_features = out_node_features + in_node_features.unsqueeze_dim(2);
             } else {
                 out_node_features = out_node_features
                     + skip.forward(in_node_features).reshape([
-                        -1,
+                        inf_dims[0] as i32,
                         -1,
                         self.num_heads as i32,
                         self.out_features as i32,
@@ -243,13 +249,18 @@ impl<B: Backend> GatLayer<B> {
         }
 
         let mut out_node_features: Tensor<B, 3> = if self.concat {
-            out_node_features.reshape([-1, -1, (self.num_heads * self.out_features) as i32])
+            out_node_features.reshape([
+                inf_dims[0] as i32,
+                -1,
+                (self.num_heads * self.out_features) as i32,
+            ])
         } else {
             out_node_features.mean_dim(2).squeeze_dims::<3>(&[])
         };
 
         if let Some(bias) = &self.bias {
-            out_node_features = out_node_features + bias.val().expand([-1, -1, -1]);
+            let onf_shape = out_node_features.shape();
+            out_node_features = out_node_features + bias.val().expand(onf_shape);
         }
 
         if let Some(activation) = &self.activation {
@@ -269,9 +280,11 @@ impl<B: Backend> GatLayer<B> {
         size[1] = num_nodes;
         let out_node_features: Tensor<B, 4> =
             Tensor::zeros(size, &node_features_projected.device());
+        let edge_indices_dims = edge_indices.dims();
         let target_index_broadcasted = edge_indices
-            .slice([None, None, Some((0, 1))])
-            .squeeze_dims::<2>(&[])
+            .slice([None, Some((0, 1)), None])
+            .squeeze::<2>(1)
+            .reshape([edge_indices_dims[0], edge_indices_dims[2], 1, 1])
             .expand(node_features_projected.shape());
 
         out_node_features.scatter(1, target_index_broadcasted, node_features_projected)

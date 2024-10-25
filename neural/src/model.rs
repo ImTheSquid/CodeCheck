@@ -70,16 +70,28 @@ pub struct ModelResult<B: Backend> {
 }
 
 impl<B: Backend> Model<B> {
-    pub fn forward(&self, features: Tensor<B, 3>, edges: Tensor<B, 3, Int>) -> ModelResult<B> {
+    pub fn forward(
+        &self,
+        features: Tensor<B, 3>,
+        edges: Tensor<B, 3, Int>,
+        max_nodes: usize,
+    ) -> ModelResult<B> {
+        // println!(
+        //     "MODEL FORWARD: F {:?} E {:?}",
+        //     features.dims(),
+        //     edges.dims()
+        // );
         let features = self.node_processor.forward(features);
 
         let features = self.gat.forward(edges, features);
 
+        // println!("GAT COMPLETE");
+
         let features_a = features
             .clone()
-            .slice([None, Some((0, MAX_NODES as i64)), None]);
+            .slice([None, Some((0, max_nodes as i64)), None]);
 
-        let features_b = features.slice([None, Some((MAX_NODES as i64, -1)), None]);
+        let features_b = features.slice([None, Some((max_nodes as i64, -1)), None]);
 
         let feature_attention =
             self.attention
@@ -103,7 +115,7 @@ impl<B: Backend> Model<B> {
 
 impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
-        let out = self.forward(item.features, item.edges);
+        let out = self.forward(item.features, item.edges, item.max_nodes);
         let regression_loss: Tensor<B, 1> = loss::GIOULoss::default()
             .forward(&out.regression, &item.spans)
             .mean();
@@ -137,6 +149,6 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
 
 impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
-        self.forward(item.features, item.edges)
+        self.forward(item.features, item.edges, item.max_nodes)
     }
 }

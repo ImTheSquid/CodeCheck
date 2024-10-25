@@ -136,7 +136,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let gat_config = GatConfig::new(vec![50, 40, 40, 30], vec![8, 8, 1]);
+    let gat_config = GatConfig::new(vec![50, 40, 40, 24], vec![8, 8, 1]);
 
     #[cfg(target_os = "linux")]
     let device = WgpuDevice::DiscreteGpu(0);

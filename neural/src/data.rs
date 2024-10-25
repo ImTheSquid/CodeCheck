@@ -353,7 +353,7 @@ impl<B: Backend> AstBatcher<B> {
 }
 
 pub const MAX_SPANS: usize = 50;
-pub const MAX_NODES: usize = 100_000;
+pub const MAX_NODES: usize = 10_000;
 pub const MAX_FEATURES: usize = 200;
 pub const MAX_EDGES: usize = MAX_NODES - 1;
 
@@ -361,6 +361,10 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
         // Read each item in the dataset, loading in all of the files in each batch
         // This is gonna take a ton of memory but oh well
+        struct FeaturePair<B: Backend> {
+            a: Tensor<B, 2>,
+            b: Tensor<B, 2>,
+        }
         let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
             items
                 .into_iter()
@@ -378,7 +382,11 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                         .expect("Valid tree build B");
 
                     let edge = Tensor::cat(vec![a_edge, b_edge], 0);
-                    let features = Tensor::cat(vec![a_feature, b_feature], 0);
+                    // let features = Tensor::cat(vec![a_feature, b_feature], 0);
+                    let features = FeaturePair {
+                        a: a_feature,
+                        b: b_feature,
+                    };
 
                     // Load spans
                     assert!(
@@ -419,9 +427,10 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
         // Find the maximum values for features and edges, padding each tensor to the correct size
         let max_nodes = features
             .iter()
-            .map(|t| t.dims()[0])
+            .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
             .max()
             .expect("some max feature value");
+
         let max_edges = edges
             .iter()
             .map(|t| t.dims()[0])
@@ -443,18 +452,31 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             })
             .collect();
 
+        fn normalize_to_max_nodes_if_needed<B: Backend>(
+            feature: Tensor<B, 2>,
+            max: usize,
+            device: &B::Device,
+        ) -> Tensor<B, 2> {
+            if feature.dims()[0] < max {
+                let difference = max - feature.dims()[0];
+                let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
+
+                Tensor::cat(vec![feature, padding], 0)
+            } else {
+                feature
+            }
+        }
+
         let features = features
             .into_iter()
             .map(|feature| {
-                if feature.dims()[0] < max_nodes {
-                    let difference = max_nodes - feature.dims()[0];
-                    let padding =
-                        Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, &self.device);
-
-                    Tensor::cat(vec![feature, padding], 0)
-                } else {
-                    feature
-                }
+                Tensor::cat(
+                    vec![
+                        normalize_to_max_nodes_if_needed(feature.a, max_nodes, &self.device),
+                        normalize_to_max_nodes_if_needed(feature.b, max_nodes, &self.device),
+                    ],
+                    0,
+                )
             })
             .collect();
 
@@ -462,6 +484,7 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             edges: Tensor::stack(edges, 0),
             features: Tensor::stack(features, 0),
             spans: Tensor::stack(spans, 0),
+            max_nodes,
         }
     }
 }
@@ -483,4 +506,5 @@ pub struct AstBatch<B: Backend> {
     pub features: Tensor<B, 3>,
     /// [batch_size, MAX_SPANS, 4]
     pub spans: Tensor<B, 3>,
+    pub max_nodes: usize,
 }
