@@ -3,7 +3,7 @@ use burn::{
     module::{Module, Param, ParamId},
     nn::{Dropout, DropoutConfig, Initializer, LeakyRelu, LeakyReluConfig, Linear, LinearConfig},
     prelude::Backend,
-    tensor::{Distribution, Int, Shape, Tensor},
+    tensor::{BroadcastArgs, Distribution, Int, Shape, Tensor},
 };
 
 use crate::elu::{Elu, EluConfig};
@@ -304,7 +304,17 @@ impl<B: Backend> GatLayer<B> {
         target_index: Tensor<B, 2, Int>,
         num_nodes: usize,
     ) -> Tensor<B, 3> {
-        let target_index_broadcasted = target_index.clone().expand(exp_scores_per_edge.shape());
+        let target_index_shape = target_index.dims();
+        let target_index_broadcasted = target_index
+            .clone()
+            .reshape([target_index_shape[0], target_index_shape[1], 1])
+            .expand(exp_scores_per_edge.shape());
+
+        // println!(
+        //     "ESPE {:?} TIB {:?} NN {num_nodes}",
+        //     exp_scores_per_edge.dims(),
+        //     target_index_broadcasted.dims()
+        // );
 
         let mut size = exp_scores_per_edge.dims();
         size[1] = num_nodes;
@@ -312,14 +322,23 @@ impl<B: Backend> GatLayer<B> {
         let neighborhood_sums =
             neighborhood_sums.scatter(1, target_index_broadcasted, exp_scores_per_edge);
 
-        Tensor::stack(
-            neighborhood_sums
-                .chunk(size[0], 0)
-                .into_iter()
-                .zip(target_index.chunk(size[0], 0))
-                .map(|(c, i)| c.select(1, i.squeeze_dims(&[])))
-                .collect(),
-            0,
-        )
+        // println!("NS {:?}", neighborhood_sums.dims());
+
+        let neighborhood_sums = neighborhood_sums
+            .chunk(size[0], 0)
+            .into_iter()
+            .zip(target_index.chunk(size[0], 0))
+            .map(|(c, i)| c.select(1, i.squeeze::<1>(0)).squeeze::<2>(0))
+            .collect::<Vec<_>>();
+
+        // println!(
+        //     "NSPROC {:?}",
+        //     neighborhood_sums
+        //         .iter()
+        //         .map(|n| n.shape().dims)
+        //         .collect::<Vec<_>>()
+        // );
+
+        Tensor::stack(neighborhood_sums, 0)
     }
 }
