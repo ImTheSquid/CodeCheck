@@ -47,8 +47,8 @@ impl ModelConfig {
             .init(device),
             gat: self.gat.init(device),
             attention: MultiHeadAttentionConfig::new(gat_output, self.attention_heads).init(device),
-            regression: LinearConfig::new(gat_output, MAX_SPANS * 4).init(device),
-            objectness: LinearConfig::new(gat_output, MAX_SPANS).init(device),
+            regression: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS * 4).init(device),
+            objectness: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS).init(device),
             bce_loss: BinaryCrossEntropyLossConfig::new().init(device),
         }
     }
@@ -97,7 +97,18 @@ impl<B: Backend> Model<B> {
             self.attention
                 .forward(MhaInput::new(features_a, features_b.clone(), features_b));
 
-        let context = feature_attention.context.flatten::<2>(1, 2);
+        // Normalize length of output to put through linear
+        let mut shape = feature_attention.context.dims();
+        let original = shape[1];
+        shape[1] = MAX_NODES;
+        let dev = feature_attention.context.device();
+        let z = Tensor::<B, 3>::zeros(shape, &dev);
+        let context = z.slice_assign(
+            [0..shape[0], 0..original, 0..shape[2]],
+            feature_attention.context,
+        );
+
+        let context = context.flatten::<2>(1, 2);
 
         let regression =
             self.regression
