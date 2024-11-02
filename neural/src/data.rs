@@ -352,7 +352,7 @@ impl<B: Backend> AstBatcher<B> {
     }
 }
 
-pub const MAX_SPANS: usize = 50;
+pub const MAX_SPANS: usize = 10;
 pub const MAX_NODES: usize = 10_000;
 pub const MAX_FEATURES: usize = 200;
 pub const MAX_EDGES: usize = MAX_NODES - 1;

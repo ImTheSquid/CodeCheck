@@ -4,7 +4,7 @@ use burn::{
     nn::{
         attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
         loss::{BinaryCrossEntropyLoss, BinaryCrossEntropyLossConfig},
-        Linear, LinearConfig,
+        Linear, LinearConfig, Relu, Sigmoid,
     },
     prelude::Backend,
     tensor::{backend::AutodiffBackend, Int, Tensor},
@@ -48,7 +48,9 @@ impl ModelConfig {
             gat: self.gat.init(device),
             attention: MultiHeadAttentionConfig::new(gat_output, self.attention_heads).init(device),
             regression: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS * 4).init(device),
+            regression_activation: Relu::new(),
             objectness: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS).init(device),
+            objectness_activation: Sigmoid::new(),
             bce_loss: BinaryCrossEntropyLossConfig::new().init(device),
         }
     }
@@ -60,7 +62,9 @@ pub struct Model<B: Backend> {
     gat: Gat<B>,
     attention: MultiHeadAttention<B>,
     regression: Linear<B>,
+    regression_activation: Relu,
     objectness: Linear<B>,
+    objectness_activation: Sigmoid,
     bce_loss: BinaryCrossEntropyLoss<B>,
 }
 
@@ -114,8 +118,10 @@ impl<B: Backend> Model<B> {
             self.regression
                 .forward(context.clone())
                 .reshape([-1, MAX_SPANS as i32, 4]);
+        let regression = self.regression_activation.forward(regression);
 
         let objectness = self.objectness.forward(context);
+        let objectness = self.objectness_activation.forward(objectness);
 
         ModelResult {
             regression,
@@ -128,7 +134,7 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
         let out = self.forward(item.features, item.edges, item.max_nodes);
         let regression_loss: Tensor<B, 1> = loss::GIOULoss::default()
-            .forward(&out.regression, &item.spans)
+            .forward(out.regression.clone(), item.spans.clone())
             .mean();
         let objectness_spans = item
             .spans
@@ -140,6 +146,24 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
         let objectness_loss = self
             .bce_loss
             .forward(out.objectness.clone(), objectness_spans.clone());
+        assert!(
+            !regression_loss.contains_nan().into_scalar(),
+            "Regression loss contains NaN!"
+        );
+        assert!(
+            !objectness_loss.contains_nan().into_scalar(),
+            "Objectness loss contains NaN!"
+        );
+        // println!(
+        //     "ANY NAN? RL {} OL {}",
+        //     regression_loss.contains_nan().into_scalar(),
+        //     objectness_loss.contains_nan().into_scalar()
+        // );
+        // println!(
+        //     "AVERAGE RL {} OL {}",
+        //     regression_loss.clone().mean().into_scalar(),
+        //     objectness_loss.clone().mean().into_scalar()
+        // );
         TrainOutput::new(
             self,
             (regression_loss.clone() * 5.0 + objectness_loss.clone()).backward(),
