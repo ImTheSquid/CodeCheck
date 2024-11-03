@@ -16,6 +16,7 @@ use crate::{
     gat::{Gat, GatConfig},
     loss::{self, BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
     node_process::{NodeProcessor, NodeProcessorConfig},
+    sequential::{Sequential, SequentialConfig, SequentialLayerConfig},
 };
 
 #[derive(Config)]
@@ -47,10 +48,26 @@ impl ModelConfig {
             .init(device),
             gat: self.gat.init(device),
             attention: MultiHeadAttentionConfig::new(gat_output, self.attention_heads).init(device),
-            regression: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS * 4).init(device),
-            regression_activation: Relu::new(),
-            objectness: LinearConfig::new(MAX_NODES * gat_output, MAX_SPANS).init(device),
-            objectness_activation: Sigmoid::new(),
+            regression: SequentialConfig::new(vec![
+                SequentialLayerConfig::Linear(LinearConfig::new(
+                    MAX_NODES * gat_output,
+                    MAX_NODES / 2,
+                )),
+                SequentialLayerConfig::Relu,
+                SequentialLayerConfig::Linear(LinearConfig::new(MAX_NODES / 2, MAX_SPANS * 4)),
+                SequentialLayerConfig::Relu,
+            ])
+            .init(device),
+            objectness: SequentialConfig::new(vec![
+                SequentialLayerConfig::Linear(LinearConfig::new(
+                    MAX_NODES * gat_output,
+                    MAX_NODES / 2,
+                )),
+                SequentialLayerConfig::Relu,
+                SequentialLayerConfig::Linear(LinearConfig::new(MAX_NODES / 2, MAX_SPANS)),
+                SequentialLayerConfig::Sigmoid,
+            ])
+            .init(device),
             bce_loss: BinaryCrossEntropyLossConfig::new().init(device),
         }
     }
@@ -61,10 +78,8 @@ pub struct Model<B: Backend> {
     node_processor: NodeProcessor<B>,
     gat: Gat<B>,
     attention: MultiHeadAttention<B>,
-    regression: Linear<B>,
-    regression_activation: Relu,
-    objectness: Linear<B>,
-    objectness_activation: Sigmoid,
+    regression: Sequential<B>,
+    objectness: Sequential<B>,
     bce_loss: BinaryCrossEntropyLoss<B>,
 }
 
@@ -118,10 +133,8 @@ impl<B: Backend> Model<B> {
             self.regression
                 .forward(context.clone())
                 .reshape([-1, MAX_SPANS as i32, 4]);
-        let regression = self.regression_activation.forward(regression);
 
         let objectness = self.objectness.forward(context);
-        let objectness = self.objectness_activation.forward(objectness);
 
         ModelResult {
             regression,

@@ -6,26 +6,20 @@ use burn::{
     tensor::Tensor,
 };
 
-use crate::data::MAX_FEATURES;
+use crate::{
+    data::MAX_FEATURES,
+    sequential::{Sequential, SequentialConfig, SequentialLayerConfig},
+};
 
 // A simple preprocessor to get some very basic embeddings out of tree info
 #[derive(Debug, Module)]
 pub struct NodeProcessor<B: Backend> {
-    linear1: Linear<B>,
-    // Leaky to allow for negatives but to an extent
-    activation1: LeakyRelu,
-    linear2: Linear<B>,
-    activation2: LeakyRelu,
-    linear3: Linear<B>,
-    activation: Relu,
+    seq: Sequential<B>,
 }
 
 impl<B: Backend> NodeProcessor<B> {
     pub fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
-        let x = self.linear1.forward(x);
-        let x = self.linear2.forward(self.activation1.forward(x));
-        let x = self.linear3.forward(self.activation2.forward(x));
-        self.activation.forward(x)
+        self.seq.forward(x)
     }
 }
 
@@ -41,18 +35,25 @@ pub struct NodeProcessorConfig {
 impl NodeProcessorConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> NodeProcessor<B> {
         NodeProcessor {
-            // Add one for language identifier
-            linear1: LinearConfig::new(MAX_FEATURES, self.hidden_1_size)
-                .init(device),
-            activation1: LeakyReluConfig::new()
-                .with_negative_slope(self.leaky_1_slope)
-                .init(),
-            linear2: LinearConfig::new(self.hidden_1_size, self.hidden_2_size).init(device),
-            activation2: LeakyReluConfig::new()
-                .with_negative_slope(self.leaky_2_slope)
-                .init(),
-            linear3: LinearConfig::new(self.hidden_2_size, self.output_size).init(device),
-            activation: Relu::new(),
+            seq: SequentialConfig::new(vec![
+                SequentialLayerConfig::Linear(LinearConfig::new(MAX_FEATURES, self.hidden_1_size)),
+                SequentialLayerConfig::LeakyRelu(
+                    LeakyReluConfig::new().with_negative_slope(self.leaky_1_slope),
+                ),
+                SequentialLayerConfig::Linear(LinearConfig::new(
+                    self.hidden_1_size,
+                    self.hidden_2_size,
+                )),
+                SequentialLayerConfig::LeakyRelu(
+                    LeakyReluConfig::new().with_negative_slope(self.leaky_2_slope),
+                ),
+                SequentialLayerConfig::Linear(LinearConfig::new(
+                    self.hidden_2_size,
+                    self.output_size,
+                )),
+                SequentialLayerConfig::Relu,
+            ])
+            .init(device),
         }
     }
 }

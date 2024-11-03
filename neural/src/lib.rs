@@ -8,6 +8,7 @@ pub mod gat;
 pub mod loss;
 pub mod model;
 pub mod node_process;
+pub mod sequential;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

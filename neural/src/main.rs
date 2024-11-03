@@ -85,6 +85,9 @@ fn train<B: AutodiffBackend>(
         .num_workers(config.num_workers)
         .build(dataset.test());
 
+    let s = config.model.init::<B>(&device).to_string();
+    println!("{s}");
+
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(LossMetric::new())
         // .metric_valid_numeric(LossMetric::new())
@@ -136,7 +139,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let gat_config = GatConfig::new(vec![50, 40, 40, 24], vec![8, 8, 1]);
+    let gat_config = GatConfig::new(vec![50, 40, 40, 40, 40, 24], vec![8, 8, 8, 8, 1]);
 
     #[cfg(target_os = "linux")]
     let device = WgpuDevice::DiscreteGpu(0);
