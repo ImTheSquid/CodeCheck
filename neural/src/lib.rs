@@ -1,4 +1,5 @@
 #![feature(new_range_api)]
+#![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
 pub mod contrastive;
@@ -9,18 +10,3 @@ pub mod loss;
 pub mod model;
 pub mod node_process;
 pub mod sequential;
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}

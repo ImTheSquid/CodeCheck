@@ -69,12 +69,8 @@ impl<B: Backend> GIOULoss<B> {
         let pred_zero = predict.zeros_like();
         let true_zero = truth.zeros_like();
 
-        if predict
-            .clone()
-            .all_close(pred_zero, Some(EPSILON_MIN), Some(EPSILON_MIN))
-            && truth
-                .clone()
-                .all_close(true_zero, Some(EPSILON_MIN), Some(EPSILON_MIN))
+        if predict.clone().all_close(pred_zero, None, None)
+            && truth.clone().all_close(true_zero, None, None)
         {
             return Tensor::zeros(pred_shape, &predict.device());
         }
@@ -376,5 +372,61 @@ pub struct ModelOutput<B: Backend> {
 impl<B: Backend> Adaptor<LossInput<B>> for ModelOutput<B> {
     fn adapt(&self) -> LossInput<B> {
         LossInput::new(self.loss.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use burn::{
+        backend::{wgpu::WgpuDevice, Wgpu},
+        tensor::Tensor,
+    };
+
+    use crate::loss::GIOULoss;
+
+    #[test]
+    fn loss_function_works() {
+        let device = WgpuDevice::default();
+        type Backend = Wgpu;
+
+        let predict = Tensor::<Backend, 2>::from_floats(
+            [
+                [0.5, 0.5, 1.0, 1.0],
+                [1.5, 1.5, 2.0, 2.0],
+                [2.5, 2.5, 3.0, 3.0],
+            ],
+            &device,
+        );
+
+        let truth = Tensor::<Backend, 2>::from_floats(
+            [
+                [0.5, 0.5, 1.0, 1.0],
+                [2.0, 2.0, 2.5, 2.5],
+                [3.0, 3.0, 3.5, 3.5],
+            ],
+            &device,
+        );
+
+        let test = Tensor::<Backend, 2>::from_floats(
+            [
+                [1.0000, -0.8750, -0.9444],
+                [-0.7778, -0.5000, -0.8750],
+                [-0.9200, -0.5000, -0.5000],
+            ],
+            &device,
+        );
+
+        let output = GIOULoss::default().forward(predict, truth);
+
+        assert_eq!(
+            test.dims(),
+            output.dims(),
+            "Tensors have different dimensions!"
+        );
+
+        assert!(
+            test.clone().all_close(output.clone(), None, None),
+            "Test and output diverge!\nTest:\n{test:?}\nOutput:\n{output:?}"
+        );
     }
 }
