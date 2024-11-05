@@ -1,9 +1,9 @@
 use core::f64;
-use std::{f64::EPSILON, marker::PhantomData};
+use std::marker::PhantomData;
 
 use burn::{
     prelude::Backend,
-    tensor::{cast::ToElement, Int, Tensor},
+    tensor::{Int, Tensor},
     train::metric::{Adaptor, LossInput},
 };
 
@@ -26,13 +26,14 @@ impl<B: Backend> GIOULoss<B> {
         &self,
         predict: Tensor<B, D>,
         truth: Tensor<B, D>,
-    ) -> Tensor<B, D>
+    ) -> Tensor<B, 1>
     where
         [(); D + 1]:,
     {
         let empty_truth_mask = truth.clone().equal_elem(EMPTY_VALUE).all_dim(D - 1);
 
         let giou = self.masked_giou(predict, truth);
+        // println!("GIOU: {giou}");
 
         let best = giou.max_dim(D - 2);
 
@@ -45,7 +46,8 @@ impl<B: Backend> GIOULoss<B> {
             .mask_fill(empty_truth_mask, 0.0)
             * PENALTY;
 
-        actual_loss + penalty
+        // println!("PENALTY: {}", penalty.clone().sum().into_scalar());
+        actual_loss.sum() + penalty.sum()
     }
 
     /// Ignores -1's
@@ -57,11 +59,18 @@ impl<B: Backend> GIOULoss<B> {
     where
         [(); D + 1]:,
     {
-        let predict_mask = predict.clone().not_equal_elem(EMPTY_VALUE).all_dim(D - 1);
-        let truth_mask = truth.clone().not_equal_elem(EMPTY_VALUE).all_dim(D - 1);
-
-        let predict = predict.mask_fill(predict_mask, 0.0);
-        let truth = truth.mask_fill(truth_mask, 0.0);
+        let pred_ones = predict.ones_like();
+        let true_ones = truth.ones_like();
+        let predict_mask = predict
+            .clone()
+            .is_close(pred_ones * EMPTY_VALUE, None, None)
+            .all_dim(D - 1);
+        let truth_mask = truth
+            .clone()
+            .is_close(true_ones * EMPTY_VALUE, None, None)
+            .all_dim(D - 1);
+        let predict = predict.mask_fill(predict_mask, f64::NAN);
+        let truth = truth.mask_fill(truth_mask, f64::NAN);
 
         let mut pred_shape = predict.dims();
         pred_shape[D - 1] = truth.dims()[D - 2];
@@ -76,10 +85,15 @@ impl<B: Backend> GIOULoss<B> {
         }
 
         let giou = self.giou(predict, truth);
+        // println!("UNFILTERED GIOU: {giou}");
 
         // Check if any of the values in the row/cols should be ignored, if so then clear them out
-
-        giou
+        // is_nan is currently broken but this works instead
+        let nans = giou
+            .clone()
+            .greater_equal_elem(f64::NEG_INFINITY)
+            .bool_not();
+        giou.clone().mask_fill(nans, 0.0)
     }
 
     pub fn giou<const D: usize>(&self, predict: Tensor<B, D>, truth: Tensor<B, D>) -> Tensor<B, D>
@@ -112,6 +126,7 @@ impl<B: Backend> GIOULoss<B> {
         // let out = (self.giou(s1, e1, s1g, e1g) + self.giou(s2, e2, s2g, e2g)).neg();
 
         // panic!("OUTPUT DIMENSIONS: {:?}", out.dims());
+        // println!("INPUTS:\nP\n{predict}\nT\n{truth}======================");
 
         let predict = predict.unsqueeze_dim::<{ D + 1 }>(D - 1);
         let truth = truth.unsqueeze_dim::<{ D + 1 }>(D - 2);
@@ -120,6 +135,7 @@ impl<B: Backend> GIOULoss<B> {
         selection[D] = Some((0, 1));
         let pred0 = predict.clone().slice(selection);
         let true0 = truth.clone().slice(selection);
+        // println!("P {pred0} T {true0}");
 
         selection[D] = Some((1, 2));
         let pred1 = predict.clone().slice(selection);
@@ -137,217 +153,37 @@ impl<B: Backend> GIOULoss<B> {
         let x2_inter = pred1.clone().min_pair(true1.clone());
         let y1_inter = pred2.clone().max_pair(true2.clone());
         let y2_inter = pred3.clone().min_pair(true3.clone());
+        // println!("=================\nX1:{x1_inter}\nX2:{x2_inter}\nY1:{y1_inter}\nY2:{y2_inter}\n=====================");
 
         let x1_enclose = pred0.clone().min_pair(true0.clone());
         let x2_enclose = pred1.clone().max_pair(true1.clone());
         let y1_enclose = pred2.clone().min_pair(true2.clone());
         let y2_enclose = pred3.clone().max_pair(true3.clone());
 
+        // println!(
+        //     "===================\nDIFF X {} Y {}",
+        //     (x2_inter.clone() - x1_inter.clone()),
+        //     (y2_inter.clone() - y1_inter.clone())
+        // );
         let intersection_area =
             (x2_inter - x1_inter).clamp_min(0.0) * (y2_inter - y1_inter).clamp_min(0.0);
+        // println!("==============\nINTERSECT\n:{intersection_area}\n");
 
         let prediction_area = (pred1 - pred0) * (pred3 - pred2);
         let truth_area = (true1 - true0) * (true3 - true2);
 
         let union_area = prediction_area + truth_area - intersection_area.clone();
+        // println!("==============\nUNION\n:{union_area}\n");
         let iou = intersection_area / (union_area.clone() + EPSILON_MIN);
+        // println!("==============\nIOU\n:{iou}\n");
 
         let enclose_area = (x2_enclose - x1_enclose) * (y2_enclose - y1_enclose);
+        // println!("==============\nENCLOSE\n:{enclose_area}\n");
 
         let giou = iou - (enclose_area.clone() - union_area) / (enclose_area + EPSILON_MIN);
 
         giou.squeeze::<D>(D)
     }
-
-    // pub fn _forward<const D: usize>(
-    //     &self,
-    //     predict: &Tensor<B, D>,
-    //     truth: &Tensor<B, D>,
-    // ) -> Tensor<B, { D - 1 }> {
-    //     let mut loss_arr: Vec<Tensor<B, 1>> = Vec::new();
-
-    //     let mut shape: [usize; D] = predict.dims();
-    //     // println!("Shape: {:?}", shape);
-
-    //     if shape.len() != 3 {
-    //         panic!("Only 3D tensors are supported");
-    //     }
-
-    //     for i in 0..shape[0] {
-    //         // println!("\ndim0 idx: {}", i);
-
-    //         let mut new_truth = truth
-    //             .clone()
-    //             .select(0, Tensor::<B, 1, Int>::from_ints([i], &truth.device()))
-    //             .squeeze::<2>(0);
-    //         let mut new_predict = predict
-    //             .clone()
-    //             .select(0, Tensor::<B, 1, Int>::from_ints([i], &truth.device()))
-    //             .squeeze::<2>(0);
-
-    //         // println!("New truth: {}", new_truth);
-    //         // println!("New predict: {}", new_predict);
-
-    //         let loss = self.loss_sum(&new_truth, &new_predict);
-    //         // println!("Loss: {:?}", loss);
-
-    //         loss_arr.push(loss);
-    //     }
-    //     // println!("Loss array: {:?}", loss_arr);
-
-    //     return Tensor::stack(loss_arr, 0);
-    // }
-
-    // fn giou<const D: usize>(
-    //     &self,
-    //     t1: Tensor<B, D>,
-    //     t2: Tensor<B, D>,
-    //     p1: Tensor<B, D>,
-    //     p2: Tensor<B, D>,
-    // ) -> Tensor<B, D> {
-    //     let intersection =
-    //         (t2.clone().min_pair(p2.clone()) - t1.clone().max_pair(p1.clone())).clamp_min(0.0);
-    //     let area = p2.clone() - p1.clone() + t2.clone() - t1.clone() - intersection.clone();
-    //     let area = area.clamp_min(EPSILON_MIN);
-    //     let entire = t2.max_pair(p2) - t1.min_pair(p1);
-
-    //     let entire = entire / area.clone();
-
-    //     // Overlap
-    //     intersection / area - entire
-    // }
-
-    // fn _giou(&self, t1: f32, t2: f32, p1: f32, p2: f32) -> f32 {
-    //     // println!("t1: {}, t2: {}, p1: {}, p2: {}", t1, t2, p1, p2);
-    //     let intersection = (t2.min(p2) - t1.max(p1)).max(0.0);
-    //     // println!("Intersection: {}", intersection);
-    //     let area = p2 - p1 + t2 - t1 - intersection;
-    //     // println!("Area: {}", area);
-    //     let mut entire = p2.max(p2) - t1.min(p1);
-    //     // println!("Entire: {}", entire);
-
-    //     entire = entire / area; // this is where we would apply function f(C)
-
-    //     let overlap = ((intersection / area) - (entire)).into();
-    //     // println!("Overlap: {}", overlap);
-    //     return overlap;
-    // }
-
-    // fn loss(&self, truth: &Tensor<B, 1>, predict: &Tensor<B, 1>) -> f64 {
-    //     // Assign values
-    //     let t_l1 = truth
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([0], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let t_l2 = truth
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([1], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let t_r1 = truth
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([2], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let t_r2 = truth
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([3], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-
-    //     let p_l1 = predict
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([0], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let p_l2 = predict
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([1], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let p_r1 = predict
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([2], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-    //     let p_r2 = predict
-    //         .clone()
-    //         .select(0, Tensor::<B, 1, Int>::from_ints([3], &truth.device()))
-    //         .into_scalar()
-    //         .to_f32();
-
-    //     // Calculate each loss
-    //     let l_giou = self._giou(t_l1, t_l2, p_l1, p_l2);
-    //     let r_giou = self._giou(t_r1, t_r2, p_r1, p_r2);
-
-    //     let loss = -1.0 * (l_giou + r_giou); // this is where we would apply function g
-    //                                          // println!("loss between truth: {} and prediction {} is {}", truth, predict, loss);
-    //     return loss.into();
-    // }
-
-    // fn loss_sum(&self, truths: &Tensor<B, 2>, predicts: &Tensor<B, 2>) -> Tensor<B, 1> {
-    //     // let mut sum = 0.0;
-    //     let len = predicts.dims()[0];
-    //     let shape = predicts.dims();
-
-    //     // the results loss tensor will be of equal length to the number of predictions
-    //     // for predictions made after all truths are exausted, a loss of n will be applied with n>>0
-    //     let max_loss = 100.0;
-
-    //     // let mut loss_floats = [0.0; 2];
-    //     let mut loss_floats = vec![0.0; len];
-    //     // let loss = Tensor::<Backend, 1, Float>::from_floats([0.0], &truths.device());
-
-    //     // println!("Length of predict matrix (num of truths): {}", len);
-
-    //     let mut used = <Vec<usize>>::new();
-    //     // let mut used = <Vec<i32>>::new();
-
-    //     for i in 0..len {
-    //         // println!("Currently used is {:?} and i is {}", used, i);
-    //         if used.len() == truths.dims()[0] {
-    //             // println!("All truths have been used");
-    //             loss_floats[i] = max_loss;
-    //             break;
-    //         }
-
-    //         // let mut max: f64 = loss(&truths.select(0, Tensor::<Backend, 1>::from_floats()), &predicts.select(0, i));
-    //         let idx_0 = Tensor::<B, 1, Int>::from_ints([0], &truths.device());
-    //         let idx_i = Tensor::<B, 1, Int>::from_ints([i], &truths.device());
-    //         let mut max: f64 = self.loss(
-    //             &truths.clone().select(0, idx_0.clone()).flatten::<1>(0, 1),
-    //             &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1),
-    //         );
-
-    //         let mut max_truth_idx = 0;
-    //         // println!("\nSearching through truths for better loss than loss: {}", max);
-    //         for j in 0..truths.dims()[0] {
-    //             if !used.contains(&j) {
-    //                 let idx_j = Tensor::<B, 1, Int>::from_ints([j], &truths.device());
-    //                 let loss = self.loss(
-    //                     &truths.clone().select(0, idx_j.clone()).flatten::<1>(0, 1),
-    //                     &predicts.clone().select(0, idx_i.clone()).flatten::<1>(0, 1),
-    //                 );
-    //                 // println!("Truth: {:?}, Predict: {:?}, Loss: {}", truths.clone().select(0, idx_j.clone()), predicts.clone().select(0, idx_i.clone()), loss);
-    //                 if loss < max {
-    //                     // println!("Found best match with loss: {}", loss);
-    //                     max = loss;
-    //                     max_truth_idx = j;
-    //                 }
-    //             }
-    //             loss_floats[i] = max;
-    //         }
-
-    //         // used.push(max_truth_idx);
-
-    //         // sum += max;
-    //     }
-    //     // println!("loss_floats: {:?}", loss_floats);
-    //     // return loss_floats
-    //     return Tensor::<B, 1>::from_floats(loss_floats.as_slice(), &truths.device());
-    //     // return sum / len as f64;
-    // }
 }
 
 #[derive(Debug, Clone)]
@@ -391,30 +227,23 @@ mod tests {
 
         let predict = Tensor::<Backend, 2>::from_floats(
             [
-                [0.5, 0.5, 1.0, 1.0],
-                [1.5, 1.5, 2.0, 2.0],
-                [2.5, 2.5, 3.0, 3.0],
+                [0.5, 1.0, 0.5, 1.0],
+                [-1.0, -1.0, -1.0, -1.0],
+                [2.5, 3.0, 2.5, 3.0],
             ],
             &device,
         );
 
         let truth = Tensor::<Backend, 2>::from_floats(
             [
-                [0.5, 0.5, 1.0, 1.0],
-                [2.0, 2.0, 2.5, 2.5],
-                [3.0, 3.0, 3.5, 3.5],
+                [0.5, 1.0, 0.5, 1.0],
+                [2.0, 2.5, 2.0, 2.5],
+                [-1.0, -1.0, -1.0, -1.0],
             ],
             &device,
         );
 
-        let test = Tensor::<Backend, 2>::from_floats(
-            [
-                [1.0000, -0.8750, -0.9444],
-                [-0.7778, -0.5000, -0.8750],
-                [-0.9200, -0.5000, -0.5000],
-            ],
-            &device,
-        );
+        let test = Tensor::<Backend, 1>::from_floats([4.0], &device);
 
         let output = GIOULoss::default().forward(predict, truth);
 
@@ -426,7 +255,9 @@ mod tests {
 
         assert!(
             test.clone().all_close(output.clone(), None, None),
-            "Test and output diverge!\nTest:\n{test:?}\nOutput:\n{output:?}"
+            "Test and output diverge!\nTest: {}\nOutput: {}",
+            test.into_scalar(),
+            output.into_scalar()
         );
     }
 }
