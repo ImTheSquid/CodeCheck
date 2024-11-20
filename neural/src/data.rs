@@ -8,9 +8,7 @@ use core::range::Range;
 use std::{
     collections::HashMap,
     fs,
-    marker::PhantomData,
     path::{Path, PathBuf},
-    rc::Rc,
     sync::{Arc, Weak},
 };
 use util::{
@@ -29,14 +27,14 @@ pub struct RawAstDataset {
     self_ref: Weak<Self>,
 }
 
-impl RawAstDataset {
-    fn to_arc(mut self) -> Arc<Self> {
-        Arc::new_cyclic(|d| {
-            self.self_ref = d.clone();
-            self
-        })
-    }
-}
+// impl RawAstDataset {
+//     fn to_arc(mut self) -> Arc<Self> {
+//         Arc::new_cyclic(|d| {
+//             self.self_ref = d.clone();
+//             self
+//         })
+//     }
+// }
 
 impl TryFrom<&Path> for RawAstDataset {
     type Error = DatasetError;
@@ -399,10 +397,11 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                     let spans = if num_marks > 0 {
                         let marks = marks.iter().map(|m| {
                             Tensor::<B, 1>::from_floats(
+                                // s_1 s_2 e_1 e_2
                                 [
                                     m.a.start as f32,
-                                    m.a.end as f32,
                                     m.b.start as f32,
+                                    m.a.end as f32,
                                     m.b.end as f32,
                                 ],
                                 &self.device,

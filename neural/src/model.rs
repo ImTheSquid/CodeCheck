@@ -1,14 +1,15 @@
 use burn::{
-    config::{self, Config},
+    config::Config,
+    grad_clipping::{GradientClipping, GradientClippingConfig},
     module::Module,
     nn::{
         attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
         loss::{BinaryCrossEntropyLoss, BinaryCrossEntropyLossConfig},
-        Linear, LinearConfig, Relu, Sigmoid,
+        LinearConfig,
     },
     prelude::Backend,
     tensor::{backend::AutodiffBackend, Int, Tensor},
-    train::{RegressionOutput, TrainOutput, TrainStep, ValidStep},
+    train::{TrainOutput, TrainStep, ValidStep},
 };
 
 use crate::{
@@ -25,7 +26,9 @@ pub struct ModelConfig {
     pub hidden_1_size: usize,
     #[config(default = 0.01)]
     pub leaky_1_slope: f64,
-    #[config(default = 100)]
+    #[config(default = 0.3)]
+    pub p_dropout: f64,
+    #[config(default = 50)]
     pub hidden_2_size: usize,
     #[config(default = 0.01)]
     pub leaky_2_slope: f64,
@@ -36,11 +39,12 @@ pub struct ModelConfig {
 
 impl ModelConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> Model<B> {
-        let gat_output = self.gat.num_features.last().unwrap() * self.gat.num_heads.last().unwrap();
+        let gat_output = *self.gat.num_features.last().unwrap();
         Model {
             node_processor: NodeProcessorConfig::new(
                 self.hidden_1_size,
                 self.leaky_1_slope,
+                self.p_dropout,
                 self.hidden_2_size,
                 self.leaky_2_slope,
                 self.gat.num_features[0],
@@ -65,10 +69,11 @@ impl ModelConfig {
                 )),
                 SequentialLayerConfig::Relu,
                 SequentialLayerConfig::Linear(LinearConfig::new(MAX_NODES / 2, MAX_SPANS)),
-                SequentialLayerConfig::Sigmoid,
             ])
             .init(device),
-            bce_loss: BinaryCrossEntropyLossConfig::new().init(device),
+            bce_loss: BinaryCrossEntropyLossConfig::new()
+                .with_logits(true)
+                .init(device),
         }
     }
 }
@@ -100,9 +105,16 @@ impl<B: Backend> Model<B> {
         //     features.dims(),
         //     edges.dims()
         // );
+        println!("FORWARD: {features}\nE: {edges}\n");
         let features = self.node_processor.forward(features);
 
+        println!("PROC COMPLETE: {features}\n");
+
         let features = self.gat.forward(edges, features);
+
+        println!("GAT COMPLETE: {features}\n");
+
+        println!("ABSOLUTE MAX: {}", features.clone().abs().max());
 
         // println!("GAT COMPLETE");
 
@@ -115,6 +127,8 @@ impl<B: Backend> Model<B> {
         let feature_attention =
             self.attention
                 .forward(MhaInput::new(features_a, features_b.clone(), features_b));
+
+        println!("ATTN COMPLETE: {}", feature_attention.context);
 
         // Normalize length of output to put through linear
         let mut shape = feature_attention.context.dims();
@@ -145,10 +159,17 @@ impl<B: Backend> Model<B> {
 
 impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
+        println!(
+            "INPUT===================\nF: {}\nE: {}",
+            item.features, item.edges
+        );
         let out = self.forward(item.features, item.edges, item.max_nodes);
-        let regression_loss: Tensor<B, 1> = loss::GIOULoss::default()
-            .forward(out.regression.clone(), item.spans.clone())
-            .mean();
+        println!(
+            "OUTPUT=================\nOBJ: {}\n\nREG: {}",
+            out.objectness, out.regression
+        );
+        let regression_loss: Tensor<B, 1> =
+            loss::GIOULoss::default().forward(out.regression.clone(), item.spans.clone());
         let objectness_spans = item
             .spans
             .clone()
@@ -156,17 +177,12 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
             .squeeze_dims::<2>(&[])
             .bool()
             .int();
-        let objectness_loss = self
-            .bce_loss
-            .forward(out.objectness.clone(), objectness_spans.clone());
-        assert!(
-            !regression_loss.contains_nan().into_scalar(),
-            "Regression loss contains NaN!"
+        // println!("OBJ: {}\n\nTRUTH: {}", out.objectness, objectness_spans);
+        let objectness_loss = self.bce_loss.forward(
+            out.objectness.clone().flatten::<1>(0, 1),
+            objectness_spans.clone().flatten(0, 1),
         );
-        assert!(
-            !objectness_loss.contains_nan().into_scalar(),
-            "Objectness loss contains NaN!"
-        );
+
         // println!(
         //     "ANY NAN? RL {} OL {}",
         //     regression_loss.contains_nan().into_scalar(),
@@ -177,11 +193,12 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
         //     regression_loss.clone().mean().into_scalar(),
         //     objectness_loss.clone().mean().into_scalar()
         // );
+        println!("LOSS RL {} OL {}", regression_loss, objectness_loss);
         TrainOutput::new(
             self,
-            (regression_loss.clone() * 5.0 + objectness_loss.clone()).backward(),
+            (regression_loss.clone() * 5 + objectness_loss.clone()).backward(),
             loss::ModelOutput {
-                loss: regression_loss * 5.0 + objectness_loss,
+                loss: regression_loss.clone() * 5 + objectness_loss,
                 regression: BatchedRegressionOutput {
                     output: out.regression,
                     targets: item.spans,

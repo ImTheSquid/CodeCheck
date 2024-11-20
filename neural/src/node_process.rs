@@ -1,7 +1,7 @@
 use burn::{
     config::Config,
     module::Module,
-    nn::{LeakyRelu, LeakyReluConfig, Linear, LinearConfig, Relu},
+    nn::{DropoutConfig, LeakyReluConfig, LinearConfig},
     prelude::Backend,
     tensor::Tensor,
 };
@@ -27,6 +27,7 @@ impl<B: Backend> NodeProcessor<B> {
 pub struct NodeProcessorConfig {
     pub hidden_1_size: usize,
     pub leaky_1_slope: f64,
+    pub p_dropout: f64,
     pub hidden_2_size: usize,
     pub leaky_2_slope: f64,
     pub output_size: usize,
@@ -47,6 +48,7 @@ impl NodeProcessorConfig {
                 SequentialLayerConfig::LeakyRelu(
                     LeakyReluConfig::new().with_negative_slope(self.leaky_2_slope),
                 ),
+                SequentialLayerConfig::Dropout(DropoutConfig::new(self.p_dropout)),
                 SequentialLayerConfig::Linear(LinearConfig::new(
                     self.hidden_2_size,
                     self.output_size,

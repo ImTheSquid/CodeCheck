@@ -7,8 +7,9 @@ use burn::{
     backend::{wgpu::WgpuDevice, Autodiff},
     config::Config,
     data::dataloader::DataLoaderBuilder,
+    grad_clipping::GradientClippingConfig,
     module::Module,
-    optim::AdamConfig,
+    optim::{decay::WeightDecayConfig, AdamConfig},
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
     train::{
@@ -18,7 +19,7 @@ use burn::{
 };
 use clap::Parser;
 use neural::{
-    data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset, MAX_FEATURES},
+    data::{AnyDataset, AstBatcher, CollatedAstDataset, RawAstDataset},
     gat::GatConfig,
     model::ModelConfig,
 };
@@ -85,8 +86,8 @@ fn train<B: AutodiffBackend>(
         .num_workers(config.num_workers)
         .build(dataset.test());
 
-    let s = config.model.init::<B>(&device).to_string();
-    println!("{s}");
+    // let s = config.model.init::<B>(&device).to_string();
+    // println!("{s}");
 
     let learner = LearnerBuilder::new(artifact_dir)
         .metric_train_numeric(LossMetric::new())
@@ -139,7 +140,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let gat_config = GatConfig::new(vec![50, 40, 40, 40, 40, 24], vec![8, 8, 8, 8, 1]);
+    let gat_config = GatConfig::new(vec![15, 15, 15, 8], vec![8, 8, 3]);
 
     #[cfg(target_os = "linux")]
     let device = WgpuDevice::DiscreteGpu(0);
@@ -148,7 +149,11 @@ fn main() {
     let device = WgpuDevice::default();
 
     let config = ModelConfig::new(gat_config);
-    let config = TrainingConfig::new(config, AdamConfig::new()).with_num_workers(num_cpus::get());
+    let config = TrainingConfig::new(
+        config,
+        AdamConfig::new().with_grad_clipping(Some(GradientClippingConfig::Norm(5.0))),
+    )
+    .with_num_workers(num_cpus::get());
 
     train::<Autodiff<Backend>>(
         &args.artifact_dir,

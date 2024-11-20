@@ -1,9 +1,9 @@
 use burn::{
     config::Config,
-    module::{Module, Param, ParamId},
+    module::{Module, Param},
     nn::{Dropout, DropoutConfig, Initializer, LeakyRelu, LeakyReluConfig, Linear, LinearConfig},
     prelude::Backend,
-    tensor::{BroadcastArgs, Distribution, Int, Shape, Tensor},
+    tensor::{Int, Tensor},
 };
 
 use crate::elu::{Elu, EluConfig};
@@ -97,9 +97,17 @@ impl GatLayerConfig {
     }
 }
 
+const BATCH_DIM: usize = 0;
+const NODE_COUNT_DIM: usize = 1;
+const FEATURE_DIM: usize = 2;
+const EDGE_COUNT_DIM: usize = 2;
+const EDGE_DIM: usize = 1;
+const SOURCE_NODES_DIM: usize = 0;
+const TARGET_NODES_DIM: usize = 1;
+
 impl<B: Backend> GatLayer<B> {
     /// Input:
-    /// Edges: [batch_size, E * 2, 2]
+    /// Edges: [batch_size, 2, E * 2]
     /// Features: [batch_size, N * 2, F]
     pub fn forward(&self, edges: &Tensor<B, 3, Int>, features: Tensor<B, 3>) -> Tensor<B, 3> {
         // println!(
@@ -110,6 +118,12 @@ impl<B: Backend> GatLayer<B> {
         //     self.out_features,
         //     self.num_heads,
         // );
+        assert_eq!(
+            edges.dims()[EDGE_DIM],
+            2,
+            "Edge tensor shape is incorrect! Shape: {:?}",
+            edges.dims()
+        );
         let in_skip = features.clone();
         // Linear projection and regularization
         let features_dims = features.dims();
@@ -119,7 +133,7 @@ impl<B: Backend> GatLayer<B> {
 
         let f = features.dims();
         let features: Tensor<B, 4> = features.reshape([
-            f[0] as i32,
+            f[BATCH_DIM] as i32,
             -1,
             self.num_heads as i32,
             self.out_features as i32,
@@ -130,20 +144,28 @@ impl<B: Backend> GatLayer<B> {
         // Edge attention
 
         // Apply scoring function
-        let scores_source = self
-            .scoring_fn_source
-            .val()
-            .expand::<4, _>(features_proj.shape())
-            .mul(features_proj.clone())
-            .sum_dim(3);
-        let scores_source = scores_source.squeeze::<3>(3);
-        let scores_target = self
-            .scoring_fn_target
-            .val()
-            .expand::<4, _>(features_proj.shape())
-            .mul(features_proj.clone())
-            .sum_dim(3);
-        let scores_target = scores_target.squeeze::<3>(3);
+        let scores_source = (features_proj.clone()
+            * self.scoring_fn_source.val().expand(features_proj.shape()))
+        .sum_dim(3)
+        .squeeze::<3>(3);
+        // let scores_source = self
+        //     .scoring_fn_source
+        //     .val()
+        //     .expand::<4, _>(features_proj.shape())
+        //     .mul(features_proj.clone())
+        //     .sum_dim(3);
+        // let scores_source = scores_source.squeeze::<3>(3);
+        let scores_target = (features_proj.clone()
+            * self.scoring_fn_target.val().expand(features_proj.shape()))
+        .sum_dim(3)
+        .squeeze::<3>(3);
+        // let scores_target = self
+        //     .scoring_fn_target
+        //     .val()
+        //     .expand::<4, _>(features_proj.shape())
+        //     .mul(features_proj.clone())
+        //     .sum_dim(3);
+        // let scores_target = scores_target.squeeze::<3>(3);
 
         let (scores_source, scores_target, features_proj) =
             self.lift(scores_source, scores_target, features_proj, edges.clone());
@@ -151,8 +173,15 @@ impl<B: Backend> GatLayer<B> {
 
         let attentions_per_edge = self.neighborhood_aware_softmax(
             scores_per_edge,
-            edges.clone().slice([None, Some((1, 2)), None]).squeeze(1),
-            features_dims[1],
+            edges
+                .clone()
+                .slice([
+                    None,
+                    Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
+                    None,
+                ])
+                .squeeze(1),
+            features_dims[NODE_COUNT_DIM],
         );
         let attentions_per_edge = self.dropout.forward(attentions_per_edge);
 
@@ -161,7 +190,7 @@ impl<B: Backend> GatLayer<B> {
         let out_node_features = self.aggregate_neighbors(
             node_features_projected_lifted_weighted,
             edges.clone(),
-            features_dims[1],
+            features_dims[NODE_COUNT_DIM],
         );
 
         self.skip_concat_bias(in_skip, out_node_features)
@@ -174,13 +203,22 @@ impl<B: Backend> GatLayer<B> {
         node_features_projected: Tensor<B, 4>,
         edge_indices: Tensor<B, 3, Int>,
     ) -> (Tensor<B, 3>, Tensor<B, 3>, Tensor<B, 4>) {
-        let edge_indices_dims = edge_indices.dims();
+        // let edge_indices_dims = edge_indices.dims();
         let source_node_indices: Tensor<B, 2, Int> = edge_indices
             .clone()
-            .slice([None, Some((0, 1)), None])
+            .slice([
+                None,
+                Some((SOURCE_NODES_DIM as i64, SOURCE_NODES_DIM as i64 + 1)),
+                None,
+            ])
             .squeeze(1);
-        let target_node_indices: Tensor<B, 2, Int> =
-            edge_indices.slice([None, Some((1, 2)), None]).squeeze(1);
+        let target_node_indices: Tensor<B, 2, Int> = edge_indices
+            .slice([
+                None,
+                Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
+                None,
+            ])
+            .squeeze(1);
 
         let source_node_dims = source_node_indices.dims();
         let target_node_dims = target_node_indices.dims();
@@ -193,30 +231,43 @@ impl<B: Backend> GatLayer<B> {
         // );
 
         let scores_source_selected = scores_source
-            .chunk(source_node_dims[0], 0)
+            .chunk(source_node_dims[BATCH_DIM], BATCH_DIM)
             .into_iter()
-            .zip(source_node_indices.clone().chunk(source_node_dims[0], 0))
-            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<2>(0))
+            .zip(
+                source_node_indices
+                    .clone()
+                    .chunk(source_node_dims[BATCH_DIM], BATCH_DIM),
+            )
+            .map(|(c, i)| {
+                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
+                    .squeeze::<2>(BATCH_DIM)
+            })
             .collect::<Vec<_>>();
 
         let scores_target_selected = scores_target
-            .chunk(target_node_dims[0], 0)
+            .chunk(target_node_dims[BATCH_DIM], BATCH_DIM)
             .into_iter()
-            .zip(target_node_indices.chunk(target_node_dims[0], 0))
-            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<2>(0))
+            .zip(target_node_indices.chunk(target_node_dims[BATCH_DIM], BATCH_DIM))
+            .map(|(c, i)| {
+                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
+                    .squeeze::<2>(BATCH_DIM)
+            })
             .collect();
 
         let node_features_projected_selected = node_features_projected
-            .chunk(source_node_dims[0], 0)
+            .chunk(source_node_dims[BATCH_DIM], BATCH_DIM)
             .into_iter()
-            .zip(source_node_indices.chunk(source_node_dims[0], 0))
-            .map(|(c, i)| c.select(1, i.squeeze(0)).squeeze::<3>(0))
+            .zip(source_node_indices.chunk(source_node_dims[BATCH_DIM], BATCH_DIM))
+            .map(|(c, i)| {
+                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
+                    .squeeze::<3>(BATCH_DIM)
+            })
             .collect();
 
-        let scores_source: Tensor<B, 3> = Tensor::stack(scores_source_selected, 0);
-        let scores_target: Tensor<B, 3> = Tensor::stack(scores_target_selected, 0);
+        let scores_source: Tensor<B, 3> = Tensor::stack(scores_source_selected, BATCH_DIM);
+        let scores_target: Tensor<B, 3> = Tensor::stack(scores_target_selected, BATCH_DIM);
         let node_features_projected: Tensor<B, 4> =
-            Tensor::stack(node_features_projected_selected, 0);
+            Tensor::stack(node_features_projected_selected, BATCH_DIM);
 
         // println!(
         //     "AFTER SS {:?} ST {:?} NFP {:?}",
@@ -282,12 +333,25 @@ impl<B: Backend> GatLayer<B> {
             Tensor::zeros(size, &node_features_projected.device());
         let edge_indices_dims = edge_indices.dims();
         let target_index_broadcasted = edge_indices
-            .slice([None, Some((0, 1)), None])
+            .slice([
+                None,
+                Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
+                None,
+            ])
             .squeeze::<2>(1)
-            .reshape([edge_indices_dims[0], edge_indices_dims[2], 1, 1])
+            .reshape([
+                edge_indices_dims[BATCH_DIM],
+                edge_indices_dims[EDGE_COUNT_DIM],
+                1,
+                1,
+            ])
             .expand(node_features_projected.shape());
 
-        out_node_features.scatter(1, target_index_broadcasted, node_features_projected)
+        out_node_features.scatter(
+            NODE_COUNT_DIM,
+            target_index_broadcasted,
+            node_features_projected,
+        )
     }
 
     fn neighborhood_aware_softmax(

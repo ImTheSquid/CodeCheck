@@ -64,6 +64,7 @@ impl<B: Backend> Gat<B> {
     pub fn forward(&self, edges: Tensor<B, 3, Int>, mut features: Tensor<B, 3>) -> Tensor<B, 3> {
         for layer in &self.layers {
             features = layer.forward(&edges, features);
+            println!("ABS MAX: {}", features.clone().abs().max());
         }
 
         features

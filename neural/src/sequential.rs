@@ -1,7 +1,7 @@
 use burn::{
     config::Config,
     module::Module,
-    nn::{LeakyRelu, LeakyReluConfig, Linear, LinearConfig, Relu, Sigmoid},
+    nn::{Dropout, DropoutConfig, LeakyRelu, LeakyReluConfig, Linear, LinearConfig, Relu, Sigmoid},
     prelude::Backend,
     tensor::Tensor,
 };
@@ -12,6 +12,7 @@ pub enum SequentialLayerConfig {
     Relu,
     LeakyRelu(LeakyReluConfig),
     Sigmoid,
+    Dropout(DropoutConfig),
 }
 
 #[derive(Debug, Config)]
@@ -30,6 +31,7 @@ impl SequentialConfig {
                     SequentialLayerConfig::Sigmoid => SequentialLayer::Sigmoid(Sigmoid),
                     SequentialLayerConfig::LeakyRelu(lrc) => SequentialLayer::LeakyRelu(lrc.init()),
                     SequentialLayerConfig::Linear(l) => SequentialLayer::Linear(l.init(device)),
+                    SequentialLayerConfig::Dropout(d) => SequentialLayer::Dropout(d.init()),
                 })
                 .collect(),
         }
@@ -42,6 +44,7 @@ pub enum SequentialLayer<B: Backend> {
     Relu(Relu),
     LeakyRelu(LeakyRelu),
     Sigmoid(Sigmoid),
+    Dropout(Dropout),
 }
 
 #[derive(Module, Debug)]
@@ -56,8 +59,13 @@ impl<B: Backend> Sequential<B> {
                 SequentialLayer::Relu(r) => r.forward(input),
                 SequentialLayer::Sigmoid(s) => s.forward(input),
                 SequentialLayer::LeakyRelu(lr) => lr.forward(input),
-                SequentialLayer::Linear(l) => l.forward(input),
-            }
+                SequentialLayer::Linear(l) => {
+                    println!("LIN WEIGHTS: {}", l.weight.val());
+                    l.forward(input)
+                }
+                SequentialLayer::Dropout(d) => d.forward(input),
+            };
+            println!("AFTER {layer:?}, INPUT {input}");
         }
 
         input
