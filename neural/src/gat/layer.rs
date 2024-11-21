@@ -98,7 +98,7 @@ impl GatLayerConfig {
 }
 
 const NODE_COUNT_DIM: usize = 0;
-const FEATURE_DIM: usize = 1;
+// const FEATURE_DIM: usize = 1;
 const EDGE_COUNT_DIM: usize = 1;
 const EDGE_DIM: usize = 0;
 const SOURCE_NODES_DIM: usize = 0;
