@@ -61,7 +61,7 @@ pub struct Gat<B: Backend> {
 }
 
 impl<B: Backend> Gat<B> {
-    pub fn forward(&self, edges: Tensor<B, 3, Int>, mut features: Tensor<B, 3>) -> Tensor<B, 3> {
+    pub fn forward(&self, edges: Tensor<B, 2, Int>, mut features: Tensor<B, 2>) -> Tensor<B, 2> {
         for layer in &self.layers {
             features = layer.forward(&edges, features);
             println!("ABS MAX: {}", features.clone().abs().max());

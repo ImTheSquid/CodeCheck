@@ -65,7 +65,7 @@ impl<B: Backend> Sequential<B> {
                 }
                 SequentialLayer::Dropout(d) => d.forward(input),
             };
-            println!("AFTER {layer:?}, INPUT {input}");
+            println!("AFTER {layer:?}, INPUT NOW: {input}");
         }
 
         input

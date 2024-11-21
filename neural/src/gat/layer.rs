@@ -97,19 +97,18 @@ impl GatLayerConfig {
     }
 }
 
-const BATCH_DIM: usize = 0;
-const NODE_COUNT_DIM: usize = 1;
-const FEATURE_DIM: usize = 2;
-const EDGE_COUNT_DIM: usize = 2;
-const EDGE_DIM: usize = 1;
+const NODE_COUNT_DIM: usize = 0;
+const FEATURE_DIM: usize = 1;
+const EDGE_COUNT_DIM: usize = 1;
+const EDGE_DIM: usize = 0;
 const SOURCE_NODES_DIM: usize = 0;
 const TARGET_NODES_DIM: usize = 1;
 
 impl<B: Backend> GatLayer<B> {
     /// Input:
-    /// Edges: [batch_size, 2, E * 2]
-    /// Features: [batch_size, N * 2, F]
-    pub fn forward(&self, edges: &Tensor<B, 3, Int>, features: Tensor<B, 3>) -> Tensor<B, 3> {
+    /// Edges: [2, E]
+    /// Features: [N, F]
+    pub fn forward(&self, edges: &Tensor<B, 2, Int>, features: Tensor<B, 2>) -> Tensor<B, 2> {
         // println!(
         //     "LAYER FORWARD: E {:?} F {:?} LP {:?} OF {} NH {}",
         //     edges.dims(),
@@ -131,13 +130,8 @@ impl<B: Backend> GatLayer<B> {
 
         let features = self.linear_projection.forward(features);
 
-        let f = features.dims();
-        let features: Tensor<B, 4> = features.reshape([
-            f[BATCH_DIM] as i32,
-            -1,
-            self.num_heads as i32,
-            self.out_features as i32,
-        ]);
+        let features: Tensor<B, 3> =
+            features.reshape([-1, self.num_heads as i32, self.out_features as i32]);
 
         let features_proj = self.dropout.forward(features);
 
@@ -146,8 +140,8 @@ impl<B: Backend> GatLayer<B> {
         // Apply scoring function
         let scores_source = (features_proj.clone()
             * self.scoring_fn_source.val().expand(features_proj.shape()))
-        .sum_dim(3)
-        .squeeze::<3>(3);
+        .sum_dim(2)
+        .squeeze::<2>(2);
         // let scores_source = self
         //     .scoring_fn_source
         //     .val()
@@ -157,8 +151,8 @@ impl<B: Backend> GatLayer<B> {
         // let scores_source = scores_source.squeeze::<3>(3);
         let scores_target = (features_proj.clone()
             * self.scoring_fn_target.val().expand(features_proj.shape()))
-        .sum_dim(3)
-        .squeeze::<3>(3);
+        .sum_dim(2)
+        .squeeze::<2>(2);
         // let scores_target = self
         //     .scoring_fn_target
         //     .val()
@@ -176,11 +170,10 @@ impl<B: Backend> GatLayer<B> {
             edges
                 .clone()
                 .slice([
-                    None,
                     Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
                     None,
                 ])
-                .squeeze(1),
+                .squeeze(0),
             features_dims[NODE_COUNT_DIM],
         );
         let attentions_per_edge = self.dropout.forward(attentions_per_edge);
@@ -198,30 +191,25 @@ impl<B: Backend> GatLayer<B> {
 
     fn lift(
         &self,
-        scores_source: Tensor<B, 3>,
-        scores_target: Tensor<B, 3>,
-        node_features_projected: Tensor<B, 4>,
-        edge_indices: Tensor<B, 3, Int>,
-    ) -> (Tensor<B, 3>, Tensor<B, 3>, Tensor<B, 4>) {
+        scores_source: Tensor<B, 2>,
+        scores_target: Tensor<B, 2>,
+        node_features_projected: Tensor<B, 3>,
+        edge_indices: Tensor<B, 2, Int>,
+    ) -> (Tensor<B, 2>, Tensor<B, 2>, Tensor<B, 3>) {
         // let edge_indices_dims = edge_indices.dims();
-        let source_node_indices: Tensor<B, 2, Int> = edge_indices
+        let source_node_indices: Tensor<B, 1, Int> = edge_indices
             .clone()
             .slice([
-                None,
                 Some((SOURCE_NODES_DIM as i64, SOURCE_NODES_DIM as i64 + 1)),
                 None,
             ])
-            .squeeze(1);
-        let target_node_indices: Tensor<B, 2, Int> = edge_indices
+            .squeeze(0);
+        let target_node_indices: Tensor<B, 1, Int> = edge_indices
             .slice([
-                None,
                 Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
                 None,
             ])
-            .squeeze(1);
-
-        let source_node_dims = source_node_indices.dims();
-        let target_node_dims = target_node_indices.dims();
+            .squeeze(0);
 
         // println!(
         //     "SHAPES: SNI {source_node_dims:?} TNI {target_node_dims:?} NFP {:?} EI {edge_indices_dims:?} SS {:?} ST {:?}",
@@ -230,44 +218,10 @@ impl<B: Backend> GatLayer<B> {
         //     scores_target.dims(),
         // );
 
-        let scores_source_selected = scores_source
-            .chunk(source_node_dims[BATCH_DIM], BATCH_DIM)
-            .into_iter()
-            .zip(
-                source_node_indices
-                    .clone()
-                    .chunk(source_node_dims[BATCH_DIM], BATCH_DIM),
-            )
-            .map(|(c, i)| {
-                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
-                    .squeeze::<2>(BATCH_DIM)
-            })
-            .collect::<Vec<_>>();
-
-        let scores_target_selected = scores_target
-            .chunk(target_node_dims[BATCH_DIM], BATCH_DIM)
-            .into_iter()
-            .zip(target_node_indices.chunk(target_node_dims[BATCH_DIM], BATCH_DIM))
-            .map(|(c, i)| {
-                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
-                    .squeeze::<2>(BATCH_DIM)
-            })
-            .collect();
-
-        let node_features_projected_selected = node_features_projected
-            .chunk(source_node_dims[BATCH_DIM], BATCH_DIM)
-            .into_iter()
-            .zip(source_node_indices.chunk(source_node_dims[BATCH_DIM], BATCH_DIM))
-            .map(|(c, i)| {
-                c.select(NODE_COUNT_DIM, i.squeeze(BATCH_DIM))
-                    .squeeze::<3>(BATCH_DIM)
-            })
-            .collect();
-
-        let scores_source: Tensor<B, 3> = Tensor::stack(scores_source_selected, BATCH_DIM);
-        let scores_target: Tensor<B, 3> = Tensor::stack(scores_target_selected, BATCH_DIM);
-        let node_features_projected: Tensor<B, 4> =
-            Tensor::stack(node_features_projected_selected, BATCH_DIM);
+        let scores_source = scores_source.select(NODE_COUNT_DIM, source_node_indices.clone());
+        let scores_target = scores_target.select(NODE_COUNT_DIM, target_node_indices);
+        let node_features_projected =
+            node_features_projected.select(NODE_COUNT_DIM, source_node_indices);
 
         // println!(
         //     "AFTER SS {:?} ST {:?} NFP {:?}",
@@ -281,17 +235,15 @@ impl<B: Backend> GatLayer<B> {
 
     fn skip_concat_bias(
         &self,
-        in_node_features: Tensor<B, 3>,
-        mut out_node_features: Tensor<B, 4>,
-    ) -> Tensor<B, 3> {
-        let inf_dims = in_node_features.dims();
+        in_node_features: Tensor<B, 2>,
+        mut out_node_features: Tensor<B, 3>,
+    ) -> Tensor<B, 2> {
         if let Some(skip) = &self.skip_projection {
-            if out_node_features.dims()[3] == in_node_features.dims()[2] {
-                out_node_features = out_node_features + in_node_features.unsqueeze_dim(2);
+            if out_node_features.dims()[2] == in_node_features.dims()[1] {
+                out_node_features = out_node_features + in_node_features.unsqueeze_dim(1);
             } else {
                 out_node_features = out_node_features
                     + skip.forward(in_node_features).reshape([
-                        inf_dims[0] as i32,
                         -1,
                         self.num_heads as i32,
                         self.out_features as i32,
@@ -299,14 +251,10 @@ impl<B: Backend> GatLayer<B> {
             }
         }
 
-        let mut out_node_features: Tensor<B, 3> = if self.concat {
-            out_node_features.reshape([
-                inf_dims[0] as i32,
-                -1,
-                (self.num_heads * self.out_features) as i32,
-            ])
+        let mut out_node_features: Tensor<B, 2> = if self.concat {
+            out_node_features.reshape([-1, (self.num_heads * self.out_features) as i32])
         } else {
-            out_node_features.mean_dim(2).squeeze_dims::<3>(&[])
+            out_node_features.mean_dim(1).squeeze_dims::<2>(&[])
         };
 
         if let Some(bias) = &self.bias {
@@ -323,28 +271,22 @@ impl<B: Backend> GatLayer<B> {
 
     fn aggregate_neighbors(
         &self,
-        node_features_projected: Tensor<B, 4>,
-        edge_indices: Tensor<B, 3, Int>,
+        node_features_projected: Tensor<B, 3>,
+        edge_indices: Tensor<B, 2, Int>,
         num_nodes: usize,
-    ) -> Tensor<B, 4> {
+    ) -> Tensor<B, 3> {
         let mut size = node_features_projected.dims();
-        size[1] = num_nodes;
-        let out_node_features: Tensor<B, 4> =
+        size[0] = num_nodes;
+        let out_node_features: Tensor<B, 3> =
             Tensor::zeros(size, &node_features_projected.device());
         let edge_indices_dims = edge_indices.dims();
         let target_index_broadcasted = edge_indices
             .slice([
-                None,
                 Some((TARGET_NODES_DIM as i64, TARGET_NODES_DIM as i64 + 1)),
                 None,
             ])
-            .squeeze::<2>(1)
-            .reshape([
-                edge_indices_dims[BATCH_DIM],
-                edge_indices_dims[EDGE_COUNT_DIM],
-                1,
-                1,
-            ])
+            .squeeze::<1>(0)
+            .reshape([edge_indices_dims[EDGE_COUNT_DIM], 1, 1])
             .expand(node_features_projected.shape());
 
         out_node_features.scatter(
@@ -356,10 +298,10 @@ impl<B: Backend> GatLayer<B> {
 
     fn neighborhood_aware_softmax(
         &self,
-        scores_per_edge: Tensor<B, 3>,
-        target_index: Tensor<B, 2, Int>,
+        scores_per_edge: Tensor<B, 2>,
+        target_index: Tensor<B, 1, Int>,
         num_nodes: usize,
-    ) -> Tensor<B, 4> {
+    ) -> Tensor<B, 3> {
         let max_score = scores_per_edge.clone().max().into_scalar();
         let scores_per_edge = scores_per_edge - max_score;
         let exp_scores_per_edge = scores_per_edge.exp();
@@ -377,14 +319,14 @@ impl<B: Backend> GatLayer<B> {
 
     fn sum_edge_scores_neighborhood_aware(
         &self,
-        exp_scores_per_edge: Tensor<B, 3>,
-        target_index: Tensor<B, 2, Int>,
+        exp_scores_per_edge: Tensor<B, 2>,
+        target_index: Tensor<B, 1, Int>,
         num_nodes: usize,
-    ) -> Tensor<B, 3> {
+    ) -> Tensor<B, 2> {
         let target_index_shape = target_index.dims();
         let target_index_broadcasted = target_index
             .clone()
-            .reshape([target_index_shape[0], target_index_shape[1], 1])
+            .reshape([target_index_shape[0], 1])
             .expand(exp_scores_per_edge.shape());
 
         // println!(
@@ -394,28 +336,13 @@ impl<B: Backend> GatLayer<B> {
         // );
 
         let mut size = exp_scores_per_edge.dims();
-        size[1] = num_nodes;
+        size[0] = num_nodes;
         let neighborhood_sums = Tensor::zeros(size, &exp_scores_per_edge.device());
         let neighborhood_sums =
-            neighborhood_sums.scatter(1, target_index_broadcasted, exp_scores_per_edge);
+            neighborhood_sums.scatter(0, target_index_broadcasted, exp_scores_per_edge);
 
         // println!("NS {:?}", neighborhood_sums.dims());
 
-        let neighborhood_sums = neighborhood_sums
-            .chunk(size[0], 0)
-            .into_iter()
-            .zip(target_index.chunk(size[0], 0))
-            .map(|(c, i)| c.select(1, i.squeeze::<1>(0)).squeeze::<2>(0))
-            .collect::<Vec<_>>();
-
-        // println!(
-        //     "NSPROC {:?}",
-        //     neighborhood_sums
-        //         .iter()
-        //         .map(|n| n.shape().dims)
-        //         .collect::<Vec<_>>()
-        // );
-
-        Tensor::stack(neighborhood_sums, 0)
+        neighborhood_sums.select(0, target_index)
     }
 }

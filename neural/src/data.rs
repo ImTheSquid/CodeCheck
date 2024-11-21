@@ -331,22 +331,21 @@ impl<B: Backend> AstBatcher<B> {
 
         for (from, list) in edge_indices.iter().enumerate() {
             for to in list {
-                paired_indices.push(Tensor::from_ints(
-                    [(from + index_offset), (*to + index_offset)],
-                    &self.device,
-                ))
+                paired_indices.push(Tensor::from_ints([from, *to], &self.device))
             }
         }
 
         // Self-attention
-        for i in Range::from(0..tree.len())
-            .into_iter()
-            .map(|i| (i + index_offset))
-        {
+        for i in Range::from(0..tree.len()).into_iter() {
             paired_indices.push(Tensor::from_ints([i, i], &self.device));
         }
 
-        (Tensor::stack(paired_indices, 0), Tensor::stack(features, 0))
+        (
+            Tensor::stack(paired_indices, 0)
+                .add_scalar(index_offset as i64)
+                .transpose(),
+            Tensor::stack(features, 0),
+        )
     }
 }
 
@@ -372,14 +371,10 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                         .build_edges_and_features(a.path.as_path(), a.language, 0)
                         .expect("Valid tree build A");
                     let (b_edge, b_feature) = self
-                        .build_edges_and_features(
-                            b.path.as_path(),
-                            b.language,
-                            a_edge.shape().dims[0],
-                        )
+                        .build_edges_and_features(b.path.as_path(), b.language, 0)
                         .expect("Valid tree build B");
 
-                    let edge = Tensor::cat(vec![a_edge, b_edge], 0);
+                    // let edge = Tensor::cat(vec![a_edge, b_edge], 0);
                     // let features = Tensor::cat(vec![a_feature, b_feature], 0);
                     let features = FeaturePair {
                         a: a_feature,
@@ -418,72 +413,88 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                         Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &self.device)
                     };
 
-                    (edge, features, spans)
+                    ([a_edge, b_edge], features, spans)
                 })
                 .collect::<Vec<(_, _, _)>>(),
         );
 
         // Find the maximum values for features and edges, padding each tensor to the correct size
-        let max_nodes = features
-            .iter()
-            .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
-            .max()
-            .expect("some max feature value");
+        // let max_nodes = features
+        //     .iter()
+        //     .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
+        //     .max()
+        //     .expect("some max feature value");
 
-        let max_edges = edges
-            .iter()
-            .map(|t| t.dims()[0])
-            .max()
-            .expect("some max edges value");
+        // let max_edges = edges
+        //     .iter()
+        //     .map(|t| t.dims()[0])
+        //     .max()
+        //     .expect("some max edges value");
 
-        let edges = edges
-            .into_iter()
-            .map(|edge| {
-                if edge.dims()[0] < max_edges {
-                    let difference = max_edges - edge.dims()[0];
-                    let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
+        // let edges = edges
+        //     .into_iter()
+        //     .map(|edge| {
+        //         if edge.dims()[0] < max_edges {
+        //             let difference = max_edges - edge.dims()[0];
+        //             let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
 
-                    Tensor::cat(vec![edge, padding], 0)
-                } else {
-                    edge
-                }
-                .transpose()
-            })
-            .collect();
+        //             Tensor::cat(vec![edge, padding], 0)
+        //         } else {
+        //             edge
+        //         }
+        //         .transpose()
+        //     })
+        //     .collect();
 
-        fn normalize_to_max_nodes_if_needed<B: Backend>(
-            feature: Tensor<B, 2>,
-            max: usize,
-            device: &B::Device,
-        ) -> Tensor<B, 2> {
-            if feature.dims()[0] < max {
-                let difference = max - feature.dims()[0];
-                let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
+        // fn normalize_to_max_nodes_if_needed<B: Backend>(
+        //     feature: Tensor<B, 2>,
+        //     max: usize,
+        //     device: &B::Device,
+        // ) -> Tensor<B, 2> {
+        //     if feature.dims()[0] < max {
+        //         let difference = max - feature.dims()[0];
+        //         let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
 
-                Tensor::cat(vec![feature, padding], 0)
-            } else {
-                feature
-            }
+        //         Tensor::cat(vec![feature, padding], 0)
+        //     } else {
+        //         feature
+        //     }
+        // }
+
+        let mut offset = 0_i64;
+        let mut output = Vec::with_capacity(edges.len());
+        for edge_tensor in edges.into_iter().flatten() {
+            let next_offset = edge_tensor.dims()[1] as i64;
+            output.push(edge_tensor.add_scalar(offset));
+            offset += next_offset;
         }
 
-        let features = features
+        let edges = Tensor::cat(output, 1);
+
+        let features: Vec<_> = features
             .into_iter()
-            .map(|feature| {
-                Tensor::cat(
-                    vec![
-                        normalize_to_max_nodes_if_needed(feature.a, max_nodes, &self.device),
-                        normalize_to_max_nodes_if_needed(feature.b, max_nodes, &self.device),
-                    ],
-                    0,
-                )
-            })
+            .flat_map(|feature| [feature.a, feature.b])
             .collect();
 
+        // Create the graph index array
+        // Each graph node will have an associated item in this tensor such that for some node N_i,
+        // graph[N_i] = graph index it came from
+        // To get the pair index, do N_i // 2
+        let graph_feature_indices = features
+            .iter()
+            .enumerate()
+            .map(|(i, feature)| {
+                Tensor::<B, 1, Int>::full([feature.dims()[0]], i as u64, &self.device)
+            })
+            .collect::<Vec<_>>();
+
+        let graph_feature_indices = Tensor::cat(graph_feature_indices, 0);
+
         AstBatch {
-            edges: Tensor::stack(edges, 0),
-            features: Tensor::stack(features, 0),
+            edges,
+            features: Tensor::cat(features, 0),
             spans: Tensor::stack(spans, 0),
-            max_nodes,
+            graph_feature_indices,
         }
     }
 }
@@ -499,11 +510,11 @@ enum DataError {
 /// Represents a batch of ASTs for training
 #[derive(Debug, Clone)]
 pub struct AstBatch<B: Backend> {
-    /// [batch_size, E * 2, 2]
-    pub edges: Tensor<B, 3, burn::tensor::Int>,
-    /// [batch_size, N * 2, F]
-    pub features: Tensor<B, 3>,
+    /// [E, 2]
+    pub edges: Tensor<B, 2, burn::tensor::Int>,
+    /// [N, F]
+    pub features: Tensor<B, 2>,
     /// [batch_size, MAX_SPANS, 4]
     pub spans: Tensor<B, 3>,
-    pub max_nodes: usize,
+    pub graph_feature_indices: Tensor<B, 1, Int>,
 }

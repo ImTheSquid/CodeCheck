@@ -1,6 +1,5 @@
 use burn::{
     config::Config,
-    grad_clipping::{GradientClipping, GradientClippingConfig},
     module::Module,
     nn::{
         attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
@@ -8,13 +7,14 @@ use burn::{
         LinearConfig,
     },
     prelude::Backend,
-    tensor::{backend::AutodiffBackend, Int, Tensor},
+    tensor::{backend::AutodiffBackend, cast::ToElement, Int, Tensor},
     train::{TrainOutput, TrainStep, ValidStep},
 };
 
 use crate::{
     data::{AstBatch, MAX_NODES, MAX_SPANS},
     gat::{Gat, GatConfig},
+    leaky_gain,
     loss::{self, BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
     node_process::{NodeProcessor, NodeProcessorConfig},
     sequential::{Sequential, SequentialConfig, SequentialLayerConfig},
@@ -53,20 +53,35 @@ impl ModelConfig {
             gat: self.gat.init(device),
             attention: MultiHeadAttentionConfig::new(gat_output, self.attention_heads).init(device),
             regression: SequentialConfig::new(vec![
-                SequentialLayerConfig::Linear(LinearConfig::new(
-                    MAX_NODES * gat_output,
-                    MAX_NODES / 2,
-                )),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(MAX_NODES * gat_output, MAX_NODES / 2).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(0.0),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::Relu,
-                SequentialLayerConfig::Linear(LinearConfig::new(MAX_NODES / 2, MAX_SPANS * 4)),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(MAX_NODES / 2, MAX_SPANS * 4).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(0.0),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::Relu,
             ])
             .init(device),
             objectness: SequentialConfig::new(vec![
-                SequentialLayerConfig::Linear(LinearConfig::new(
-                    MAX_NODES * gat_output,
-                    MAX_NODES / 2,
-                )),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(MAX_NODES * gat_output, MAX_NODES / 2).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(0.0),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::Relu,
                 SequentialLayerConfig::Linear(LinearConfig::new(MAX_NODES / 2, MAX_SPANS)),
             ])
@@ -96,9 +111,9 @@ pub struct ModelResult<B: Backend> {
 impl<B: Backend> Model<B> {
     pub fn forward(
         &self,
-        features: Tensor<B, 3>,
-        edges: Tensor<B, 3, Int>,
-        max_nodes: usize,
+        features: Tensor<B, 2>,
+        edges: Tensor<B, 2, Int>,
+        graph_feature_indices: Tensor<B, 1, Int>,
     ) -> ModelResult<B> {
         // println!(
         //     "MODEL FORWARD: F {:?} E {:?}",
@@ -118,30 +133,79 @@ impl<B: Backend> Model<B> {
 
         // println!("GAT COMPLETE");
 
-        let features_a = features
-            .clone()
-            .slice([None, Some((0, max_nodes as i64)), None]);
+        let num_pairs = (graph_feature_indices.clone().max().into_scalar().to_i64() + 1) / 2;
 
-        let features_b = features.slice([None, Some((max_nodes as i64, -1)), None]);
+        let mut expanded = Tensor::<B, 3>::zeros(
+            [num_pairs as usize, MAX_NODES, features.dims()[1]],
+            &features.device(),
+        );
+        for pair_index in 0..num_pairs {
+            let first = pair_index * 2;
+            let second = first + 1;
 
-        let feature_attention =
-            self.attention
-                .forward(MhaInput::new(features_a, features_b.clone(), features_b));
+            // What elements match?
+            let first_indices = graph_feature_indices
+                .clone()
+                .equal_elem(first)
+                .nonzero()
+                .into_iter()
+                .next()
+                .unwrap();
+            let second_indices = graph_feature_indices
+                .clone()
+                .equal_elem(second)
+                .nonzero()
+                .into_iter()
+                .next()
+                .unwrap();
+            let first_select = features.clone().select(0, first_indices);
+            let second_select = features.clone().select(0, second_indices).unsqueeze();
 
-        println!("ATTN COMPLETE: {}", feature_attention.context);
+            let feature_attention = self.attention.forward(MhaInput::new(
+                first_select.unsqueeze(),
+                second_select.clone(),
+                second_select,
+            ));
+
+            let ctx = feature_attention.context.squeeze::<2>(0);
+
+            expanded.inplace(|e| {
+                let pair_index = pair_index as usize;
+                e.slice_assign(
+                    [
+                        pair_index..pair_index + 1,
+                        0..ctx.dims()[0],
+                        0..ctx.dims()[1],
+                    ],
+                    ctx.unsqueeze(),
+                )
+            });
+        }
+
+        // let features_a = features
+        //     .clone()
+        //     .slice([None, Some((0, max_nodes as i64)), None]);
+
+        // let features_b = features.slice([None, Some((max_nodes as i64, -1)), None]);
+
+        // let feature_attention =
+        //     self.attention
+        //         .forward(MhaInput::new(features_a, features_b.clone(), features_b));
+
+        // println!("ATTN COMPLETE: {}", feature_attention.context);
 
         // Normalize length of output to put through linear
-        let mut shape = feature_attention.context.dims();
-        let original = shape[1];
-        shape[1] = MAX_NODES;
-        let dev = feature_attention.context.device();
-        let z = Tensor::<B, 3>::zeros(shape, &dev);
-        let context = z.slice_assign(
-            [0..shape[0], 0..original, 0..shape[2]],
-            feature_attention.context,
-        );
+        // let mut shape = feature_attention.context.dims();
+        // let original = shape[1];
+        // shape[1] = MAX_NODES;
+        // let dev = feature_attention.context.device();
+        // let z = Tensor::<B, 3>::zeros(shape, &dev);
+        // let context = z.slice_assign(
+        //     [0..shape[0], 0..original, 0..shape[2]],
+        //     feature_attention.context,
+        // );
 
-        let context = context.flatten::<2>(1, 2);
+        let context = expanded.flatten::<2>(1, 2);
 
         let regression =
             self.regression
@@ -163,7 +227,7 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
             "INPUT===================\nF: {}\nE: {}",
             item.features, item.edges
         );
-        let out = self.forward(item.features, item.edges, item.max_nodes);
+        let out = self.forward(item.features, item.edges, item.graph_feature_indices);
         println!(
             "OUTPUT=================\nOBJ: {}\n\nREG: {}",
             out.objectness, out.regression
@@ -214,6 +278,6 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
 
 impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
-        self.forward(item.features, item.edges, item.max_nodes)
+        self.forward(item.features, item.edges, item.graph_feature_indices)
     }
 }

@@ -9,7 +9,7 @@ use burn::{
     data::dataloader::DataLoaderBuilder,
     grad_clipping::GradientClippingConfig,
     module::Module,
-    optim::{decay::WeightDecayConfig, AdamConfig},
+    optim::AdamConfig,
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
     train::{

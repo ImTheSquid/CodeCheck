@@ -8,6 +8,7 @@ use burn::{
 
 use crate::{
     data::MAX_FEATURES,
+    leaky_gain,
     sequential::{Sequential, SequentialConfig, SequentialLayerConfig},
 };
 
@@ -37,22 +38,37 @@ impl NodeProcessorConfig {
     pub fn init<B: Backend>(&self, device: &B::Device) -> NodeProcessor<B> {
         NodeProcessor {
             seq: SequentialConfig::new(vec![
-                SequentialLayerConfig::Linear(LinearConfig::new(MAX_FEATURES, self.hidden_1_size)),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(MAX_FEATURES, self.hidden_1_size).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(self.leaky_1_slope),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::LeakyRelu(
                     LeakyReluConfig::new().with_negative_slope(self.leaky_1_slope),
                 ),
-                SequentialLayerConfig::Linear(LinearConfig::new(
-                    self.hidden_1_size,
-                    self.hidden_2_size,
-                )),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(self.hidden_1_size, self.hidden_2_size).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(self.leaky_2_slope),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::LeakyRelu(
                     LeakyReluConfig::new().with_negative_slope(self.leaky_2_slope),
                 ),
                 SequentialLayerConfig::Dropout(DropoutConfig::new(self.p_dropout)),
-                SequentialLayerConfig::Linear(LinearConfig::new(
-                    self.hidden_2_size,
-                    self.output_size,
-                )),
+                SequentialLayerConfig::Linear(
+                    LinearConfig::new(self.hidden_2_size, self.output_size).with_initializer(
+                        burn::nn::Initializer::KaimingNormal {
+                            gain: leaky_gain(0.0),
+                            fan_out_only: false,
+                        },
+                    ),
+                ),
                 SequentialLayerConfig::Relu,
             ])
             .init(device),
