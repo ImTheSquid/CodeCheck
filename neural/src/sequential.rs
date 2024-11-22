@@ -65,7 +65,10 @@ impl<B: Backend> Sequential<B> {
                 }
                 SequentialLayer::Dropout(d) => d.forward(input),
             };
-            println!("AFTER {layer:?}, INPUT NOW: {input}");
+            println!(
+                "AFTER {layer:?}, INPUT NOW: {input} SUM {}",
+                input.clone().sum()
+            );
         }
 
         input

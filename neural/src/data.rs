@@ -362,6 +362,7 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             a: Tensor<B, 2>,
             b: Tensor<B, 2>,
         }
+        let num_items = items.len();
         let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
             items
                 .into_iter()
@@ -396,8 +397,8 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                                 [
                                     m.a.start as f32,
                                     m.b.start as f32,
-                                    m.a.end as f32,
-                                    m.b.end as f32,
+                                    m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 },
+                                    m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 },
                                 ],
                                 &self.device,
                             )
@@ -476,6 +477,8 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             .flat_map(|feature| [feature.a, feature.b])
             .collect();
 
+        assert_eq!(features.len(), num_items * 2, "Feature data lost!");
+
         // Create the graph index array
         // Each graph node will have an associated item in this tensor such that for some node N_i,
         // graph[N_i] = graph index it came from
@@ -489,6 +492,15 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
             .collect::<Vec<_>>();
 
         let graph_feature_indices = Tensor::cat(graph_feature_indices, 0);
+
+        assert!(
+            graph_feature_indices
+                .clone()
+                .greater_elem(0)
+                .any()
+                .into_scalar(),
+            "Graph feature indices all zero!"
+        );
 
         AstBatch {
             edges,

@@ -120,7 +120,7 @@ impl<B: Backend> Model<B> {
         //     features.dims(),
         //     edges.dims()
         // );
-        println!("FORWARD: {features}\nE: {edges}\n");
+        println!("FORWARD: {features}\nE: {edges}\nGFI: {graph_feature_indices}");
         let features = self.node_processor.forward(features);
 
         println!("PROC COMPLETE: {features}\n");
@@ -129,7 +129,11 @@ impl<B: Backend> Model<B> {
 
         println!("GAT COMPLETE: {features}\n");
 
-        println!("ABSOLUTE MAX: {}", features.clone().abs().max());
+        println!(
+            "ABSOLUTE MAX: {} SUM: {}",
+            features.clone().abs().max(),
+            features.clone().sum()
+        );
 
         // println!("GAT COMPLETE");
 
@@ -150,14 +154,14 @@ impl<B: Backend> Model<B> {
                 .nonzero()
                 .into_iter()
                 .next()
-                .unwrap();
+                .unwrap_or_else(|| panic!("No indices found for first index {first}!"));
             let second_indices = graph_feature_indices
                 .clone()
                 .equal_elem(second)
                 .nonzero()
                 .into_iter()
                 .next()
-                .unwrap();
+                .unwrap_or_else(|| panic!("No indices found for second index {second}!"));
             let first_select = features.clone().select(0, first_indices);
             let second_select = features.clone().select(0, second_indices).unsqueeze();
 
