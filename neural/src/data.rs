@@ -314,7 +314,7 @@ impl<B: Backend> AstBatcher<B> {
             }
 
             let node_feature = {
-                let node = node.value().into();
+                let node = node.value().into().to_device(&self.device);
                 let language_identifier =
                     Tensor::<B, 1>::from_floats([language_index], &self.device);
                 let padding =

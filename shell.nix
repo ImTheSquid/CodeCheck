@@ -7,11 +7,19 @@ let
       gdk-pixbuf
       glib
       dbus
-      openssl_3
+      openssl_3_3
       librsvg
     ] ++ lib.optionals pkgs.stdenv.isLinux [
         webkitgtk_4_1
         libsoup_3
+        libxkbcommon
+        libGL
+        wayland
+        vulkan-loader
+        xorg.libX11
+        xorg.libXcursor
+        xorg.libXi
+        xorg.libXrandr
     ] ++ lib.optionals pkgs.stdenv.isDarwin [
         darwin.apple_sdk.frameworks.WebKit
     ];
@@ -29,7 +37,7 @@ pkgs.mkShell {
     nixd
     pkg-config
     dbus
-    openssl_3
+    openssl_3_3
     glib
     gtk3
     librsvg
