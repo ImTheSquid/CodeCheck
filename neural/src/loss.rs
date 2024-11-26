@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 
 use burn::{
     prelude::Backend,
-    tensor::{Int, Tensor},
-    train::metric::{Adaptor, LossInput},
+    tensor::{Int, Tensor, Transaction},
+    train::metric::{Adaptor, ItemLazy, LossInput},
 };
 
 #[derive(Debug, Default)]
@@ -102,15 +102,24 @@ impl<B: Backend> GIOULoss<B> {
     where
         [(); D + 1]:,
     {
+        println!("GIOU FORWARD ================================\nT: {truth}");
+
         let empty_truth_mask = truth.clone().equal_elem(EMPTY_VALUE).all_dim(D - 1);
 
+        println!("ETM: {empty_truth_mask}");
+
         let giou = self.giou(predict, truth);
-        // println!("GIOU: {giou}");
+        println!("GIOU: {giou}");
 
         let best = giou.max_dim(D - 2);
+        println!("BEST: {best} BS: {}", best.clone().sum().into_scalar());
 
         // Empty truth by default has no loss, so make it such that 1 - 1 = 0
         let actual_loss = best.ones_like() - best.clone().mask_fill(empty_truth_mask.clone(), 1.0);
+        println!(
+            "A/L: {actual_loss} ALMEAN: {}",
+            actual_loss.clone().mean().into_scalar()
+        );
 
         let penalty = best
             .lower_elem(THRESHOLD)
@@ -118,8 +127,13 @@ impl<B: Backend> GIOULoss<B> {
             .mask_fill(empty_truth_mask, 0.0)
             * PENALTY;
 
+        println!(
+            "PENALTY: {penalty} PM: {}",
+            penalty.clone().mean().into_scalar()
+        );
+
         // println!("PENALTY: {}", penalty.clone().sum().into_scalar());
-        actual_loss.sum() + penalty.sum()
+        actual_loss.mean() + penalty.mean()
     }
 }
 
@@ -146,6 +160,35 @@ impl<B: Backend> Adaptor<LossInput<B>> for ModelOutput<B> {
     fn adapt(&self) -> LossInput<B> {
         println!("FINAL LOSS: {}", self.loss);
         LossInput::new(self.loss.clone())
+    }
+}
+
+impl<B: Backend> ItemLazy for ModelOutput<B> {
+    type ItemSync = ModelOutput<burn::backend::NdArray>;
+    fn sync(self) -> Self::ItemSync {
+        let [loss, obs_out, obs_tgt, reg_out, reg_tgt] = Transaction::default()
+            .register(self.loss)
+            .register(self.objectness.output)
+            .register(self.objectness.targets)
+            .register(self.regression.output)
+            .register(self.regression.targets)
+            .execute()
+            .try_into()
+            .expect("Correct number of tensors");
+
+        let device = &Default::default();
+
+        ModelOutput {
+            loss: Tensor::from_data(loss, device),
+            objectness: ObjectnessOutput {
+                output: Tensor::from_data(obs_out, device),
+                targets: Tensor::from_data(obs_tgt, device),
+            },
+            regression: BatchedRegressionOutput {
+                output: Tensor::from_data(reg_out, device),
+                targets: Tensor::from_data(reg_tgt, device),
+            },
+        }
     }
 }
 

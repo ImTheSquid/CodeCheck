@@ -244,6 +244,12 @@ pub struct AstBatcher<B: Backend> {
     device: B::Device,
 }
 
+struct BatchedTensors<B: Backend> {
+    edges: Tensor<B, 2, Int>,
+    features: Tensor<B, 2>,
+    num_lines: usize,
+}
+
 impl<B: Backend> AstBatcher<B> {
     pub fn new(device: B::Device) -> Self {
         AstBatcher { device }
@@ -254,10 +260,11 @@ impl<B: Backend> AstBatcher<B> {
         path: &Path,
         language: Language,
         index_offset: usize,
-    ) -> Result<(Tensor<B, 2, Int>, Tensor<B, 2>), DataError> {
+    ) -> Result<BatchedTensors<B>, DataError> {
         let file_data = fs::read_to_string(path)?;
+        let num_lines = file_data.lines().count();
 
-        Ok(match language {
+        let (e, f) = match language {
             Language::C => {
                 let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
                 self.convert_tree_to_tensor(tree, index_offset, 0.0)
@@ -273,6 +280,12 @@ impl<B: Backend> AstBatcher<B> {
             Language::Python => {
                 todo!()
             }
+        };
+
+        Ok(BatchedTensors {
+            edges: e,
+            features: f,
+            num_lines,
         })
     }
 
@@ -368,12 +381,23 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                 .into_iter()
                 .map(|AstDatasetSingle { a, b, marks }| {
                     // Traverse the tree in the default order that syntree does, converting nodes to features
-                    let (a_edge, a_feature) = self
+                    let BatchedTensors {
+                        edges: a_edge,
+                        features: a_feature,
+                        num_lines: a_lines,
+                    } = self
                         .build_edges_and_features(a.path.as_path(), a.language, 0)
                         .expect("Valid tree build A");
-                    let (b_edge, b_feature) = self
+                    let BatchedTensors {
+                        edges: b_edge,
+                        features: b_feature,
+                        num_lines: b_lines,
+                    } = self
                         .build_edges_and_features(b.path.as_path(), b.language, 0)
                         .expect("Valid tree build B");
+
+                    let a_lines = a_lines as f32;
+                    let b_lines = b_lines as f32;
 
                     // let edge = Tensor::cat(vec![a_edge, b_edge], 0);
                     // let features = Tensor::cat(vec![a_feature, b_feature], 0);
@@ -395,10 +419,12 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                             Tensor::<B, 1>::from_floats(
                                 // s_1 s_2 e_1 e_2
                                 [
-                                    m.a.start as f32,
-                                    m.b.start as f32,
-                                    m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 },
-                                    m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 },
+                                    m.a.start as f32 / a_lines,
+                                    m.b.start as f32 / b_lines,
+                                    (m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 })
+                                        / a_lines,
+                                    (m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 })
+                                        / b_lines,
                                 ],
                                 &self.device,
                             )

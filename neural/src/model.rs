@@ -6,9 +6,10 @@ use burn::{
         loss::{BinaryCrossEntropyLoss, BinaryCrossEntropyLossConfig},
         LinearConfig,
     },
+    optim::GradientsParams,
     prelude::Backend,
-    tensor::{backend::AutodiffBackend, cast::ToElement, Int, Tensor},
-    train::{TrainOutput, TrainStep, ValidStep},
+    tensor::{backend::AutodiffBackend, cast::ToElement, Int, Tensor, Transaction},
+    train::{metric::ItemLazy, TrainOutput, TrainStep, ValidStep},
 };
 
 use crate::{
@@ -70,7 +71,7 @@ impl ModelConfig {
                         },
                     ),
                 ),
-                SequentialLayerConfig::Relu,
+                SequentialLayerConfig::Sigmoid,
             ])
             .init(device),
             objectness: SequentialConfig::new(vec![
@@ -262,11 +263,16 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
         //     objectness_loss.clone().mean().into_scalar()
         // );
         println!("LOSS RL {} OL {}", regression_loss, objectness_loss);
+        let grads = GradientsParams::from_module(
+            &mut (regression_loss.clone() + objectness_loss.clone()).backward(),
+            self,
+        );
+        println!("{grads:?}");
         TrainOutput::new(
             self,
-            (regression_loss.clone() * 5 + objectness_loss.clone()).backward(),
+            (regression_loss.clone() + objectness_loss.clone()).backward(),
             loss::ModelOutput {
-                loss: regression_loss.clone() * 5 + objectness_loss,
+                loss: regression_loss.clone() + objectness_loss,
                 regression: BatchedRegressionOutput {
                     output: out.regression,
                     targets: item.spans,
@@ -283,5 +289,24 @@ impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
 impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
         self.forward(item.features, item.edges, item.graph_feature_indices)
+    }
+}
+
+impl<B: Backend> ItemLazy for ModelResult<B> {
+    type ItemSync = ModelResult<burn::backend::NdArray>;
+    fn sync(self) -> Self::ItemSync {
+        let [obs, reg] = Transaction::default()
+            .register(self.objectness)
+            .register(self.regression)
+            .execute()
+            .try_into()
+            .expect("right number of tensors");
+
+        let dev = &Default::default();
+
+        ModelResult {
+            objectness: Tensor::from_data(obs, dev),
+            regression: Tensor::from_data(reg, dev),
+        }
     }
 }

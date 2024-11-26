@@ -9,7 +9,7 @@ use burn::{
     data::dataloader::DataLoaderBuilder,
     grad_clipping::GradientClippingConfig,
     module::Module,
-    optim::AdamConfig,
+    optim::{decay::WeightDecayConfig, AdamConfig},
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
     train::{
@@ -147,7 +147,9 @@ fn main() {
     let config = ModelConfig::new(gat_config);
     let config = TrainingConfig::new(
         config,
-        AdamConfig::new().with_grad_clipping(Some(GradientClippingConfig::Norm(5.0))),
+        AdamConfig::new()
+            .with_weight_decay(Some(WeightDecayConfig::new(1e-5)))
+            .with_grad_clipping(Some(GradientClippingConfig::Value(1.0))),
     )
     .with_num_workers(num_cpus::get());
 

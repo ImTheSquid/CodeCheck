@@ -60,7 +60,11 @@ impl<B: Backend> Sequential<B> {
                 SequentialLayer::Sigmoid(s) => s.forward(input),
                 SequentialLayer::LeakyRelu(lr) => lr.forward(input),
                 SequentialLayer::Linear(l) => {
-                    println!("LIN WEIGHTS: {}", l.weight.val());
+                    println!(
+                        "LIN WEIGHTS: {} WSUM: {}",
+                        l.weight.val(),
+                        l.weight.val().sum()
+                    );
                     l.forward(input)
                 }
                 SequentialLayer::Dropout(d) => d.forward(input),
