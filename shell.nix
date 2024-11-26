@@ -1,5 +1,6 @@
 let
     pkgs = import <nixpkgs> {};
+    fenix = import (fetchTarball "https://github.com/nix-community/fenix/archive/main.tar.gz") { };
 
     libraries = with pkgs;[
       gtk3
@@ -26,12 +27,18 @@ let
 in
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    rustup
+    (fenix.complete.withComponents [
+      "cargo"
+      "clippy"
+      "rust-src"
+      "rustc"
+      "rustfmt"
+      "rust-analyzer"
+    ])
     sass
     tailwindcss
     cargo-edit
     cargo-leptos
-    rust-analyzer
     taplo
     prettierd
     nixd
@@ -59,10 +66,10 @@ pkgs.mkShell {
     export WEBKIT_DISABLE_DMABUF_RENDERER=1
 
     # Setup rustup with the nightly toolchain and default toolchain as nightly
-    rustup default nightly
-    rustup update nightly
+    #rustup default nightly
+    #rustup update nightly
 
     # Optionally, add wasm target if your project needs it
-    rustup target add wasm32-unknown-unknown --toolchain nightly
+    #rustup target add wasm32-unknown-unknown --toolchain nightly
   '';
 }

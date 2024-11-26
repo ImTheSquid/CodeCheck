@@ -142,10 +142,6 @@ fn main() {
 
     let gat_config = GatConfig::new(vec![15, 15, 15, 8], vec![8, 8, 3]);
 
-    #[cfg(target_os = "linux")]
-    let device = WgpuDevice::DiscreteGpu(0);
-
-    #[cfg(not(target_os = "linux"))]
     let device = WgpuDevice::default();
 
     let config = ModelConfig::new(gat_config);
