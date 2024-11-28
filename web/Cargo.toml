@@ -12,10 +12,10 @@ actix-web = { version = "4", optional = true, features = ["macros"] }
 console_error_panic_hook = "0.1"
 cfg-if = "1"
 http = { version = "0.2", optional = true }
-leptos = { version = "0.6.14", features = ["nightly"] }
-leptos_meta = { version = "0.6.14", features = ["nightly"] }
-leptos_actix = { version = "0.6.14", optional = true }
-leptos_router = { version = "0.6.14", features = ["nightly"] }
+leptos = { version = "0.7.0-rc2", features = ["nightly"] }
+leptos_meta = { version = "0.7.0-rc2" }
+leptos_actix = { version = "0.7.0-rc2", optional = true }
+leptos_router = { version = "0.7.0-rc2", features = ["nightly"] }
 #wasm-bindgen = "=0.2.93"
 serde = { version = "1.0.209", features = ["derive"] }
 auth = { path = "../auth" }
@@ -36,8 +36,8 @@ web-sys = "0.3.70"
 serde_json = "1.0.127"
 
 [features]
-csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr", "styled/csr"]
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+csr = ["leptos/csr", "styled/csr"]
+hydrate = ["leptos/hydrate"]
 ssr = [
     "dep:actix-files",
     "dep:actix-web",
