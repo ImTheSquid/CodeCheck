@@ -1,7 +1,4 @@
-use std::{
-    fs::{create_dir_all, remove_dir_all},
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use burn::{
     backend::{wgpu::WgpuDevice, Autodiff},
@@ -42,12 +39,6 @@ pub struct TrainingConfig {
     pub learning_rate: f64,
 }
 
-/// Ensures the given path exists as a directory
-fn create_artifact_directory(path: &Path) {
-    remove_dir_all(path).ok();
-    create_dir_all(path).expect("directory creation to succeed");
-}
-
 fn train<B: AutodiffBackend>(
     artifact_dir: &Path,
     config_dir: &Path,
@@ -55,8 +46,6 @@ fn train<B: AutodiffBackend>(
     config: TrainingConfig,
     device: B::Device,
 ) {
-    create_artifact_directory(artifact_dir);
-
     config
         .save(config_dir.join("config.json"))
         .expect("config to save successfully");
