@@ -1,6 +1,7 @@
 use crate::{
     app::{ServerAction, TermSelector, UserSearchBox},
-    home::sidebar::{get_course, CourseSidebar, SectionInfo}, RoleRequirement,
+    home::sidebar::{get_course, CourseSidebar, SectionInfo},
+    RoleRequirement,
 };
 use auth::ValidatedUser;
 use db::Role;
@@ -59,9 +60,9 @@ async fn get_all_users() -> Result<Vec<DisplayUser>, ServerFnError> {
             name: u.name,
             role: u.role,
             email: u.email.as_ref().map(|vr| vr.resource.to_owned()),
-            email_verified: u.email.is_some_and(|vr| {
-                matches!(vr.status, db::models::VerificationStatus::Verified)
-            }),
+            email_verified: u
+                .email
+                .is_some_and(|vr| matches!(vr.status, db::models::VerificationStatus::Verified)),
         })
         .collect();
 
@@ -143,7 +144,10 @@ pub fn Users() -> impl IntoView {
         let prev = prev.unwrap_or(0);
         let new = new_user_action.version()();
         if prev != new {
-            new_user_dialog.get().expect("new user dialog to be mounted").close();
+            new_user_dialog
+                .get()
+                .expect("new user dialog to be mounted")
+                .close();
             users_res.refetch();
             new
         } else {
@@ -290,9 +294,7 @@ async fn update_user(user: DisplayUser) -> Result<(), ServerFnError> {
     user_db.role = user.role;
     user_db.email = email;
 
-    user_db
-        .save(&data.database)
-        .await?;
+    user_db.save(&data.database).await?;
 
     Ok(())
 }
@@ -343,7 +345,10 @@ fn UserListRowItem(user: DisplayUser, #[prop(into)] refresh: Callback<()>) -> im
 
     let user_delete_id = user.id.clone();
     let delete_user = move |_| {
-        delete_dialog.get().expect("delete dialog to be mounted").close();
+        delete_dialog
+            .get()
+            .expect("delete dialog to be mounted")
+            .close();
         delete_user_action.dispatch(DeleteUser {
             user_id: user_delete_id.clone(),
         });
@@ -500,7 +505,9 @@ async fn get_terms() -> Result<Vec<TermInfo>, ServerFnError> {
         .map(|t| TermInfo {
             id: t.id.expect("term to have an id").to_hex(),
             name: t.name,
-            can_delete: t.can_delete.expect("can delete to be attached to the document"),
+            can_delete: t
+                .can_delete
+                .expect("can delete to be attached to the document"),
         })
         .collect::<Vec<_>>();
 
@@ -648,7 +655,9 @@ async fn get_courses(term_id: String) -> Result<Vec<BaseCourseInfo>, ServerFnErr
             id: c.id.expect("id to exist on the course").to_hex(),
             name: c.name,
             owner: {
-                let human_owner = c.human_owner.expect("human owner to be attaached to the document");
+                let human_owner = c
+                    .human_owner
+                    .expect("human owner to be attaached to the document");
                 HumanReadableUser {
                     id: c.owner.to_hex(),
                     name: human_owner.name,
@@ -737,7 +746,10 @@ pub fn Courses() -> impl IntoView {
         let course_new = create_course.version()();
         if course_new != course_prev {
             new_course_trigger.notify();
-            create_course_ref.get().expect("create course dialog to be mounted").close();
+            create_course_ref
+                .get()
+                .expect("create course dialog to be mounted")
+                .close();
             course_new
         } else {
             course_prev
@@ -841,7 +853,10 @@ fn CourseCreator(
             owner_id: new_course_owner().expect("because submission is blocked until not None"),
             term_id: new_course_term().expect("because submission is blocked until not None"),
         });
-        create_course_ref.get().expect("create course dialog to be mounted").close();
+        create_course_ref
+            .get()
+            .expect("create course dialog to be mounted")
+            .close();
     };
 
     view! {
@@ -864,20 +879,31 @@ fn CourseCreator(
 }
 
 #[server(SaveCourseInfo)]
-async fn save_course_info(course_id: String, name: String, owner_id: String) -> Result<(), ServerFnError> {
+async fn save_course_info(
+    course_id: String,
+    name: String,
+    owner_id: String,
+) -> Result<(), ServerFnError> {
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$set": {
-            "name": name,
-            "owner": ObjectId::from_str(&owner_id)?,
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$set": {
+                    "name": name,
+                    "owner": ObjectId::from_str(&owner_id)?,
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -886,12 +912,18 @@ async fn save_course_info(course_id: String, name: String, owner_id: String) -> 
 async fn delete_course(course_id: String) -> Result<(), ServerFnError> {
     use crate::server_prelude::*;
     use db::models::Course;
-    
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().delete_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?
-    }, None).await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
+
+    data.database
+        .auto_collection::<Course>()
+        .delete_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -900,8 +932,8 @@ async fn delete_course(course_id: String) -> Result<(), ServerFnError> {
 async fn create_section(course_id: String, section_name: String) -> Result<(), ServerFnError> {
     use crate::server_prelude::*;
     use db::models::{Course, CourseSection};
-    
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
     data.database.auto_collection::<Course>().update_one(doc! {
         "_id": ObjectId::from_str(&course_id)?,
@@ -919,17 +951,24 @@ async fn delete_section(course_id: String, section_id: String) -> Result<(), Ser
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$pull": {
-            "sections": {
-                "id": ObjectId::from_str(&section_id)?,
-            }
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$pull": {
+                    "sections": {
+                        "id": ObjectId::from_str(&section_id)?,
+                    }
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -939,15 +978,22 @@ async fn add_instructor(course_id: String, user_id: String) -> Result<(), Server
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$push": {
-            "instructors": ObjectId::from_str(&user_id)?,
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$push": {
+                    "instructors": ObjectId::from_str(&user_id)?,
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -957,15 +1003,22 @@ async fn remove_instructor(course_id: String, user_id: String) -> Result<(), Ser
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$pull": {
-            "instructors": ObjectId::from_str(&user_id)?,
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$pull": {
+                    "instructors": ObjectId::from_str(&user_id)?,
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -975,15 +1028,22 @@ async fn add_grader(course_id: String, user_id: String) -> Result<(), ServerFnEr
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$push": {
-            "graders": ObjectId::from_str(&user_id)?,
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$push": {
+                    "graders": ObjectId::from_str(&user_id)?,
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -993,15 +1053,22 @@ async fn remove_grader(course_id: String, user_id: String) -> Result<(), ServerF
     use crate::server_prelude::*;
     use db::models::Course;
 
-    let (data, _user): (Data<WebState>, AuthedUser::<{ Role::Admin }>) = extract().await?;
+    let (data, _user): (Data<WebState>, AuthedUser<{ Role::Admin }>) = extract().await?;
 
-    data.database.auto_collection::<Course>().update_one(doc! {
-        "_id": ObjectId::from_str(&course_id)?,
-    }, doc! {
-        "$pull": {
-            "graders": ObjectId::from_str(&user_id)?,
-        }
-    }, None).await?;
+    data.database
+        .auto_collection::<Course>()
+        .update_one(
+            doc! {
+                "_id": ObjectId::from_str(&course_id)?,
+            },
+            doc! {
+                "$pull": {
+                    "graders": ObjectId::from_str(&user_id)?,
+                }
+            },
+            None,
+        )
+        .await?;
 
     Ok(())
 }
@@ -1018,13 +1085,19 @@ pub fn Course() -> impl IntoView {
     let add_grader = create_server_action::<AddGrader>();
     let remove_grader = create_server_action::<RemoveGrader>();
     let params = use_params_map();
-    let course_id = move || params.with(|params| params.get("course").cloned().expect(":course to be in URL params"));
+    let course_id = move || {
+        params.with(|params| {
+            params
+                .get("course")
+                .cloned()
+                .expect(":course to be in URL params")
+        })
+    };
 
-    let course = create_blocking_resource(move || {
-        course_id()
-    }, |course| async move {
-        get_course(true, course).await
-    });
+    let course = create_blocking_resource(
+        move || course_id(),
+        |course| async move { get_course(true, course).await },
+    );
 
     // let styles = style!(
     //     div.fields {
@@ -1072,17 +1145,26 @@ pub fn Course() -> impl IntoView {
     let new_grader = create_rw_signal(None);
 
     let create_new_section = move || {
-        create_section.dispatch(CreateSection { course_id: course_id(), section_name: new_section_name() });
+        create_section.dispatch(CreateSection {
+            course_id: course_id(),
+            section_name: new_section_name(),
+        });
         set_new_section_name(String::new());
     };
 
     let add_instructor = move || {
-        add_instructor.dispatch(AddInstructor { course_id: course_id(), user_id: new_instructor().expect("instructor to be selected") });
+        add_instructor.dispatch(AddInstructor {
+            course_id: course_id(),
+            user_id: new_instructor().expect("instructor to be selected"),
+        });
         new_instructor.set(None);
     };
 
     let add_grader = move || {
-        add_grader.dispatch(AddGrader { course_id: course_id(), user_id: new_grader().expect("grader to be selected") });
+        add_grader.dispatch(AddGrader {
+            course_id: course_id(),
+            user_id: new_grader().expect("grader to be selected"),
+        });
         new_grader.set(None);
     };
 
@@ -1185,7 +1267,10 @@ pub fn Course() -> impl IntoView {
 }
 
 #[component]
-fn CourseSectionListRowItem(section: SectionInfo, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
+fn CourseSectionListRowItem(
+    section: SectionInfo,
+    #[prop(into)] on_remove: Callback<()>,
+) -> impl IntoView {
     // let styles = style!(
     //     div {
     //         display: inline-block;
@@ -1202,7 +1287,10 @@ fn CourseSectionListRowItem(section: SectionInfo, #[prop(into)] on_remove: Callb
 }
 
 #[component]
-fn CourseUserListRowItem(user: HumanReadableUser, #[prop(into)] on_remove: Callback<()>) -> impl IntoView {
+fn CourseUserListRowItem(
+    user: HumanReadableUser,
+    #[prop(into)] on_remove: Callback<()>,
+) -> impl IntoView {
     // let styles = style!(
     //     div {
     //         display: inline-block;

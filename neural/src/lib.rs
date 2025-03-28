@@ -3,6 +3,7 @@
 #![feature(generic_const_exprs)]
 
 pub mod contrastive;
+pub mod critic;
 pub mod data;
 pub mod elu;
 pub mod gat;

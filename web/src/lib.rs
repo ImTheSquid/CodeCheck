@@ -5,10 +5,10 @@
 pub mod admin;
 pub mod app;
 pub mod home;
-pub mod login;
-pub mod setup;
 #[cfg(feature = "ssr")]
 pub mod jobs;
+pub mod login;
+pub mod setup;
 
 use cfg_if::cfg_if;
 
@@ -32,7 +32,7 @@ if #[cfg(feature = "hydrate")] {
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum RoleRequirementCondition {
     ExactOrGreater,
-    Exact
+    Exact,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -43,10 +43,7 @@ pub struct RoleRequirement {
 
 impl RoleRequirement {
     pub fn new(role: db::Role, condition: RoleRequirementCondition) -> Self {
-        Self {
-            role,
-            condition,
-        }
+        Self { role, condition }
     }
 
     pub fn includes_role(&self, role: db::Role) -> bool {
@@ -120,10 +117,10 @@ pub mod server_prelude {
     pub use crate::AuthedUser;
     pub use actix_web::web::Data;
     pub use actix_web::HttpRequest;
+    pub use db::Role;
     pub use goldleaf::{AutoCollection, CollectionIdentity};
     pub use leptos_actix::{extract, ResponseOptions};
     pub use mongodb::bson::{doc, from_document, oid::ObjectId, to_bson};
-    pub use db::Role;
 }
 
 #[cfg(feature = "ssr")]
@@ -142,8 +139,7 @@ pub mod server {
 
     pub async fn database() -> Result<mongodb::Database, anyhow::Error> {
         db::connect(
-            &env::var("CODECHECK_MONGO_URI")
-                .expect("`CODECHECK_MONGO_URI` variable required!"),
+            &env::var("CODECHECK_MONGO_URI").expect("`CODECHECK_MONGO_URI` variable required!"),
             "codecheck",
         )
         .await

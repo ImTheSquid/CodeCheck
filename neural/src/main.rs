@@ -6,6 +6,7 @@ use burn::{
     data::dataloader::DataLoaderBuilder,
     grad_clipping::GradientClippingConfig,
     module::Module,
+    nn::LstmConfig,
     optim::{decay::WeightDecayConfig, AdamConfig},
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
@@ -130,10 +131,11 @@ fn main() {
         .collect::<Vec<_>>();
 
     let gat_config = GatConfig::new(vec![15, 15, 15, 8], vec![8, 8, 3]);
+    let lstm_config = LstmConfig::new(8, 16, true);
 
     let device = WgpuDevice::default();
 
-    let config = ModelConfig::new(gat_config);
+    let config = ModelConfig::new(gat_config, lstm_config);
     let config = TrainingConfig::new(
         config,
         AdamConfig::new()

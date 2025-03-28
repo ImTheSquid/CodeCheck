@@ -7,7 +7,7 @@ use leptos_router::*;
 use leptos_use::*;
 use stylist::style;
 
-use crate::{HumanReadableUser};
+use crate::HumanReadableUser;
 
 #[component]
 pub fn OutletSidebar() -> impl IntoView {
@@ -30,10 +30,7 @@ pub struct CourseInfo {
 }
 
 #[server(GetCourses)]
-async fn get_courses(
-    try_get_all: bool,
-    term_id: String,
-) -> Result<Vec<CourseInfo>, ServerFnError> {
+async fn get_courses(try_get_all: bool, term_id: String) -> Result<Vec<CourseInfo>, ServerFnError> {
     use crate::server::WebState;
     use crate::AuthedUser;
     use actix_web::web::Data;
@@ -159,9 +156,12 @@ pub struct FullCourseInfo {
 }
 
 #[server(GetCourse)]
-pub async fn get_course(try_override_membership: bool, id: String) -> Result<FullCourseInfo, ServerFnError> {
+pub async fn get_course(
+    try_override_membership: bool,
+    id: String,
+) -> Result<FullCourseInfo, ServerFnError> {
     use crate::server_prelude::*;
-    use db::models::{User, Course};
+    use db::models::{Course, User};
 
     let id = ObjectId::from_str(&id)?;
     let data: Data<WebState> = extract().await?;
@@ -213,7 +213,7 @@ pub async fn get_course(try_override_membership: bool, id: String) -> Result<Ful
                     "$arrayElemAt": ["$human_owner", 0],
                 }
             }
-        },        
+        },
         // Attach human readable
         doc! {
             "$set": {
@@ -242,8 +242,15 @@ pub async fn get_course(try_override_membership: bool, id: String) -> Result<Ful
             }
         },
     ];
-    
-    let course = data.database.auto_collection::<Course>().aggregate(aggregation, None).await?.try_collect::<Vec<_>>().await?.pop();
+
+    let course = data
+        .database
+        .auto_collection::<Course>()
+        .aggregate(aggregation, None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?
+        .pop();
 
     match course {
         None => Err(ServerFnError::ServerError("Invalid course ID".to_string())),
@@ -255,22 +262,36 @@ pub async fn get_course(try_override_membership: bool, id: String) -> Result<Ful
             Ok(FullCourseInfo {
                 id: course.id.unwrap().to_hex(),
                 name: course.name,
-                owner: HumanReadableUser { id: course.owner.to_hex(), name: human_owner.name, username: human_owner.username },
-                instructors: human_instructors.into_iter().map(|inst| HumanReadableUser {
-                    id: inst.id.unwrap().to_hex(),
-                    name: inst.name,
-                    username: inst.username,
-                }).collect(),
-                graders: human_graders.into_iter().map(|grad| HumanReadableUser {
-                    id: grad.id.unwrap().to_hex(),
-                    name: grad.name,
-                    username: grad.username,
-                }).collect(),
+                owner: HumanReadableUser {
+                    id: course.owner.to_hex(),
+                    name: human_owner.name,
+                    username: human_owner.username,
+                },
+                instructors: human_instructors
+                    .into_iter()
+                    .map(|inst| HumanReadableUser {
+                        id: inst.id.unwrap().to_hex(),
+                        name: inst.name,
+                        username: inst.username,
+                    })
+                    .collect(),
+                graders: human_graders
+                    .into_iter()
+                    .map(|grad| HumanReadableUser {
+                        id: grad.id.unwrap().to_hex(),
+                        name: grad.name,
+                        username: grad.username,
+                    })
+                    .collect(),
                 term_id: course.term.to_hex(),
-                sections: course.sections.into_iter().map(|sect| SectionInfo {
-                    id: sect.id.to_hex(),
-                    name: sect.name,
-                }).collect(),
+                sections: course
+                    .sections
+                    .into_iter()
+                    .map(|sect| SectionInfo {
+                        id: sect.id.to_hex(),
+                        name: sect.name,
+                    })
+                    .collect(),
             })
         }
     }
@@ -303,15 +324,29 @@ pub fn CourseSidebar(
     let (_, set_sidebar_height) = use_css_var("--sidebar-height");
     let resize_listener = window_event_listener(ev::resize, move |ev| {
         let target = event_target::<web_sys::Window>(&ev);
-        let height = target.inner_height().expect("window height to be valid").as_f64().expect("window height to be a float");
-        let top = container().expect("div to be mounted").get_bounding_client_rect().y() as f64;
+        let height = target
+            .inner_height()
+            .expect("window height to be valid")
+            .as_f64()
+            .expect("window height to be a float");
+        let top = container()
+            .expect("div to be mounted")
+            .get_bounding_client_rect()
+            .y() as f64;
         set_sidebar_height(format!("{}px", height - top));
     });
     on_cleanup(move || resize_listener.remove());
 
     create_effect(move |_| {
-        let height = window().inner_height().expect("window height to be valid").as_f64().expect("window height to be a float");
-        let top = container().expect("div to be mounted").get_bounding_client_rect().y();
+        let height = window()
+            .inner_height()
+            .expect("window height to be valid")
+            .as_f64()
+            .expect("window height to be a float");
+        let top = container()
+            .expect("div to be mounted")
+            .get_bounding_client_rect()
+            .y();
         set_sidebar_height(format!("{}px", height - top));
     });
 

@@ -135,7 +135,7 @@ impl CollatedAstDataset {
 
 impl AnyDataset for CollatedAstDataset {
     fn num_comps(&self) -> usize {
-        self.files.len() * (self.files.len() - 1) / 2
+        self.files.len()
     }
 
     fn train(&self) -> AstDataset<Self> {
@@ -167,7 +167,7 @@ impl AnyDataset for CollatedAstDataset {
 
 impl AnyDataset for RawAstDataset {
     fn num_comps(&self) -> usize {
-        self.files.len() * (self.files.len() - 1) / 2
+        self.files.len()
     }
 
     fn train(&self) -> AstDataset<Self> {
@@ -246,8 +246,15 @@ pub struct AstBatcher<B: Backend> {
 
 struct BatchedTensors<B: Backend> {
     edges: Tensor<B, 2, Int>,
+    edges_hash: HashMap<usize, Vec<usize>>,
     features: Tensor<B, 2>,
     num_lines: usize,
+}
+
+struct TensorBuildData<B: Backend> {
+    edges: Tensor<B, 2, Int>,
+    edges_hash: HashMap<usize, Vec<usize>>,
+    features: Tensor<B, 2>,
 }
 
 impl<B: Backend> AstBatcher<B> {
@@ -264,7 +271,11 @@ impl<B: Backend> AstBatcher<B> {
         let file_data = fs::read_to_string(path)?;
         let num_lines = file_data.lines().count();
 
-        let (e, f) = match language {
+        let TensorBuildData {
+            edges,
+            edges_hash,
+            features,
+        } = match language {
             Language::C => {
                 let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
                 self.convert_tree_to_tensor(tree, index_offset, 0.0)
@@ -283,8 +294,9 @@ impl<B: Backend> AstBatcher<B> {
         };
 
         Ok(BatchedTensors {
-            edges: e,
-            features: f,
+            edges,
+            edges_hash,
+            features,
             num_lines,
         })
     }
@@ -294,7 +306,7 @@ impl<B: Backend> AstBatcher<B> {
         tree: syntree::Tree<T, usize, usize>,
         index_offset: usize,
         language_index: f64,
-    ) -> (Tensor<B, 2, burn::tensor::Int>, Tensor<B, 2>)
+    ) -> TensorBuildData<B>
     where
         T: Copy + Into<Tensor<B, 1>>,
     {
@@ -341,24 +353,31 @@ impl<B: Backend> AstBatcher<B> {
         }
 
         let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];
+        let mut hash_map: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for (from, list) in edge_indices.iter().enumerate() {
-            for to in list {
-                paired_indices.push(Tensor::from_ints([from, *to], &self.device))
+            for &to in list {
+                paired_indices.push(Tensor::from_ints([from, to], &self.device));
+                if let Some(list) = hash_map.get_mut(&from) {
+                    list.push(to);
+                } else {
+                    hash_map.insert(from, vec![to]);
+                }
             }
         }
 
-        // Self-attention
-        for i in Range::from(0..tree.len()).into_iter() {
-            paired_indices.push(Tensor::from_ints([i, i], &self.device));
-        }
+        // // Self-attention
+        // for i in Range::from(0..tree.len()).into_iter() {
+        //     paired_indices.push(Tensor::from_ints([i, i], &self.device));
+        // }
 
-        (
-            Tensor::stack(paired_indices, 0)
+        TensorBuildData {
+            edges: Tensor::stack(paired_indices, 0)
                 .add_scalar(index_offset as i64)
                 .transpose(),
-            Tensor::stack(features, 0),
-        )
+            edges_hash: hash_map,
+            features: Tensor::stack(features, 0),
+        }
     }
 }
 
@@ -383,13 +402,16 @@ impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
                     // Traverse the tree in the default order that syntree does, converting nodes to features
                     let BatchedTensors {
                         edges: a_edge,
+                        edges_hash: a_edges_hash,
                         features: a_feature,
                         num_lines: a_lines,
                     } = self
                         .build_edges_and_features(a.path.as_path(), a.language, 0)
                         .expect("Valid tree build A");
+
                     let BatchedTensors {
                         edges: b_edge,
+                        edges_hash: b_edges_hash,
                         features: b_feature,
                         num_lines: b_lines,
                     } = self
