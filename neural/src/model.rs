@@ -38,7 +38,6 @@ pub struct ModelConfig {
     #[config(default = 0.01)]
     pub leaky_2_slope: f64,
     pub gat: GatConfig,
-    pub lstm: LstmConfig,
 }
 
 impl ModelConfig {
@@ -90,8 +89,6 @@ impl ModelConfig {
 #[derive(Debug, Module)]
 pub struct Model<B: Backend> {
     gat: Gat<B>,
-    lstm: Lstm<B>,
-    output_gate: Sequential<B>,
     regression: Sequential<B>,
     objectness: Sequential<B>,
     bce_loss: BinaryCrossEntropyLoss<B>,
@@ -108,13 +105,7 @@ pub struct MappedTensor<B: Backend> {
 }
 
 impl<B: Backend> Model<B> {
-    pub fn forward(
-        &self,
-        features: Tensor<B, 2>,
-        edges: Tensor<B, 2, Int>,
-        edges_hash: HashMap<usize, Vec<usize>>,
-        graph_feature_indices: Tensor<B, 1, Int>,
-    ) -> ModelResult<B> {
+    pub fn forward(&self, features: Tensor<B, 2>, edges: Tensor<B, 2, Int>) -> ModelResult<B> {
         // println!(
         //     "MODEL FORWARD: F {:?} E {:?}",
         //     features.dims(),
@@ -131,77 +122,77 @@ impl<B: Backend> Model<B> {
 
         // Traverse the tree using postorder, feeding it through the LSTM
         // These are batched so this must be done multiple times
-        for &feature_index in graph_feature_indices
-            .to_data()
-            .as_slice::<i64>()
-            .expect("valid slice")
-        {
-            struct Info<B: Backend> {
-                index: usize,
-                feat: Tensor<B, 1>,
-            }
-            let mut stack1 = vec![Info {
-                index: feature_index as usize,
-                feat: features
-                    .clone()
-                    .slice([Some((feature_index, feature_index + 1)), None])
-                    .squeeze::<1>(1),
-            }];
-            let mut stack2 = Vec::new();
-            while let Some(node) = stack1.pop() {
-                let children = edges_hash.get(&node.index);
-                stack2.push(node);
+        // for &feature_index in graph_feature_indices
+        //     .to_data()
+        //     .as_slice::<i64>()
+        //     .expect("valid slice")
+        // {
+        //     struct Info<B: Backend> {
+        //         index: usize,
+        //         feat: Tensor<B, 1>,
+        //     }
+        //     let mut stack1 = vec![Info {
+        //         index: feature_index as usize,
+        //         feat: features
+        //             .clone()
+        //             .slice([Some((feature_index, feature_index + 1)), None])
+        //             .squeeze::<1>(1),
+        //     }];
+        //     let mut stack2 = Vec::new();
+        //     while let Some(node) = stack1.pop() {
+        //         let children = edges_hash.get(&node.index);
+        //         stack2.push(node);
 
-                for &child in children.unwrap_or(&vec![]) {
-                    let index = child;
-                    let child = child as i64;
-                    stack1.push(Info {
-                        index,
-                        feat: features
-                            .clone()
-                            .slice([Some((child, child + 1)), None])
-                            .squeeze(1),
-                    });
-                }
-            }
+        //         for &child in children.unwrap_or(&vec![]) {
+        //             let index = child;
+        //             let child = child as i64;
+        //             stack1.push(Info {
+        //                 index,
+        //                 feat: features
+        //                     .clone()
+        //                     .slice([Some((child, child + 1)), None])
+        //                     .squeeze(1),
+        //             });
+        //         }
+        //     }
 
-            // Reverse and stack stack2
-            let stack2: Vec<_> = stack2.into_iter().rev().collect();
-            let mut stack2 = stack2.into_iter();
+        //     // Reverse and stack stack2
+        //     let stack2: Vec<_> = stack2.into_iter().rev().collect();
+        //     let mut stack2 = stack2.into_iter();
 
-            let mut lstm_state = None;
+        //     let mut lstm_state = None;
 
-            let first_node = stack2.next().expect("nonempty tree");
-            let (output, lstm_state) = self
-                .lstm
-                .forward(first_node.feat.unsqueeze_dims(&[0, 1]), None);
-            let mut start_idx = first_node.index;
-            // Tracks whether the start index needs to be updated after pushing a new mapped tensor
-            let mut needs_start_update = false;
-            for itm in stack2 {
-                if needs_start_update {
-                    start_idx = itm.index;
-                    needs_start_update = false;
-                }
+        //     let first_node = stack2.next().expect("nonempty tree");
+        //     let (output, lstm_state) = self
+        //         .lstm
+        //         .forward(first_node.feat.unsqueeze_dims(&[0, 1]), None);
+        //     let mut start_idx = first_node.index;
+        //     // Tracks whether the start index needs to be updated after pushing a new mapped tensor
+        //     let mut needs_start_update = false;
+        //     for itm in stack2 {
+        //         if needs_start_update {
+        //             start_idx = itm.index;
+        //             needs_start_update = false;
+        //         }
 
-                (output, lstm_state) = self
-                    .lstm
-                    .forward(itm.feat.unsqueeze_dims(&[0, 1]), Some(lstm_state));
+        //         (output, lstm_state) = self
+        //             .lstm
+        //             .forward(itm.feat.unsqueeze_dims(&[0, 1]), Some(lstm_state));
 
-                // Feed LSTM output to output gate
-                let output = self.output_gate.forward(output.squeeze_dims::<1>(&[0, 1]));
-                let output = softmax(output.clone(), 0);
-                // If argmax is 0, STOP, otherwise CONTINUE
-                if output.argmax(0).into_scalar().to_i64() == 0 {
-                    // Grab the output of the LSTM and push it along with its location data to the queue.
-                    found_spans.push(MappedTensor {
-                        mapped: output,
-                        span: start_idx..=itm.index,
-                    });
-                    needs_start_update = true;
-                }
-            }
-        }
+        //         // Feed LSTM output to output gate
+        //         let output = self.output_gate.forward(output.squeeze_dims::<1>(&[0, 1]));
+        //         let output = softmax(output.clone(), 0);
+        //         // If argmax is 0, STOP, otherwise CONTINUE
+        //         if output.argmax(0).into_scalar().to_i64() == 0 {
+        //             // Grab the output of the LSTM and push it along with its location data to the queue.
+        //             found_spans.push(MappedTensor {
+        //                 mapped: output,
+        //                 span: start_idx..=itm.index,
+        //             });
+        //             needs_start_update = true;
+        //         }
+        //     }
+        // }
 
         // Run HDBSCAN
         let tensors = found_spans

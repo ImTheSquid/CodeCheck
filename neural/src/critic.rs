@@ -8,14 +8,14 @@ use crate::{
 };
 
 #[derive(Debug, Config)]
-struct CriticConfig {
-    actor_output_seq: SequentialConfig,
-    gat: GatConfig,
-    combining_sequential: SequentialConfig,
+pub struct CriticConfig {
+    pub actor_output_seq: SequentialConfig,
+    pub gat: GatConfig,
+    pub combining_sequential: SequentialConfig,
 }
 
 impl CriticConfig {
-    fn init<B: Backend>(&self, device: &B::Device) -> Critic<B> {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> Critic<B> {
         Critic {
             actor_output_seq: self.actor_output_seq.init(device),
             gat: self.gat.init(device),
@@ -26,7 +26,7 @@ impl CriticConfig {
 
 /// The critic module takes in the input data and the actor's output, returning a scalar value representing the critic's estimate of the state-action value.
 #[derive(Debug, Module)]
-struct Critic<B: Backend> {
+pub struct Critic<B: Backend> {
     actor_output_seq: Sequential<B>,
     gat: Gat<B>,
     combining_sequential: Sequential<B>,
