@@ -5784,7 +5784,6 @@ dependencies = [
  "thiserror 1.0.69",
  "util",
  "walkdir",
- "widestring",
 ]
 
 [[package]]

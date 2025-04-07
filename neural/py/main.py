@@ -2,7 +2,8 @@ from numpy.typing import NDArray
 from torch import nn, optim
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset
-from torch_geometric.data import Data, DataLoader, InMemoryDataset
+from torch_geometric.loader import DataLoader
+from torch_geometric.data import Data
 from actor import Actor
 from critic import Critic
 from hdbscan import HDBSCAN, all_points_membership_vectors
@@ -14,13 +15,16 @@ class GraphDataset(Dataset):
         for i, graph in enumerate(self.graphs):
             graph.idx = i
 
-    def len(self):
+    def __len__(self):
         return len(self.graphs)
 
     def get(self, idx: int):
         return self.graphs[idx]
 
-def generate_dataset(edges: list[NDArray], features: list[NDArray]) -> Dataset:
+    def __getitem__(self, lookup):
+        return self.get(lookup)
+
+def generate_dataset(edges: list[NDArray], features: list[NDArray]) -> GraphDataset:
     assert len(edges) == len(features), "Invalid shape configuration!!! Stack of edges must have same number of graphs as features!"
     # assert edges[0].shape[0] == 2, "Invalid edge shape! Must have shape [B, 2, E]"
 
@@ -86,8 +90,12 @@ def train(dataset: Dataset, actor: nn.Module, critic: nn.Module, actor_optim: op
     for batch in test_data:
         pass
 
+    print('Training complete')
+
 def rust_train(features: list[NDArray], edges: list[NDArray], keys: dict[tuple[int, int], NDArray]):
+    print('Beginning training...')
     dataset = generate_dataset(edges, features)
+    print(f'Dataset generated with {len(dataset)} entries')
 
     actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 10], num_heads=[8, 8], pool_ratios=[0.5, 0.5])
     critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8)

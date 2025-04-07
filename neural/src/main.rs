@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // use burn::{
 //     backend::{wgpu::WgpuDevice, Autodiff},
@@ -17,13 +17,10 @@ use std::path::{Path, PathBuf};
 // };
 use clap::Parser;
 use neural::{
-    data::{AstBuilder, CollatedAstDataset, RawAstDataset},
-    gat::GatConfig,
-    model::ModelConfig,
+    data::{CollatedAstDataset, RawAstDataset},
     KeyData,
 };
 use pyo3::Python;
-use widestring::{u16str, u32str};
 
 // type Backend = ::burn::backend::Wgpu;
 
@@ -187,7 +184,10 @@ fn main() {
     Python::with_gil(|py| {
         neural::initialize_python(py, args.venv);
 
-        neural::train(py, &features, &edges, &keys).expect("training to work properly");
+        if let Err(e) = neural::train(py, &features, &edges, &keys) {
+            e.print(py);
+            std::process::exit(1);
+        }
     });
 
     // let gat_config = GatConfig::new(vec![15, 15, 15, 8], vec![8, 8, 3]);

@@ -68,11 +68,6 @@ fn debug_python_env(py: Python<'_>) {
 
 pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
     if let Some(location) = venv_location {
-        let location = if !location.is_absolute() {
-            PathBuf::new().join(".").join(location)
-        } else {
-            location
-        };
         let location = location
             .canonicalize()
             .expect("valid canoicalization")
@@ -93,7 +88,7 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         .unwrap();
     }
 
-    debug_python_env(py);
+    // debug_python_env(py);
 
     assert!(
         py.import("math").is_ok(),

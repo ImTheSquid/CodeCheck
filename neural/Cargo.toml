@@ -27,4 +27,3 @@ num_cpus = "1.16.0"
 hdbscan = "0.9.0"
 pyo3 = { version = "0.24.1", features = ["nightly", "auto-initialize"] }
 numpy = "0.24.0"
-widestring = "1.2.0"
