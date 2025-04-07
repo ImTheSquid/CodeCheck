@@ -39,9 +39,10 @@ impl<B: Backend> Critic<B> {
         input_features: Tensor<B, 2>,
         actor_output: Tensor<B, 2>,
     ) -> Tensor<B, 1> {
-        let actor_output = self.actor_output_seq.forward(actor_output);
-        let gat_out = self.gat.forward(input_edges, input_features);
-        self.combining_sequential
-            .forward(Tensor::cat(vec![actor_output, gat_out], 0))
+        // let actor_output = self.actor_output_seq.forward(actor_output);
+        // let gat_out = self.gat.forward(input_edges, input_features);
+        // self.combining_sequential
+        //     .forward(Tensor::cat(vec![actor_output, gat_out], 0))
+        todo!()
     }
 }

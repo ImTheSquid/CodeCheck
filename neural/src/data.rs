@@ -5,6 +5,7 @@ use burn::{
     tensor::{Int, Tensor},
 };
 use core::range::Range;
+use ndarray::{array, Array1, Array2, ArrayBase, ArrayView, Axis};
 use std::{
     collections::HashMap,
     fs,
@@ -12,8 +13,8 @@ use std::{
     sync::{Arc, Weak},
 };
 use util::{
-    find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError, Mark, Pair,
-    PairedIndices,
+    arr_vec_to_view, find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError,
+    Mark, Pair,
 };
 use walkdir::WalkDir;
 
@@ -66,6 +67,7 @@ impl TryFrom<&Path> for RawAstDataset {
     }
 }
 
+/// A path with a specific language bound to it for parsing
 #[derive(Debug, Clone)]
 pub struct LanguageBoundPath {
     language: Language,
@@ -87,24 +89,24 @@ pub struct LanguageBoundPath {
 //     path: &'a Path,
 // }
 
-pub trait AnyDataset: Send + Sync {
-    fn num_comps(&self) -> usize;
+// pub trait AnyDataset: Send + Sync {
+//     fn num_comps(&self) -> usize;
 
-    fn train(&self) -> AstDataset<Self>;
+//     fn train(&self) -> AstDataset<Self>;
 
-    fn test(&self) -> AstDataset<Self>;
+//     fn test(&self) -> AstDataset<Self>;
 
-    fn file(&self, index: usize) -> LanguageBoundPath;
+//     fn file(&self, index: usize) -> LanguageBoundPath;
 
-    fn pair(&self, index: usize) -> Option<&Pair>;
+//     fn pair(&self, index: usize) -> Option<&Pair>;
 
-    fn num_files(&self) -> usize;
-}
+//     fn num_files(&self) -> usize;
+// }
 
 #[derive(Debug, Default, Clone)]
 pub struct CollatedAstDataset {
     files: Vec<LanguageBoundPath>,
-    dataset: HashMap<usize, Pair>,
+    dataset: HashMap<(usize, usize), Pair>,
     self_ref: Weak<Self>,
 }
 
@@ -117,12 +119,16 @@ impl CollatedAstDataset {
     }
 
     pub fn include(&mut self, dataset: RawAstDataset) {
+        // Adding new datasets to the existing set means all their pair indices need to be recalculated, from scratch
+        // Instead, I will reverse-lookup the indices
+        // Very inefficient but only used during training
+        let n = dataset.files.len();
         self.dataset.extend(
             dataset
                 .dataset
                 .pairs
                 .into_iter()
-                .map(|(k, v)| (k + self.files.len(), v)),
+                .map(|(k, v)| (find_paired_indices_from_pair_index(k, n), v)),
         );
 
         self.files
@@ -131,106 +137,239 @@ impl CollatedAstDataset {
                 path: p,
             }));
     }
-}
 
-impl AnyDataset for CollatedAstDataset {
-    fn num_comps(&self) -> usize {
-        self.files.len()
-    }
-
-    fn train(&self) -> AstDataset<Self> {
-        AstDataset {
-            base: self.self_ref.upgrade().expect("upgrade to allocted"),
-            range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
-        }
-    }
-
-    fn test(&self) -> AstDataset<Self> {
-        AstDataset {
-            base: self.self_ref.upgrade().expect("upgrade to allocted"),
-            range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
-        }
-    }
-
-    fn file(&self, index: usize) -> LanguageBoundPath {
-        self.files[index].clone()
-    }
-
-    fn pair(&self, index: usize) -> Option<&Pair> {
-        self.dataset.get(&index)
-    }
-
-    fn num_files(&self) -> usize {
-        self.files.len()
+    pub fn compile(
+        self,
+    ) -> Result<
+        (
+            Vec<Array2<f64>>,
+            Vec<Array2<usize>>,
+            HashMap<(usize, usize), Pair>,
+        ),
+        DataError,
+    > {
+        let r: Result<Vec<(Array2<f64>, Array2<usize>)>, DataError> = self
+            .files
+            .into_iter()
+            .map(|f| {
+                let bt = build_edges_and_features(&f.path, f.language)?;
+                Ok((bt.features, bt.edges))
+            })
+            .collect();
+        let r = r?;
+        let (features, edges) = r.into_iter().unzip();
+        Ok((features, edges, self.dataset))
     }
 }
 
-impl AnyDataset for RawAstDataset {
-    fn num_comps(&self) -> usize {
-        self.files.len()
+fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTensors, DataError> {
+    let file_data = fs::read_to_string(path)?;
+    let num_lines = file_data.lines().count();
+
+    let TensorBuildData { edges, features } = match language {
+        Language::C => {
+            let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
+            convert_tree_to_tensor(tree, 0.0)
+        }
+        Language::Cpp => {
+            let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
+            convert_tree_to_tensor(tree, 1.0)
+        }
+        Language::Java => {
+            let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
+            convert_tree_to_tensor(tree, 2.0)
+        }
+        Language::Python => {
+            todo!()
+        }
+    };
+
+    Ok(BatchedTensors {
+        edges,
+        features,
+        num_lines,
+    })
+}
+
+fn convert_tree_to_tensor<T>(
+    tree: syntree::Tree<T, usize, usize>,
+    language_index: f64,
+) -> TensorBuildData
+where
+    T: Copy + Into<Array1<f64>>,
+{
+    let mut edge_indices = Range::from(0..tree.len())
+        .into_iter()
+        .map(|_| vec![])
+        .collect::<Vec<_>>();
+    let mut features = Vec::with_capacity(tree.len());
+    let mut last_index = 0;
+    let mut parent_index_stack = vec![];
+    let mut i = 0;
+
+    for (event, node) in tree.walk_events() {
+        match event {
+            syntree::node::Event::Up => {
+                last_index = parent_index_stack
+                    .pop()
+                    .expect("pop always comes after push");
+                // An Up event will revisit a previously visited node! Skip the rest of this iteration
+                continue;
+            }
+            syntree::node::Event::Down => {
+                parent_index_stack.push(last_index);
+            }
+            syntree::node::Event::Next => {}
+        }
+
+        if let Some(parent_idx) = parent_index_stack.last() {
+            edge_indices[*parent_idx].push(i);
+        }
+
+        let node_feature = {
+            let node: Array1<f64> = node.value().into();
+            let language_identifier = array![language_index];
+            let padding = Array1::from_shape_simple_fn([MAX_FEATURES - node.dim() - 1], || 0.0);
+            ndarray::concatenate(
+                Axis(0),
+                &[language_identifier.view(), node.view(), padding.view()],
+            )
+            .expect("valid concat")
+        };
+        features.push(node_feature);
+
+        last_index = i;
+        i += 1;
     }
 
-    fn train(&self) -> AstDataset<Self> {
-        AstDataset {
-            base: self.self_ref.upgrade().expect("upgrade to allocated"),
-            range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
+    let mut paired_indices: Vec<Array1<usize>> = vec![];
+    // let mut hash_map: HashMap<usize, Vec<usize>> = HashMap::new();
+
+    for (from, list) in edge_indices.iter().enumerate() {
+        for &to in list {
+            paired_indices.push(array![from, to]);
+            // if let Some(list) = hash_map.get_mut(&from) {
+            //     list.push(to);
+            // } else {
+            //     hash_map.insert(from, vec![to]);
+            // }
         }
     }
 
-    fn test(&self) -> AstDataset<Self> {
-        AstDataset {
-            base: self.self_ref.upgrade().expect("upgrade to allocated"),
-            range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
-        }
-    }
+    // // Self-attention
+    // for i in Range::from(0..tree.len()).into_iter() {
+    //     paired_indices.push(Tensor::from_ints([i, i], &self.device));
+    // }
 
-    fn file(&self, index: usize) -> LanguageBoundPath {
-        LanguageBoundPath {
-            path: self.files[index].clone(),
-            language: self.language,
-        }
-    }
-
-    fn pair(&self, index: usize) -> Option<&Pair> {
-        self.dataset.pairs.get(&index)
-    }
-
-    fn num_files(&self) -> usize {
-        self.files.len()
+    TensorBuildData {
+        edges: ndarray::stack(Axis(0), arr_vec_to_view!(paired_indices))
+            .expect("valid stack")
+            .t()
+            .to_owned(),
+        // edges_hash: hash_map,
+        features: ndarray::stack(Axis(0), arr_vec_to_view!(features)).expect("valid stack"),
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AstDataset<Base: AnyDataset + ?Sized> {
-    base: Arc<Base>,
-    range: Range<usize>,
-}
+// impl AnyDataset for CollatedAstDataset {
+//     fn num_comps(&self) -> usize {
+//         self.files.len()
+//     }
 
-impl<Base: AnyDataset + ?Sized> Dataset<AstDatasetSingle> for AstDataset<Base> {
-    fn len(&self) -> usize {
-        self.range.end - self.range.start
-    }
+//     fn train(&self) -> AstDataset<Self> {
+//         AstDataset {
+//             base: self.self_ref.upgrade().expect("upgrade to allocted"),
+//             range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
+//         }
+//     }
 
-    fn get(&self, index: usize) -> Option<AstDatasetSingle> {
-        if !self.range.contains(&index) {
-            return None;
-        }
+//     fn test(&self) -> AstDataset<Self> {
+//         AstDataset {
+//             base: self.self_ref.upgrade().expect("upgrade to allocted"),
+//             range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
+//         }
+//     }
 
-        let PairedIndices { i, j } =
-            find_paired_indices_from_pair_index(index, self.base.num_files());
+//     fn file(&self, index: usize) -> LanguageBoundPath {
+//         self.files[index].clone()
+//     }
 
-        Some(AstDatasetSingle {
-            a: self.base.file(i),
-            b: self.base.file(j),
-            marks: self
-                .base
-                .pair(index)
-                .cloned()
-                .map(|p| p.marks)
-                .unwrap_or_default(),
-        })
-    }
-}
+//     fn pair(&self, index: usize) -> Option<&Pair> {
+//         // self.dataset.get(&index)
+//         unimplemented!()
+//     }
+
+//     fn num_files(&self) -> usize {
+//         self.files.len()
+//     }
+// }
+
+// impl AnyDataset for RawAstDataset {
+//     fn num_comps(&self) -> usize {
+//         self.files.len()
+//     }
+
+//     fn train(&self) -> AstDataset<Self> {
+//         AstDataset {
+//             base: self.self_ref.upgrade().expect("upgrade to allocated"),
+//             range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
+//         }
+//     }
+
+//     fn test(&self) -> AstDataset<Self> {
+//         AstDataset {
+//             base: self.self_ref.upgrade().expect("upgrade to allocated"),
+//             range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
+//         }
+//     }
+
+//     fn file(&self, index: usize) -> LanguageBoundPath {
+//         LanguageBoundPath {
+//             path: self.files[index].clone(),
+//             language: self.language,
+//         }
+//     }
+
+//     fn pair(&self, index: usize) -> Option<&Pair> {
+//         self.dataset.pairs.get(&index)
+//     }
+
+//     fn num_files(&self) -> usize {
+//         self.files.len()
+//     }
+// }
+
+// #[derive(Debug, Clone)]
+// pub struct AstDataset<Base: AnyDataset + ?Sized> {
+//     base: Arc<Base>,
+//     range: Range<usize>,
+// }
+
+// impl<Base: AnyDataset + ?Sized> Dataset<AstDatasetSingle> for AstDataset<Base> {
+//     fn len(&self) -> usize {
+//         self.range.end - self.range.start
+//     }
+
+//     fn get(&self, index: usize) -> Option<AstDatasetSingle> {
+//         if !self.range.contains(&index) {
+//             return None;
+//         }
+
+//         let PairedIndices { i, j } =
+//             find_paired_indices_from_pair_index(index, self.base.num_files());
+
+//         Some(AstDatasetSingle {
+//             a: self.base.file(i),
+//             b: self.base.file(j),
+//             marks: self
+//                 .base
+//                 .pair(index)
+//                 .cloned()
+//                 .map(|p| p.marks)
+//                 .unwrap_or_default(),
+//         })
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct AstDatasetSingle {
@@ -240,144 +379,26 @@ pub struct AstDatasetSingle {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AstBatcher<B: Backend> {
+pub struct AstBuilder<B: Backend> {
     device: B::Device,
 }
 
-struct BatchedTensors<B: Backend> {
-    edges: Tensor<B, 2, Int>,
-    edges_hash: HashMap<usize, Vec<usize>>,
-    features: Tensor<B, 2>,
+struct BatchedTensors {
+    edges: Array2<usize>,
+    // edges_hash: HashMap<usize, Vec<usize>>,
+    features: Array2<f64>,
     num_lines: usize,
 }
 
-struct TensorBuildData<B: Backend> {
-    edges: Tensor<B, 2, Int>,
-    edges_hash: HashMap<usize, Vec<usize>>,
-    features: Tensor<B, 2>,
+struct TensorBuildData {
+    edges: Array2<usize>,
+    // edges_hash: HashMap<usize, Vec<usize>>,
+    features: Array2<f64>,
 }
 
-impl<B: Backend> AstBatcher<B> {
+impl<B: Backend> AstBuilder<B> {
     pub fn new(device: B::Device) -> Self {
-        AstBatcher { device }
-    }
-
-    fn build_edges_and_features(
-        &self,
-        path: &Path,
-        language: Language,
-        index_offset: usize,
-    ) -> Result<BatchedTensors<B>, DataError> {
-        let file_data = fs::read_to_string(path)?;
-        let num_lines = file_data.lines().count();
-
-        let TensorBuildData {
-            edges,
-            edges_hash,
-            features,
-        } = match language {
-            Language::C => {
-                let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-                self.convert_tree_to_tensor(tree, index_offset, 0.0)
-            }
-            Language::Cpp => {
-                let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-                self.convert_tree_to_tensor(tree, index_offset, 1.0)
-            }
-            Language::Java => {
-                let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-                self.convert_tree_to_tensor(tree, index_offset, 2.0)
-            }
-            Language::Python => {
-                todo!()
-            }
-        };
-
-        Ok(BatchedTensors {
-            edges,
-            edges_hash,
-            features,
-            num_lines,
-        })
-    }
-
-    fn convert_tree_to_tensor<T>(
-        &self,
-        tree: syntree::Tree<T, usize, usize>,
-        index_offset: usize,
-        language_index: f64,
-    ) -> TensorBuildData<B>
-    where
-        T: Copy + Into<Tensor<B, 1>>,
-    {
-        let mut edge_indices = Range::from(0..tree.len())
-            .into_iter()
-            .map(|_| vec![])
-            .collect::<Vec<_>>();
-        let mut features = Vec::with_capacity(tree.len());
-        let mut last_index = 0;
-        let mut parent_index_stack = vec![];
-        let mut i = 0;
-
-        for (event, node) in tree.walk_events() {
-            match event {
-                syntree::node::Event::Up => {
-                    last_index = parent_index_stack
-                        .pop()
-                        .expect("pop always comes after push");
-                    // An Up event will revisit a previously visited node! Skip the rest of this iteration
-                    continue;
-                }
-                syntree::node::Event::Down => {
-                    parent_index_stack.push(last_index);
-                }
-                syntree::node::Event::Next => {}
-            }
-
-            if let Some(parent_idx) = parent_index_stack.last() {
-                edge_indices[*parent_idx].push(i);
-            }
-
-            let node_feature = {
-                let node = node.value().into().to_device(&self.device);
-                let language_identifier =
-                    Tensor::<B, 1>::from_floats([language_index], &self.device);
-                let padding =
-                    Tensor::<B, 1>::full([MAX_FEATURES - node.dims()[0] - 1], 0.0, &self.device);
-                Tensor::cat(vec![language_identifier, node, padding], 0)
-            };
-            features.push(node_feature);
-
-            last_index = i;
-            i += 1;
-        }
-
-        let mut paired_indices: Vec<Tensor<B, 1, burn::tensor::Int>> = vec![];
-        let mut hash_map: HashMap<usize, Vec<usize>> = HashMap::new();
-
-        for (from, list) in edge_indices.iter().enumerate() {
-            for &to in list {
-                paired_indices.push(Tensor::from_ints([from, to], &self.device));
-                if let Some(list) = hash_map.get_mut(&from) {
-                    list.push(to);
-                } else {
-                    hash_map.insert(from, vec![to]);
-                }
-            }
-        }
-
-        // // Self-attention
-        // for i in Range::from(0..tree.len()).into_iter() {
-        //     paired_indices.push(Tensor::from_ints([i, i], &self.device));
-        // }
-
-        TensorBuildData {
-            edges: Tensor::stack(paired_indices, 0)
-                .add_scalar(index_offset as i64)
-                .transpose(),
-            edges_hash: hash_map,
-            features: Tensor::stack(features, 0),
-        }
+        AstBuilder { device }
     }
 }
 
@@ -386,181 +407,181 @@ pub const MAX_NODES: usize = 1_000;
 pub const MAX_FEATURES: usize = 200;
 pub const MAX_EDGES: usize = MAX_NODES - 1;
 
-impl<B: Backend> Batcher<AstDatasetSingle, AstBatch<B>> for AstBatcher<B> {
-    fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
-        // Read each item in the dataset, loading in all of the files in each batch
-        // This is gonna take a ton of memory but oh well
-        struct FeaturePair<B: Backend> {
-            a: Tensor<B, 2>,
-            b: Tensor<B, 2>,
-        }
-        let num_items = items.len();
-        let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
-            items
-                .into_iter()
-                .map(|AstDatasetSingle { a, b, marks }| {
-                    // Traverse the tree in the default order that syntree does, converting nodes to features
-                    let BatchedTensors {
-                        edges: a_edge,
-                        edges_hash: a_edges_hash,
-                        features: a_feature,
-                        num_lines: a_lines,
-                    } = self
-                        .build_edges_and_features(a.path.as_path(), a.language, 0)
-                        .expect("Valid tree build A");
+// impl<B: Backend> Batcher<B, AstDatasetSingle, AstBatch<B>> for AstBuilder<B> {
+//     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
+//         // Read each item in the dataset, loading in all of the files in each batch
+//         // This is gonna take a ton of memory but oh well
+//         struct FeaturePair<B: Backend> {
+//             a: Tensor<B, 2>,
+//             b: Tensor<B, 2>,
+//         }
+//         let num_items = items.len();
+//         let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
+//             items
+//                 .into_iter()
+//                 .map(|AstDatasetSingle { a, b, marks }| {
+//                     // Traverse the tree in the default order that syntree does, converting nodes to features
+//                     let BatchedTensors {
+//                         edges: a_edge,
+//                         edges_hash: a_edges_hash,
+//                         features: a_feature,
+//                         num_lines: a_lines,
+//                     } = self
+//                         .build_edges_and_features(a.path.as_path(), a.language)
+//                         .expect("Valid tree build A");
 
-                    let BatchedTensors {
-                        edges: b_edge,
-                        edges_hash: b_edges_hash,
-                        features: b_feature,
-                        num_lines: b_lines,
-                    } = self
-                        .build_edges_and_features(b.path.as_path(), b.language, 0)
-                        .expect("Valid tree build B");
+//                     let BatchedTensors {
+//                         edges: b_edge,
+//                         edges_hash: b_edges_hash,
+//                         features: b_feature,
+//                         num_lines: b_lines,
+//                     } = self
+//                         .build_edges_and_features(b.path.as_path(), b.language)
+//                         .expect("Valid tree build B");
 
-                    let a_lines = a_lines as f32;
-                    let b_lines = b_lines as f32;
+//                     let a_lines = a_lines as f32;
+//                     let b_lines = b_lines as f32;
 
-                    // let edge = Tensor::cat(vec![a_edge, b_edge], 0);
-                    // let features = Tensor::cat(vec![a_feature, b_feature], 0);
-                    let features = FeaturePair {
-                        a: a_feature,
-                        b: b_feature,
-                    };
+//                     // let edge = Tensor::cat(vec![a_edge, b_edge], 0);
+//                     // let features = Tensor::cat(vec![a_feature, b_feature], 0);
+//                     let features = FeaturePair {
+//                         a: a_feature,
+//                         b: b_feature,
+//                     };
 
-                    // Load spans
-                    assert!(
-                        marks.len() <= MAX_SPANS,
-                        "Too many marks for files {a:?} {b:?}"
-                    );
+//                     // Load spans
+//                     assert!(
+//                         marks.len() <= MAX_SPANS,
+//                         "Too many marks for files {a:?} {b:?}"
+//                     );
 
-                    let num_marks = marks.len();
+//                     let num_marks = marks.len();
 
-                    let spans = if num_marks > 0 {
-                        let marks = marks.iter().map(|m| {
-                            Tensor::<B, 1>::from_floats(
-                                // s_1 s_2 e_1 e_2
-                                [
-                                    m.a.start as f32 / a_lines,
-                                    m.b.start as f32 / b_lines,
-                                    (m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 })
-                                        / a_lines,
-                                    (m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 })
-                                        / b_lines,
-                                ],
-                                &self.device,
-                            )
-                        });
+//                     let spans = if num_marks > 0 {
+//                         let marks = marks.iter().map(|m| {
+//                             Tensor::<B, 1>::from_floats(
+//                                 // s_1 s_2 e_1 e_2
+//                                 [
+//                                     m.a.start as f32 / a_lines,
+//                                     m.b.start as f32 / b_lines,
+//                                     (m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 })
+//                                         / a_lines,
+//                                     (m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 })
+//                                         / b_lines,
+//                                 ],
+//                                 &self.device,
+//                             )
+//                         });
 
-                        let marks = Tensor::stack(marks.collect(), 0);
+//                         let marks = Tensor::stack(marks.collect(), 0);
 
-                        let padding =
-                            Tensor::<B, 2>::full([MAX_SPANS - num_marks, 4], -1.0, &self.device);
+//                         let padding =
+//                             Tensor::<B, 2>::full([MAX_SPANS - num_marks, 4], -1.0, &self.device);
 
-                        Tensor::cat(vec![marks, padding], 0)
-                    } else {
-                        Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &self.device)
-                    };
+//                         Tensor::cat(vec![marks, padding], 0)
+//                     } else {
+//                         Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &self.device)
+//                     };
 
-                    ([a_edge, b_edge], features, spans)
-                })
-                .collect::<Vec<(_, _, _)>>(),
-        );
+//                     ([a_edge, b_edge], features, spans)
+//                 })
+//                 .collect::<Vec<(_, _, _)>>(),
+//         );
 
-        // Find the maximum values for features and edges, padding each tensor to the correct size
-        // let max_nodes = features
-        //     .iter()
-        //     .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
-        //     .max()
-        //     .expect("some max feature value");
+//         // Find the maximum values for features and edges, padding each tensor to the correct size
+//         // let max_nodes = features
+//         //     .iter()
+//         //     .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
+//         //     .max()
+//         //     .expect("some max feature value");
 
-        // let max_edges = edges
-        //     .iter()
-        //     .map(|t| t.dims()[0])
-        //     .max()
-        //     .expect("some max edges value");
+//         // let max_edges = edges
+//         //     .iter()
+//         //     .map(|t| t.dims()[0])
+//         //     .max()
+//         //     .expect("some max edges value");
 
-        // let edges = edges
-        //     .into_iter()
-        //     .map(|edge| {
-        //         if edge.dims()[0] < max_edges {
-        //             let difference = max_edges - edge.dims()[0];
-        //             let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
+//         // let edges = edges
+//         //     .into_iter()
+//         //     .map(|edge| {
+//         //         if edge.dims()[0] < max_edges {
+//         //             let difference = max_edges - edge.dims()[0];
+//         //             let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
 
-        //             Tensor::cat(vec![edge, padding], 0)
-        //         } else {
-        //             edge
-        //         }
-        //         .transpose()
-        //     })
-        //     .collect();
+//         //             Tensor::cat(vec![edge, padding], 0)
+//         //         } else {
+//         //             edge
+//         //         }
+//         //         .transpose()
+//         //     })
+//         //     .collect();
 
-        // fn normalize_to_max_nodes_if_needed<B: Backend>(
-        //     feature: Tensor<B, 2>,
-        //     max: usize,
-        //     device: &B::Device,
-        // ) -> Tensor<B, 2> {
-        //     if feature.dims()[0] < max {
-        //         let difference = max - feature.dims()[0];
-        //         let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
+//         // fn normalize_to_max_nodes_if_needed<B: Backend>(
+//         //     feature: Tensor<B, 2>,
+//         //     max: usize,
+//         //     device: &B::Device,
+//         // ) -> Tensor<B, 2> {
+//         //     if feature.dims()[0] < max {
+//         //         let difference = max - feature.dims()[0];
+//         //         let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
 
-        //         Tensor::cat(vec![feature, padding], 0)
-        //     } else {
-        //         feature
-        //     }
-        // }
+//         //         Tensor::cat(vec![feature, padding], 0)
+//         //     } else {
+//         //         feature
+//         //     }
+//         // }
 
-        let mut offset = 0_i64;
-        let mut output = Vec::with_capacity(edges.len());
-        for edge_tensor in edges.into_iter().flatten() {
-            let next_offset = edge_tensor.dims()[1] as i64;
-            output.push(edge_tensor.add_scalar(offset));
-            offset += next_offset;
-        }
+//         let mut offset = 0_i64;
+//         let mut output = Vec::with_capacity(edges.len());
+//         for edge_tensor in edges.into_iter().flatten() {
+//             let next_offset = edge_tensor.dims()[1] as i64;
+//             output.push(edge_tensor.add_scalar(offset));
+//             offset += next_offset;
+//         }
 
-        let edges = Tensor::cat(output, 1);
+//         let edges = Tensor::cat(output, 1);
 
-        let features: Vec<_> = features
-            .into_iter()
-            .flat_map(|feature| [feature.a, feature.b])
-            .collect();
+//         let features: Vec<_> = features
+//             .into_iter()
+//             .flat_map(|feature| [feature.a, feature.b])
+//             .collect();
 
-        assert_eq!(features.len(), num_items * 2, "Feature data lost!");
+//         assert_eq!(features.len(), num_items * 2, "Feature data lost!");
 
-        // Create the graph index array
-        // Each graph node will have an associated item in this tensor such that for some node N_i,
-        // graph[N_i] = graph index it came from
-        // To get the pair index, do N_i // 2
-        let graph_feature_indices = features
-            .iter()
-            .enumerate()
-            .map(|(i, feature)| {
-                Tensor::<B, 1, Int>::full([feature.dims()[0]], i as u64, &self.device)
-            })
-            .collect::<Vec<_>>();
+//         // Create the graph index array
+//         // Each graph node will have an associated item in this tensor such that for some node N_i,
+//         // graph[N_i] = graph index it came from
+//         // To get the pair index, do N_i // 2
+//         let graph_feature_indices = features
+//             .iter()
+//             .enumerate()
+//             .map(|(i, feature)| {
+//                 Tensor::<B, 1, Int>::full([feature.dims()[0]], i as u64, &self.device)
+//             })
+//             .collect::<Vec<_>>();
 
-        let graph_feature_indices = Tensor::cat(graph_feature_indices, 0);
+//         let graph_feature_indices = Tensor::cat(graph_feature_indices, 0);
 
-        assert!(
-            graph_feature_indices
-                .clone()
-                .greater_elem(0)
-                .any()
-                .into_scalar(),
-            "Graph feature indices all zero!"
-        );
+//         assert!(
+//             graph_feature_indices
+//                 .clone()
+//                 .greater_elem(0)
+//                 .any()
+//                 .into_scalar(),
+//             "Graph feature indices all zero!"
+//         );
 
-        AstBatch {
-            edges,
-            features: Tensor::cat(features, 0),
-            spans: Tensor::stack(spans, 0),
-            graph_feature_indices,
-        }
-    }
-}
+//         AstBatch {
+//             edges,
+//             features: Tensor::cat(features, 0),
+//             spans: Tensor::stack(spans, 0),
+//             graph_feature_indices,
+//         }
+//     }
+// }
 
 #[derive(Debug, thiserror::Error)]
-enum DataError {
+pub enum DataError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

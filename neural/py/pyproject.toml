@@ -4,4 +4,8 @@ version = "0.1.0"
 description = "The Python portion of the CodeCheck project"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["torch>=2.6.0", "torch-geometric>=2.6.1"]
+dependencies = [
+    "hdbscan>=0.8.40",
+    "torch>=2.6.0",
+    "torch-geometric>=2.6.1",
+]

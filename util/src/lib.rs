@@ -21,6 +21,9 @@ pub struct Pair {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Dataset {
+    /// The `usize` here is the pair index, a unique value for each pair of items in the dataset
+    /// The `Pair` is specific information from the index
+    /// I didn't use a `Vec` here because it would be very sparse
     pub pairs: HashMap<usize, Pair>,
 }
 
@@ -54,12 +57,7 @@ pub enum DatasetError {
 
 str_error!(DatasetError);
 
-pub struct PairedIndices {
-    pub i: usize,
-    pub j: usize,
-}
-
-pub fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndices {
+pub fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> (usize, usize) {
     let mut remaining = n - 1;
     let mut i = 0;
     while k >= remaining {
@@ -68,7 +66,7 @@ pub fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndi
         remaining -= 1;
     }
 
-    PairedIndices { i, j: i + k + 1 }
+    (i, i + k + 1)
 }
 // Oops this doesn't work, it overflows the stack
 // TCO results in an infinite hang using `tailcall`, and `become` isn't in Rust yet
@@ -94,3 +92,16 @@ pub fn find_paired_indices_from_pair_index(mut k: usize, n: usize) -> PairedIndi
 //         j: k - j + i + 1,
 //     }
 // }
+
+#[macro_export]
+macro_rules! arr_vec_to_view {
+    ($a:expr) => {
+        ::util::view(&$a).as_slice()
+    };
+}
+
+pub fn view<T, D: ndarray::Dimension>(
+    arr: &[ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>],
+) -> Vec<ndarray::ArrayView<T, D>> {
+    arr.iter().map(|a| a.view()).collect()
+}

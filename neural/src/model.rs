@@ -118,7 +118,7 @@ impl<B: Backend> Model<B> {
 
         let features = self.gat.forward(edges, features);
 
-        let mut found_spans = Vec::new();
+        // let mut found_spans = Vec::new();
 
         // Traverse the tree using postorder, feeding it through the LSTM
         // These are batched so this must be done multiple times
@@ -194,18 +194,18 @@ impl<B: Backend> Model<B> {
         //     }
         // }
 
-        // Run HDBSCAN
-        let tensors = found_spans
-            .into_iter()
-            .map(|t| t.mapped.into_data().as_slice::<f64>().unwrap().to_vec())
-            .collect::<Vec<_>>();
-        let clusterer = {
-            // Every cluster must have at least two points
-            let params = HdbscanHyperParams::builder().min_cluster_size(2).build();
-            Hdbscan::new(&tensors, params)
-        };
-        // Grab cluster assignments
-        let clusters = clusterer.cluster().expect("successful cluster generation");
+        // // Run HDBSCAN
+        // let tensors = found_spans
+        //     .into_iter()
+        //     .map(|t| t.mapped.into_data().as_slice::<f64>().unwrap().to_vec())
+        //     .collect::<Vec<_>>();
+        // let clusterer = {
+        //     // Every cluster must have at least two points
+        //     let params = HdbscanHyperParams::builder().min_cluster_size(2).build();
+        //     Hdbscan::new(&tensors, params)
+        // };
+        // // Grab cluster assignments
+        // let clusters = clusterer.cluster().expect("successful cluster generation");
 
         // println!("GAT COMPLETE: {features}\n");
 
@@ -307,69 +307,70 @@ impl<B: Backend> Model<B> {
     }
 }
 
-impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
-    fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
-        // println!(
-        //     "INPUT===================\nF: {}\nE: {}",
-        //     item.features, item.edges
-        // );
-        let out = self.forward(item.features, item.edges, item.graph_feature_indices);
-        // println!(
-        //     "OUTPUT=================\nOBJ: {}\n\nREG: {}",
-        //     out.objectness, out.regression
-        // );
-        let regression_loss: Tensor<B, 1> =
-            loss::GIOULoss::default().forward(out.regression.clone(), item.spans.clone());
-        let objectness_spans = item
-            .spans
-            .clone()
-            .sum_dim(2)
-            .squeeze_dims::<2>(&[])
-            .bool()
-            .int();
-        // println!("OBJ: {}\n\nTRUTH: {}", out.objectness, objectness_spans);
-        let objectness_loss = self.bce_loss.forward(
-            out.objectness.clone().flatten::<1>(0, 1),
-            objectness_spans.clone().flatten(0, 1),
-        );
+// impl<B: AutodiffBackend> TrainStep<AstBatch<B>, ModelOutput<B>> for Model<B> {
+//     fn step(&self, item: AstBatch<B>) -> burn::train::TrainOutput<ModelOutput<B>> {
+//         // println!(
+//         //     "INPUT===================\nF: {}\nE: {}",
+//         //     item.features, item.edges
+//         // );
+//         let out = self.forward(item.features, item.edges, item.graph_feature_indices);
+//         // println!(
+//         //     "OUTPUT=================\nOBJ: {}\n\nREG: {}",
+//         //     out.objectness, out.regression
+//         // );
+//         let regression_loss: Tensor<B, 1> =
+//             loss::GIOULoss::default().forward(out.regression.clone(), item.spans.clone());
+//         let objectness_spans = item
+//             .spans
+//             .clone()
+//             .sum_dim(2)
+//             .squeeze_dims::<2>(&[])
+//             .bool()
+//             .int();
+//         // println!("OBJ: {}\n\nTRUTH: {}", out.objectness, objectness_spans);
+//         let objectness_loss = self.bce_loss.forward(
+//             out.objectness.clone().flatten::<1>(0, 1),
+//             objectness_spans.clone().flatten(0, 1),
+//         );
 
-        // println!(
-        //     "ANY NAN? RL {} OL {}",
-        //     regression_loss.contains_nan().into_scalar(),
-        //     objectness_loss.contains_nan().into_scalar()
-        // );
-        // println!(
-        //     "AVERAGE RL {} OL {}",
-        //     regression_loss.clone().mean().into_scalar(),
-        //     objectness_loss.clone().mean().into_scalar()
-        // );
-        // println!("LOSS RL {} OL {}", regression_loss, objectness_loss);
-        // let grads = GradientsParams::from_module(
-        //     &mut (regression_loss.clone() + objectness_loss.clone()).backward(),
-        //     self,
-        // );
-        // println!("{grads:?}");
-        TrainOutput::new(
-            self,
-            (regression_loss.clone() + objectness_loss.clone()).backward(),
-            loss::ModelOutput {
-                loss: regression_loss.clone() + objectness_loss,
-                regression: BatchedRegressionOutput {
-                    output: out.regression,
-                    targets: item.spans,
-                },
-                objectness: ObjectnessOutput {
-                    output: out.objectness,
-                    targets: objectness_spans,
-                },
-            },
-        )
-    }
-}
+//         // println!(
+//         //     "ANY NAN? RL {} OL {}",
+//         //     regression_loss.contains_nan().into_scalar(),
+//         //     objectness_loss.contains_nan().into_scalar()
+//         // );
+//         // println!(
+//         //     "AVERAGE RL {} OL {}",
+//         //     regression_loss.clone().mean().into_scalar(),
+//         //     objectness_loss.clone().mean().into_scalar()
+//         // );
+//         // println!("LOSS RL {} OL {}", regression_loss, objectness_loss);
+//         // let grads = GradientsParams::from_module(
+//         //     &mut (regression_loss.clone() + objectness_loss.clone()).backward(),
+//         //     self,
+//         // );
+//         // println!("{grads:?}");
+//         TrainOutput::new(
+//             self,
+//             (regression_loss.clone() + objectness_loss.clone()).backward(),
+//             loss::ModelOutput {
+//                 loss: regression_loss.clone() + objectness_loss,
+//                 regression: BatchedRegressionOutput {
+//                     output: out.regression,
+//                     targets: item.spans,
+//                 },
+//                 objectness: ObjectnessOutput {
+//                     output: out.objectness,
+//                     targets: objectness_spans,
+//                 },
+//             },
+//         )
+//     }
+// }
 
 impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
     fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
-        self.forward(item.features, item.edges, item.graph_feature_indices)
+        // self.forward(item.features, item.edges, item.graph_feature_indices)
+        todo!()
     }
 }
 
