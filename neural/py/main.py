@@ -1,19 +1,23 @@
 from numpy.typing import NDArray
-from torch import nn, optim
+from torch import nn, optim, manual_seed
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
+import torch
 from actor import Actor
 from critic import Critic
 from hdbscan import HDBSCAN, all_points_membership_vectors
+import numpy as np
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class GraphDataset(Dataset):
     def __init__(self, graphs: list[Data]):
         super().__init__()
         self.graphs = graphs
-        for i, graph in enumerate(self.graphs):
-            graph.idx = i
+        # for i, graph in enumerate(self.graphs):
+        #     graph.key_index = i
 
     def __len__(self):
         return len(self.graphs)
@@ -43,8 +47,10 @@ def generate_dataset(edges: list[NDArray], features: list[NDArray]) -> GraphData
         valid_edges = ~(edge_index == -1).all(axis=0)  # Boolean mask for real edges
         edge_index_pruned = edge_index[:, valid_edges]  # Remove invalid edges
 
-        graphs.append(Data(x=x_pruned, edge_index=edge_index_pruned, y=i))
+        graphs.append(Data(x=torch.tensor(x_pruned, dtype=torch.float), edge_index=torch.tensor(edge_index_pruned, dtype=torch.long), key_index=torch.tensor([i], dtype=torch.long)))
 
+    stats = np.sum(list(map(lambda g: np.array([g.x.shape[0], g.edge_index.shape[1]]), graphs)), 0)
+    print(f'Dataset generated with {len(graphs)} entries, {stats[0]} features, {stats[1]} edges')
     return GraphDataset(graphs)
 
 NUM_EPISODES = 10
@@ -56,16 +62,18 @@ def make_splits(dataset_sz: int) -> tuple[int, int, int]:
     test_size = dataset_sz - train_size - val_size  # Ensure correct total
     return train_size, val_size, test_size
 
-def cluster_and_calculate_reward(nodes: NDArray, edges: NDArray, keys: dict[tuple[int, int], NDArray], merge_map: NDArray, selected_indices_for_batch: list[int]) -> float:
+def cluster_and_calculate_reward(nodes: NDArray, edges: NDArray, keys: dict[tuple[int, int], NDArray], merge_map: NDArray, selected_indices_for_batch: NDArray) -> float:
     clusterer = HDBSCAN(min_cluster_size=2, core_dist_n_jobs=-1).fit(nodes)
     vecs = all_points_membership_vectors(clusterer)
     print(vecs)
     return -100.0
 
 def train(dataset: Dataset, actor: nn.Module, critic: nn.Module, actor_optim: optim.Optimizer, critic_optim: optim.Optimizer, episodes: int):
+    manual_seed(0xdeadbeef)
+
     train_set, val_set, test_set = random_split(dataset, make_splits(len(dataset))) #type: ignore
 
-    train_data = DataLoader(train_set, batch_size=10)
+    train_data = DataLoader(train_set, batch_size=10, shuffle=True)
     val_data = DataLoader(val_set, batch_size=5)
     test_data = DataLoader(test_set, batch_size=5)
 
@@ -77,7 +85,13 @@ def train(dataset: Dataset, actor: nn.Module, critic: nn.Module, actor_optim: op
 
         # Train
         for batch in train_data:
-            selected_indices = map(lambda g: g.idx, batch)
+            selected_indices = batch.key_index
+            batch = batch.to(DEVICE)
+            print(batch)
+            # print(f'SEL IND: {selected_indices}')
+            a_x, a_edge_index, merge_map = actor(batch.x, batch.edge_index, batch.batch)
+            pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
+
             pass
 
         # Val
@@ -93,9 +107,8 @@ def train(dataset: Dataset, actor: nn.Module, critic: nn.Module, actor_optim: op
     print('Training complete')
 
 def rust_train(features: list[NDArray], edges: list[NDArray], keys: dict[tuple[int, int], NDArray]):
-    print('Beginning training...')
+    print('✅ Python initialization successful. Beginning training...')
     dataset = generate_dataset(edges, features)
-    print(f'Dataset generated with {len(dataset)} entries')
 
     actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 10], num_heads=[8, 8], pool_ratios=[0.5, 0.5])
     critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8)

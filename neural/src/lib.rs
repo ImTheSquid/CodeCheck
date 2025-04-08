@@ -73,7 +73,7 @@ pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
             .expect("valid canoicalization")
             .join("bin/activate_this.py");
         let location = location.to_string_lossy();
-        println!("Loading venv from {location}");
+        println!("🔄 Loading venv from {location}");
         let code = format!(
             r#"
 activate_this = "{location}"

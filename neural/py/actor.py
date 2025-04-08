@@ -9,14 +9,14 @@ class Actor(nn.Module):
         self.num_layers = len(num_heads)
         self.gats = nn.ModuleList()
         self.pools = nn.ModuleList()
+        self.policy_heads = nn.ModuleList()
 
         dims = [in_dim] + hidden_dims
 
         for i in range(self.num_layers):
             self.gats.append(GATv2Conv(dims[i], dims[i + 1], heads=num_heads[i], concat=False))
             self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
-
-        self.policy_head = nn.Linear(hidden_dims[-1], 1)  # Node selection score
+            self.policy_heads.append(nn.Linear(dims[i + 1], 1)) # Node selection score
 
     # ChatGPT generated this
     # Is there likely a better way of doing this? Yeah
@@ -60,15 +60,15 @@ class Actor(nn.Module):
 
         return merge_map
 
-    def forward(self, x, edge_index):
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor):
         # Merge map keeps track of which node is merged where
         # At the beginning no nodes are merged, so each node points to itself
-        merge_map = torch.arange(x.dims(0))
+        merge_map = torch.arange(x.shape[0])
 
         for i in range(self.num_layers):
             x = self.gats[i](x, edge_index)
-            scores = torch.sigmoid(self.policy_head(x))
-            x, edge_index, _, perm, _ = self.pools[i](x, edge_index, scores)
+            scores = torch.sigmoid(self.policy_heads[i](x))
+            x, edge_index, _, batch, perm, _ = self.pools[i](x, edge_index, batch=batch, attn=scores)
             # Possible footgun: is edge_index passed here supposed to be the one from before or after pooling?
             merge_map = self.batch_update_merge_map(merge_map, perm, edge_index)
 
