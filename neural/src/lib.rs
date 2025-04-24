@@ -2,20 +2,16 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use core::panic;
-use std::{
-    ffi::CStr,
-    path::{Path, PathBuf},
-};
+use std::{ffi::CStr, path::PathBuf};
 
-use ndarray::{arr2, arr3};
+use ndarray::arr2;
 use pyo3::{
     ffi::c_str,
     intern,
     prelude::*,
     types::{PyDict, PyList},
 };
-use util::{Mark, Pair};
+use util::Mark;
 
 pub mod contrastive;
 pub mod critic;
@@ -40,6 +36,7 @@ mod python_files {
     pub const CRITIC: &CStr = c_str!(include_str!("../py/critic.py"));
 }
 
+#[allow(unused)]
 fn debug_python_env(py: Python<'_>) {
     let sys = py.import("sys").unwrap();
     let version: String = sys.getattr("version").unwrap().extract().unwrap();
@@ -92,12 +89,12 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
 
     assert!(
         py.import("math").is_ok(),
-        "Something is very wrong, math import failed!"
+        "Sanity check failed: Something is very wrong, math import failed!"
     );
 
     assert!(
         py.import("torch").is_ok(),
-        "PyTorch not found! Ensure a virtual environment is present with the necessary packages."
+        "Sanity check failed: PyTorch not found! Ensure a virtual environment is present with the necessary packages."
     );
 
     PyModule::from_code(py, python_files::ACTOR, c_str!("actor.py"), c_str!("actor"))
@@ -128,6 +125,7 @@ pub fn train(
     py: Python<'_>,
     features: &[ndarray::Array2<f64>],
     edges: &[ndarray::Array2<usize>],
+    feature_spans: &[ndarray::Array2<usize>],
     keys: &[KeyData],
 ) -> PyResult<()> {
     let keys = PyList::new(
@@ -165,12 +163,20 @@ pub fn train(
     let edges = PyList::new(py, edges.iter().map(|a| numpy::PyArray2::from_array(py, a)))
         .expect("valid list");
 
+    let feature_spans = PyList::new(
+        py,
+        feature_spans
+            .iter()
+            .map(|a| numpy::PyArray2::from_array(py, a)),
+    )
+    .expect("valid list");
+
     let codecheck = py.import("codecheck")?;
 
     codecheck
         .getattr(intern!(py, "rust_train"))
         .expect("codecheck module to contain rust entry point")
-        .call1((features, edges, keys))?;
+        .call1((features, edges, feature_spans, keys))?;
 
     Ok(())
 }

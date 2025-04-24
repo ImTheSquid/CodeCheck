@@ -1,11 +1,10 @@
 use ast::{guess_language_from_path, Language, SyntaxTree};
 use burn::{
-    data::{dataloader::batcher::Batcher, dataset::Dataset},
     prelude::Backend,
     tensor::{Int, Tensor},
 };
 use core::range::Range;
-use ndarray::{array, Array1, Array2, ArrayBase, ArrayView, Axis};
+use ndarray::{array, Array1, Array2, Axis};
 use std::{
     collections::HashMap,
     fs,
@@ -14,18 +13,18 @@ use std::{
 };
 use util::{
     arr_vec_to_view, find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError,
-    Mark, Pair,
+    Pair,
 };
 use walkdir::WalkDir;
 
-const TRAIN_SPLIT: f32 = 0.8;
+// const TRAIN_SPLIT: f32 = 0.8;
 
 /// AST dataset as it exists on the filesystem
 pub struct RawAstDataset {
     language: Language,
     files: Vec<PathBuf>,
     dataset: MarkDataset,
-    self_ref: Weak<Self>,
+    // self_ref: Weak<Self>,
 }
 
 // impl RawAstDataset {
@@ -62,7 +61,7 @@ impl TryFrom<&Path> for RawAstDataset {
             language: langs[0],
             files: entries,
             dataset,
-            self_ref: Default::default(),
+            // self_ref: Default::default(),
         })
     }
 }
@@ -144,40 +143,48 @@ impl CollatedAstDataset {
         (
             Vec<Array2<f64>>,
             Vec<Array2<usize>>,
+            Vec<Array2<usize>>,
             HashMap<(usize, usize), Pair>,
         ),
         DataError,
     > {
-        let r: Result<Vec<(Array2<f64>, Array2<usize>)>, DataError> = self
+        let r: Result<Vec<(Array2<f64>, (Array2<usize>, Array2<usize>))>, DataError> = self
             .files
             .into_iter()
             .map(|f| {
                 let bt = build_edges_and_features(&f.path, f.language)?;
-                Ok((bt.features, bt.edges))
+                Ok((bt.features, (bt.edges, bt.feature_spans)))
             })
             .collect();
         let r = r?;
-        let (features, edges) = r.into_iter().unzip();
-        Ok((features, edges, self.dataset))
+        let (features, edges_and_feature_spans): (_, Vec<_>) = r.into_iter().unzip();
+        let (edges, feature_spans): (Vec<Array2<usize>>, Vec<Array2<usize>>) =
+            edges_and_feature_spans.into_iter().unzip();
+        Ok((features, edges, feature_spans, self.dataset))
     }
 }
 
 fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTensors, DataError> {
     let file_data = fs::read_to_string(path)?;
-    let num_lines = file_data.lines().count();
+    let char_map = resolve_line_numbers_from_character_positions(&file_data);
+    // let num_lines = file_data.lines().count();
 
-    let TensorBuildData { edges, features } = match language {
+    let TensorBuildData {
+        edges,
+        features,
+        feature_spans,
+    } = match language {
         Language::C => {
             let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, 0.0)
+            convert_tree_to_tensor(tree, language, char_map)
         }
         Language::Cpp => {
             let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, 1.0)
+            convert_tree_to_tensor(tree, language, char_map)
         }
         Language::Java => {
             let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, 2.0)
+            convert_tree_to_tensor(tree, language, char_map)
         }
         Language::Python => {
             todo!()
@@ -187,13 +194,29 @@ fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTe
     Ok(BatchedTensors {
         edges,
         features,
-        num_lines,
+        feature_spans,
+        // num_lines,
     })
+}
+
+fn resolve_line_numbers_from_character_positions(file_data: &str) -> HashMap<usize, usize> {
+    let mut map = HashMap::new();
+    let mut current_line = 0_usize;
+    for (i, c) in file_data.char_indices() {
+        map.insert(i, current_line);
+        if c == '\n' {
+            current_line += 1;
+        }
+    }
+    // The final character is a bit tricky and can sometimes exist, add just in case
+    map.insert(file_data.len(), current_line);
+    map
 }
 
 fn convert_tree_to_tensor<T>(
     tree: syntree::Tree<T, usize, usize>,
-    language_index: f64,
+    language: Language,
+    character_map: HashMap<usize, usize>,
 ) -> TensorBuildData
 where
     T: Copy + Into<Array1<f64>>,
@@ -203,6 +226,7 @@ where
         .map(|_| vec![])
         .collect::<Vec<_>>();
     let mut features = Vec::with_capacity(tree.len());
+    let mut spans = Vec::with_capacity(tree.len());
     let mut last_index = 0;
     let mut parent_index_stack = vec![];
     let mut i = 0;
@@ -228,15 +252,24 @@ where
 
         let node_feature = {
             let node: Array1<f64> = node.value().into();
-            let language_identifier = array![language_index];
+            let (leading, trailing) = language.padding();
+            let leading_padding = Array1::from_shape_simple_fn([leading], || 0.0);
+            let trailing_padding = Array1::from_shape_simple_fn([trailing], || 0.0);
             let padding = Array1::from_shape_simple_fn([MAX_FEATURES - node.dim() - 1], || 0.0);
-            ndarray::concatenate(
-                Axis(0),
-                &[language_identifier.view(), node.view(), padding.view()],
-            )
-            .expect("valid concat")
+            ndarray::concatenate![Axis(0), leading_padding, node, padding, trailing_padding]
         };
         features.push(node_feature);
+        let span = node.span();
+        spans.push(array![
+            *character_map.get(&span.start).unwrap_or_else(|| panic!(
+                "Unable to find line for character index START {}",
+                span.start
+            )),
+            *character_map.get(&span.end).unwrap_or_else(|| panic!(
+                "Unable to find line for character index END {}",
+                span.end
+            ))
+        ]);
 
         last_index = i;
         i += 1;
@@ -268,6 +301,7 @@ where
             .to_owned(),
         // edges_hash: hash_map,
         features: ndarray::stack(Axis(0), arr_vec_to_view!(features)).expect("valid stack"),
+        feature_spans: ndarray::stack(Axis(0), arr_vec_to_view!(spans)).expect("valid stack"),
     }
 }
 
@@ -371,36 +405,38 @@ where
 //     }
 // }
 
-#[derive(Debug, Clone)]
-pub struct AstDatasetSingle {
-    a: LanguageBoundPath,
-    b: LanguageBoundPath,
-    marks: Vec<Mark>,
-}
+// #[derive(Debug, Clone)]
+// pub struct AstDatasetSingle {
+//     a: LanguageBoundPath,
+//     b: LanguageBoundPath,
+//     marks: Vec<Mark>,
+// }
 
-#[derive(Debug, Clone, Copy)]
-pub struct AstBuilder<B: Backend> {
-    device: B::Device,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct AstBuilder<B: Backend> {
+//     device: B::Device,
+// }
 
 struct BatchedTensors {
     edges: Array2<usize>,
     // edges_hash: HashMap<usize, Vec<usize>>,
     features: Array2<f64>,
-    num_lines: usize,
+    feature_spans: Array2<usize>,
+    // num_lines: usize,
 }
 
 struct TensorBuildData {
     edges: Array2<usize>,
     // edges_hash: HashMap<usize, Vec<usize>>,
     features: Array2<f64>,
+    feature_spans: Array2<usize>,
 }
 
-impl<B: Backend> AstBuilder<B> {
-    pub fn new(device: B::Device) -> Self {
-        AstBuilder { device }
-    }
-}
+// impl<B: Backend> AstBuilder<B> {
+//     pub fn new(device: B::Device) -> Self {
+//         AstBuilder { device }
+//     }
+// }
 
 pub const MAX_SPANS: usize = 20;
 pub const MAX_NODES: usize = 1_000;

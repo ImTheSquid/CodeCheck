@@ -31,6 +31,9 @@ fn main() {
                 .symbol_tree()
                 .expect("Java tree build");
 
+            for itm in tree.walk() {
+                println!("TR: {:?} ({:?})", itm.range(), itm.value());
+            }
             tree.first().expect("non-empty java tree").value().into()
         }
         Language::Python => {

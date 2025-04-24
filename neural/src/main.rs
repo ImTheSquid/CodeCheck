@@ -139,7 +139,7 @@ fn main() {
         collated.include(dataset);
     }
 
-    let (features, edges, keys) = collated.compile().expect("valid load");
+    let (features, edges, feature_spans, keys) = collated.compile().expect("valid load");
 
     let keys = keys
         .into_iter()
@@ -184,7 +184,7 @@ fn main() {
     Python::with_gil(|py| {
         neural::initialize_python(py, args.venv);
 
-        if let Err(e) = neural::train(py, &features, &edges, &keys) {
+        if let Err(e) = neural::train(py, &features, &edges, &feature_spans, &keys) {
             e.print(py);
             std::process::exit(1);
         }

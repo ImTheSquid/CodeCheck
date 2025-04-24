@@ -1,27 +1,21 @@
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
 use burn::{
     config::Config,
     module::Module,
     nn::{
-        attention::{MhaInput, MultiHeadAttention, MultiHeadAttentionConfig},
         loss::{BinaryCrossEntropyLoss, BinaryCrossEntropyLossConfig},
-        LinearConfig, Lstm, LstmConfig,
+        LinearConfig,
     },
-    optim::GradientsParams,
     prelude::Backend,
-    tensor::{
-        activation::softmax, backend::AutodiffBackend, cast::ToElement, Int, Tensor, Transaction,
-    },
-    train::{metric::ItemLazy, TrainOutput, TrainStep, ValidStep},
+    tensor::{Int, Tensor, Transaction},
+    train::{metric::ItemLazy, ValidStep},
 };
-use hdbscan::{Hdbscan, HdbscanHyperParams};
 
 use crate::{
     data::{AstBatch, MAX_NODES, MAX_SPANS},
     gat::{Gat, GatConfig},
     leaky_gain,
-    loss::{self, BatchedRegressionOutput, ModelOutput, ObjectnessOutput},
     sequential::{Sequential, SequentialConfig, SequentialLayerConfig},
 };
 
@@ -105,7 +99,7 @@ pub struct MappedTensor<B: Backend> {
 }
 
 impl<B: Backend> Model<B> {
-    pub fn forward(&self, features: Tensor<B, 2>, edges: Tensor<B, 2, Int>) -> ModelResult<B> {
+    pub fn forward(&self, _features: Tensor<B, 2>, _edges: Tensor<B, 2, Int>) -> ModelResult<B> {
         // println!(
         //     "MODEL FORWARD: F {:?} E {:?}",
         //     features.dims(),
@@ -116,7 +110,7 @@ impl<B: Backend> Model<B> {
 
         // println!("PROC COMPLETE: {features}\n");
 
-        let features = self.gat.forward(edges, features);
+        // let features = self.gat.forward(edges, features);
 
         // let mut found_spans = Vec::new();
 
@@ -368,7 +362,7 @@ impl<B: Backend> Model<B> {
 // }
 
 impl<B: Backend> ValidStep<AstBatch<B>, ModelResult<B>> for Model<B> {
-    fn step(&self, item: AstBatch<B>) -> ModelResult<B> {
+    fn step(&self, _item: AstBatch<B>) -> ModelResult<B> {
         // self.forward(item.features, item.edges, item.graph_feature_indices)
         todo!()
     }

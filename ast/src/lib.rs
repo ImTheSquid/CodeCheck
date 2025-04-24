@@ -1,5 +1,6 @@
 use antlr_rust::errors::ANTLRError;
 use std::path::Path;
+use strum::IntoEnumIterator;
 
 pub mod c;
 pub mod cpp;
@@ -71,12 +72,42 @@ impl From<ANTLRError> for TreeParseError {
 }
 
 /// The language to be parsed
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter)]
 pub enum Language {
-    Java,
     C,
     Cpp,
+    Java,
     Python,
+}
+
+impl Language {
+    fn num_types(&self) -> usize {
+        match self {
+            Language::C => c::CTreeItem::iter().count(),
+            Language::Cpp => cpp::CppTreeItem::iter().count(),
+            Language::Java => java::JavaTreeItem::iter().count(),
+            Language::Python => 0,
+        }
+    }
+
+    /// Returns leading and trailing padding for the language
+    pub fn padding(&self) -> (usize, usize) {
+        let mut leading_sum = 0;
+        let mut trailing_sum: usize = Language::iter().skip(1).map(|l| l.num_types()).sum();
+
+        let langs = Language::iter().collect::<Vec<_>>();
+        for (i, lang) in langs.iter().enumerate() {
+            if *lang == *self {
+                return (leading_sum, trailing_sum);
+            }
+            leading_sum += lang.num_types();
+            // Safety: If trailing sum is greater than zero, it means there are more languages to process.
+            if trailing_sum > 0 {
+                trailing_sum -= langs[i + 1].num_types();
+            }
+        }
+        unreachable!()
+    }
 }
 
 /// Attempts to guess the language of the file using a path
