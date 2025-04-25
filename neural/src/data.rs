@@ -109,6 +109,13 @@ pub struct CollatedAstDataset {
     self_ref: Weak<Self>,
 }
 
+pub struct CompilationOutput {
+    pub features: Vec<Array2<f64>>,
+    pub edges: Vec<Array2<usize>>,
+    pub feature_spans: Vec<Array2<usize>>,
+    pub dataset: HashMap<(usize, usize), Pair>,
+}
+
 impl CollatedAstDataset {
     pub fn to_arc(mut self) -> Arc<Self> {
         Arc::new_cyclic(|d| {
@@ -137,17 +144,8 @@ impl CollatedAstDataset {
             }));
     }
 
-    pub fn compile(
-        self,
-    ) -> Result<
-        (
-            Vec<Array2<f64>>,
-            Vec<Array2<usize>>,
-            Vec<Array2<usize>>,
-            HashMap<(usize, usize), Pair>,
-        ),
-        DataError,
-    > {
+    pub fn compile(self) -> Result<CompilationOutput, DataError> {
+        #[allow(clippy::type_complexity)]
         let r: Result<Vec<(Array2<f64>, (Array2<usize>, Array2<usize>))>, DataError> = self
             .files
             .into_iter()
@@ -160,7 +158,12 @@ impl CollatedAstDataset {
         let (features, edges_and_feature_spans): (_, Vec<_>) = r.into_iter().unzip();
         let (edges, feature_spans): (Vec<Array2<usize>>, Vec<Array2<usize>>) =
             edges_and_feature_spans.into_iter().unzip();
-        Ok((features, edges, feature_spans, self.dataset))
+        Ok(CompilationOutput {
+            features,
+            edges,
+            feature_spans,
+            dataset: self.dataset,
+        })
     }
 }
 

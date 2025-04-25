@@ -17,7 +17,7 @@ use std::path::PathBuf;
 // };
 use clap::Parser;
 use neural::{
-    data::{CollatedAstDataset, RawAstDataset},
+    data::{CollatedAstDataset, CompilationOutput, RawAstDataset},
     KeyData,
 };
 use pyo3::Python;
@@ -139,7 +139,12 @@ fn main() {
         collated.include(dataset);
     }
 
-    let (features, edges, feature_spans, keys) = collated.compile().expect("valid load");
+    let CompilationOutput {
+        features,
+        edges,
+        feature_spans,
+        dataset: keys,
+    } = collated.compile().expect("valid load");
 
     let keys = keys
         .into_iter()
