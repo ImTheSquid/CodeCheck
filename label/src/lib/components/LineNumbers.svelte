@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { type ColoredMarkSpan, type MarkSpan } from '$lib/index';
-	export let length: number;
-	export let currentSpan: MarkSpan | null;
-	export let spans: ColoredMarkSpan[];
+	interface Props {
+		length: number;
+		currentSpan: MarkSpan | null;
+		spans: ColoredMarkSpan[];
+	}
 
-	$: maxChars = Math.floor(Math.log10(length)) + 1;
+	let { length, currentSpan = $bindable(), spans }: Props = $props();
+
+	let maxChars = $derived(Math.floor(Math.log10(length)) + 1);
 
 	function generateLineNumber(i: number): string {
 		const charsForI: number = Math.floor(Math.log10(i)) + 1;
@@ -56,7 +60,7 @@
 <pre class="text-right bg-slate-100 flex flex-col">
     {#key spans}
 		{#each { length: length } as _, i}
-			<button on:click={(_) => processClick(i)} class="contents text-right">
+			<button onclick={(_) => processClick(i)} class="contents text-right">
           <code
 					class:highlight={currentSpan !== null &&
 						currentSpan.start - 1 <= i &&

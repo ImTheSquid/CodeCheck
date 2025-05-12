@@ -1,5 +1,5 @@
 {
-	"productName": "label",
+	"productName": "CodeCheck Data Labelling Suite",
 	"version": "0.1.0",
 	"identifier": "edu.purdue.codecheck.label",
 	"build": {

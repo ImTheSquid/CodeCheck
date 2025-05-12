@@ -3,7 +3,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import Error from '$lib/components/Error.svelte';
 	import Button from '$lib/components/Button.svelte';
-	let err: string | null = null;
+	let err: string | null = $state(null);
 	const loadDirectory = async () => {
 		const res = await open({
 			directory: true,

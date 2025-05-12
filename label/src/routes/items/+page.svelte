@@ -1,20 +1,22 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import { numItems } from '$lib';
 	import Error from '$lib/components/Error.svelte';
 	import Link from '$lib/components/Link.svelte';
 	import Button from '$lib/components/Button.svelte';
-	let err: string | null = null;
-	let overviewData: (number | null)[] | null = null;
-	let goto: number = 0;
-	$: {
+	let err: string | null = $state(null);
+	let overviewData: (number | null)[] | null = $state(null);
+	let goto: number = $state(0);
+	run(() => {
 		if (goto < 0) {
 			goto = 0;
 		} else if (goto >= (overviewData?.length ?? 1)) {
 			goto = (overviewData?.length ?? 1) - 1;
 		}
-	}
+	});
 	onMount(async () => {
 		try {
 			overviewData = await invoke('get_overview');

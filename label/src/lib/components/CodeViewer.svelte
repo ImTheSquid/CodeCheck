@@ -8,10 +8,14 @@
 	import LineNumbers from './LineNumbers.svelte';
 	import { type MarkSpan, type ColoredMarkSpan } from '$lib/index';
 
-	export let spans: ColoredMarkSpan[];
-	export let currentSpan: MarkSpan | null;
-	export let code: string;
-	export let lang: string;
+	interface Props {
+		spans: ColoredMarkSpan[];
+		currentSpan: MarkSpan | null;
+		code: string;
+		lang: string;
+	}
+
+	let { spans, currentSpan = $bindable(), code, lang }: Props = $props();
 
 	function language() {
 		switch (lang) {

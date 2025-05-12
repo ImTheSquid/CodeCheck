@@ -6,13 +6,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tauri::Manager;
-use util::{
-    find_paired_indices_from_pair_index, str_error, Dataset, DatasetError, Mark, Pair,
-    PairedIndices,
-};
+use util::{find_paired_indices_from_pair_index, str_error, Dataset, DatasetError, Mark, Pair};
 use walkdir::WalkDir;
 
-const DATASET_FILE_NAME: &'static str = "dataset.json";
+const DATASET_FILE_NAME: &str = "dataset.json";
 
 #[derive(Debug)]
 struct CurrentDataset {
@@ -151,7 +148,7 @@ fn load_pair(
         let dataset = dataset.as_ref().ok_or(DatasetError::NoDataset)?;
         (
             dataset.path.clone(),
-            dataset.data.pairs.get(&pair_index).is_some(),
+            dataset.data.pairs.contains_key(&pair_index),
         )
     };
     let (marks, a, b) = if is_cached {
@@ -162,8 +159,7 @@ fn load_pair(
     } else {
         let mut dataset = state.current_dataset.write().unwrap();
         let dataset = dataset.as_mut().ok_or(DatasetError::NoDataset)?;
-        let PairedIndices { i, j } =
-            find_paired_indices_from_pair_index(pair_index, dataset.items.len());
+        let (i, j) = find_paired_indices_from_pair_index(pair_index, dataset.items.len());
         dataset.data.pairs.insert(
             pair_index,
             Pair {
