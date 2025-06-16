@@ -7,6 +7,7 @@ use core::range::Range;
 use ndarray::{array, Array1, Array2, Axis};
 use std::{
     collections::HashMap,
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Weak},
@@ -150,6 +151,7 @@ impl CollatedAstDataset {
             .files
             .into_iter()
             .map(|f| {
+                println!("{}", f.path.to_string_lossy());
                 let bt = build_edges_and_features(&f.path, f.language)?;
                 Ok((bt.features, (bt.edges, bt.feature_spans)))
             })
@@ -179,18 +181,19 @@ fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTe
     } = match language {
         Language::C => {
             let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, language, char_map)
+            convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Cpp => {
             let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, language, char_map)
+            convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Java => {
             let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
-            convert_tree_to_tensor(tree, language, char_map)
+            convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Python => {
-            todo!()
+            let tree = ast::python::PythonTree::try_from(file_data)?.symbol_tree()?;
+            convert_tree_to_tensor(tree, language, char_map)?
         }
     };
 
@@ -202,6 +205,7 @@ fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTe
     })
 }
 
+/// Converts a character index to its line number
 fn resolve_line_numbers_from_character_positions(file_data: &str) -> HashMap<usize, usize> {
     let mut map = HashMap::new();
     let mut current_line = 0_usize;
@@ -220,7 +224,7 @@ fn convert_tree_to_tensor<T>(
     tree: syntree::Tree<T, usize, usize>,
     language: Language,
     character_map: HashMap<usize, usize>,
-) -> TensorBuildData
+) -> Result<TensorBuildData, DataError>
 where
     T: Copy + Into<Array1<f64>>,
 {
@@ -264,14 +268,18 @@ where
         features.push(node_feature);
         let span = node.span();
         spans.push(array![
-            *character_map.get(&span.start).unwrap_or_else(|| panic!(
-                "Unable to find line for character index START {}",
-                span.start
-            )),
-            *character_map.get(&span.end).unwrap_or_else(|| panic!(
-                "Unable to find line for character index END {}",
-                span.end
-            ))
+            *character_map
+                .get(&span.start)
+                .ok_or(DataError::InvalidCharacterMapConstruction {
+                    character_index: span.start,
+                    designator: InvalidCharacterMapSpanPartDesignator::Start
+                })?,
+            *character_map
+                .get(&span.end)
+                .ok_or(DataError::InvalidCharacterMapConstruction {
+                    character_index: span.end,
+                    designator: InvalidCharacterMapSpanPartDesignator::End
+                })?
         ]);
 
         last_index = i;
@@ -297,7 +305,7 @@ where
     //     paired_indices.push(Tensor::from_ints([i, i], &self.device));
     // }
 
-    TensorBuildData {
+    Ok(TensorBuildData {
         edges: ndarray::stack(Axis(0), arr_vec_to_view!(paired_indices))
             .expect("valid stack")
             .t()
@@ -305,7 +313,7 @@ where
         // edges_hash: hash_map,
         features: ndarray::stack(Axis(0), arr_vec_to_view!(features)).expect("valid stack"),
         feature_spans: ndarray::stack(Axis(0), arr_vec_to_view!(spans)).expect("valid stack"),
-    }
+    })
 }
 
 // impl AnyDataset for CollatedAstDataset {
@@ -619,12 +627,35 @@ pub const MAX_EDGES: usize = MAX_NODES - 1;
 //     }
 // }
 
+#[derive(Debug)]
+pub enum InvalidCharacterMapSpanPartDesignator {
+    Start,
+    End,
+}
+
+impl Display for InvalidCharacterMapSpanPartDesignator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Start => "START",
+            Self::End => "END",
+        })
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DataError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Tree(#[from] ast::TreeParseError),
+    /// The character map doesn't match up with the tree span
+    #[error(
+        "The character map doesn't match up with the tree span! {designator} {character_index}"
+    )]
+    InvalidCharacterMapConstruction {
+        character_index: usize,
+        designator: InvalidCharacterMapSpanPartDesignator,
+    },
 }
 
 /// Represents a batch of ASTs for training

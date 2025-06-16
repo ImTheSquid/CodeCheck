@@ -5,6 +5,7 @@ use strum::IntoEnumIterator;
 pub mod c;
 pub mod cpp;
 pub mod java;
+pub mod python;
 #[macro_use]
 pub mod gen;
 
@@ -86,7 +87,7 @@ impl Language {
             Language::C => c::CTreeItem::iter().count(),
             Language::Cpp => cpp::CppTreeItem::iter().count(),
             Language::Java => java::JavaTreeItem::iter().count(),
-            Language::Python => 0,
+            Language::Python => python::PythonTreeItem::iter().count(),
         }
     }
 

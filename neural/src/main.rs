@@ -144,7 +144,7 @@ fn main() {
         edges,
         feature_spans,
         dataset: keys,
-    } = collated.compile().expect("valid load");
+    } = collated.compile().expect("valid load for path");
 
     let keys = keys
         .into_iter()

@@ -7,10 +7,10 @@ from torch_geometric.data import Data
 import torch
 from actor import Actor
 from critic import Critic
-from hdbscan import HDBSCAN, all_points_membership_vectors
+from hdbscan import HDBSCAN
 import numpy as np
-from copy import deepcopy
 import itertools
+from collections import defaultdict
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -61,7 +61,7 @@ def generate_dataset(edges: list[NDArray], features: list[NDArray], feature_span
     print(f'📶 Dataset generated with {len(graphs)} entries, {stats[0]} features, {stats[1]} edges')
     return GraphDataset(graphs)
 
-NUM_EPISODES = 10
+NUM_EPISODES = 25
 
 def make_splits(dataset_sz: int) -> tuple[int, int, int]:
     # Define split sizes (80% Train, 10% Val, 10% Test)
@@ -74,37 +74,38 @@ def find_relevant_keys_for_clustering(keys: dict[tuple[int, int], NDArray], sele
     """
     Takes the main `keys` dict and filters to only graph indices present in the batch
     """
-    pairs = set(itertools.combinations(list(map(lambda i: i[0], selected_indices_for_batch)), 2))
+    persistent_graph_ids = list(map(lambda i: i[0], selected_indices_for_batch))
+    pairs = set(itertools.combinations(persistent_graph_ids, 2))
     out = { k: keys[k] for k in keys.keys() if k in pairs }
     return out
 
-def min_max_indices(tensor: torch.Tensor):
-    """
-    Find the minimum and maximum indices for each unique number in the tensor.
+# def min_max_indices(tensor: torch.Tensor):
+#     """
+#     Find the minimum and maximum indices for each unique number in the tensor.
 
-    Args:
-        tensor (torch.Tensor): Input tensor with numbers.
+#     Args:
+#         tensor (torch.Tensor): Input tensor with numbers.
 
-    Returns:
-        results (dict): A dictionary where keys are unique values, and values
-                        are tuples containing the min and max index of occurrences.
-    """
-    # Get all unique values
-    unique_values = torch.unique(tensor)
-    results = {}
+#     Returns:
+#         results (dict): A dictionary where keys are unique values, and values
+#                         are tuples containing the min and max index of occurrences.
+#     """
+#     # Get all unique values
+#     unique_values = torch.unique(tensor)
+#     results = {}
 
-    for value in unique_values:
-        # Find indices of this value in the tensor
-        indices = torch.where(tensor == value)[0]
+#     for value in unique_values:
+#         # Find indices of this value in the tensor
+#         indices = torch.where(tensor == value)[0]
 
-        # Calculate min and max indices
-        min_index = torch.min(indices).item()
-        max_index = torch.max(indices).item()
+#         # Calculate min and max indices
+#         min_index = torch.min(indices).item()
+#         max_index = torch.max(indices).item()
 
-        # Store results
-        results[value.item()] = (min_index, max_index)
+#         # Store results
+#         results[value.item()] = (min_index, max_index)
 
-    return results
+#     return results
 
 def create_line_number_mappings(merge_map: NDArray, original_line_mappings: NDArray) -> NDArray:
     """
@@ -112,11 +113,9 @@ def create_line_number_mappings(merge_map: NDArray, original_line_mappings: NDAr
     Uses an iterative algorithm to determine merges for each item in the merge map.
     The returned tensor contains the feature and it's start and end line numbers
     """
-    # merge_map -= np.min(merge_map)
-    # print("RECENTER")
-    # print(merge_map)
+    assert merge_map.shape[0] == original_line_mappings.shape[0], "Invalid arrays!"
     num_features = np.unique(merge_map).shape[0]
-    assert num_features <= merge_map.shape[0]
+    # assert num_features <= merge_map.shape[0], "Num features must be lte size of merge map"
     line_mappings = np.zeros([num_features, 2], dtype=np.long)
     # print(f'Original merge map size {merge_map.shape}')
     # print(f'Made line mappings {line_mappings.shape}')
@@ -144,9 +143,36 @@ def create_line_number_mappings(merge_map: NDArray, original_line_mappings: NDAr
 
     return line_mappings
 
+def recombine_per_graph_spans(
+    batch: NDArray,                         # [N] graph‐ID per pooled node
+    recovered_per_graph: list[NDArray],      # list of [n_g,2] arrays, one per graph in same order
+    selected_indices_for_batch
+) -> NDArray:
+    """
+    Given:
+      - batch:           length‐N array, batch[i] = graph‐ID of node i
+      - recovered_per_graph[k]: array [n_k,2] for graph k,
+         in the same order as your `for (pid, graph) in selected_indices`
+    Returns:
+      - full_spans: np.ndarray of shape [N,2],
+         where full_spans[i] is the span for node i.
+    """
+    N = batch.shape[0]
+    full_spans = np.zeros((N,2), dtype=recovered_per_graph[0].dtype)
+
+    # Suppose your graph‐loop was in this order:
+    #   for idx, (pid, graph) in enumerate(selected_indices_for_batch):
+    for idx, (_, graph) in enumerate(selected_indices_for_batch):
+        mask = (batch == graph)              # boolean mask of shape [N]
+        spans = recovered_per_graph[idx]     # shape [mask.sum(), 2]
+        # sanity check:
+        assert spans.shape[0] == mask.sum(), f"Spans don't match mask: ({spans.shape[0]} != {mask.sum()})"
+        full_spans[mask] = spans             # broadcast assign into those rows
+
+    return full_spans
+
 def cluster_and_calculate_reward(
     nodes: NDArray,
-    edges: NDArray,
     keys: dict[tuple[int, int], NDArray],
     merge_map: NDArray,
     selected_indices_for_batch: list[tuple[int, int]],
@@ -154,10 +180,15 @@ def cluster_and_calculate_reward(
     batch: NDArray,
     perm: NDArray,
 ) -> float:
-    print(f'SIFB: {selected_indices_for_batch}')
-    # Some of these are empty, likely an issue with graph index associations
+    assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
+    assert batch.shape[0] == nodes.shape[0], "Something is wrong, nodes must match batch"
+    print(f'BART {batch.shape}')
+    print(f'LAFB {selected_line_assignments_for_batch} ({selected_line_assignments_for_batch.shape})')
+    # print(f'SIFB: {selected_indices_for_batch}')
+    line_assignments = []
+    # print('Processing (graph, pid): ', end='')
     for (persistent_id, graph) in selected_indices_for_batch:
-        print(f'PROCESSING GRAPH {graph} (persistent id {persistent_id})')
+        # print(f'{graph, persistent_id};', end='')
         # relevant_indices = np.where(batch == graph)[0]
         # line_assignments_for_graph = selected_line_assignments_for_batch[relevant_indices]
         # merge_map_for_graph = merge_map[relevant_indices]
@@ -170,6 +201,13 @@ def cluster_and_calculate_reward(
 
         mask = (batch == graph)      # select survivors of that graph
         local_pos = np.nonzero(mask)[0]              # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
+
+        if local_pos.size == 0:
+            # no nodes survived for this graph → skip or record an empty array
+            print(f'No nodes survived graph pid {persistent_id}')
+            line_assignments.append(np.zeros((0, 2), dtype=int))
+            continue
+
         global_nodes = perm[local_pos]         # now these are the true original indices
 
         # pull out their merge_map entries in the global map:
@@ -183,24 +221,147 @@ def cluster_and_calculate_reward(
 
         # and likewise your line spans:
         line_assignments_for_graph = selected_line_assignments_for_batch[global_nodes]
-        print(merge_map_for_graph)
-
 
         recovered_assignments = create_line_number_mappings(merge_map_for_graph, line_assignments_for_graph)
-        # print("Recovered Assignments:")
-        # print(recovered_assignments)
 
-    assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
+        # Build per-node spans:
+        node_spans = recovered_assignments[ merge_map_for_graph ]
+
+        assert nodes[mask].shape[0] == node_spans.shape[0], f"Nodes for graph don't match assignments! {nodes[mask].shape[0]} != {recovered_assignments.shape[0]}"
+        line_assignments.append(node_spans)
+    # print()
+    line_assignments = recombine_per_graph_spans(batch, line_assignments, selected_indices_for_batch)
+    assert line_assignments.shape[0] == nodes.shape[0], "Nodes don't match line assignments!"
+    line_spans = line_assignments
+    # print(line_assignments)
+
     relevant = find_relevant_keys_for_clustering(keys, selected_indices_for_batch)
     print(f'RELEVANT KEYS FOUND: {relevant}')
-    print(merge_map.shape)
+    # If there aren't any relevant keys in this dataset then no change in score
     if len(relevant) == 0:
         return 0.0
-    clusterer = HDBSCAN(min_cluster_size=2, core_dist_n_jobs=-1, prediction_data=True).fit(nodes)
-    vecs = all_points_membership_vectors(clusterer)
-    print(vecs)
-    return -100.0
 
+    # No prediction data for now, maybe later but get it working without first
+    clusterer = HDBSCAN(
+        min_cluster_size=2,
+        core_dist_n_jobs=-1,
+        # prediction_data=True,
+        cluster_selection_method='leaf',
+        allow_single_cluster=True
+    ).fit(nodes)
+    labels = clusterer.labels_
+    print(f'{labels.max()} clusters created')
+    # print('Finding all points membership vectors...')
+    # vecs = all_points_membership_vectors(clusterer)
+
+    cluster_dict = defaultdict(list)
+    for idx, label in enumerate(labels):
+        cluster_dict[label].append(idx)
+
+    # If you want a plain dict instead of defaultdict:
+    cluster_dict = dict(cluster_dict)
+
+    # print(vecs)
+    # Look through the returned set of membership
+    # For each pair in the relevant keys, see if a pair exists in the generated clusters
+    # If they do, add points. If not, subtract
+    # If there are any clusters unaccounted for, return a negative value for now to
+    # disincentivise false positive
+    # score = 0.0
+    # for cluster_members in cluster_dict.values():
+    #     print(f'CLUSTER MEMBERSHIPS: {cluster_members}')
+    #     pass
+
+    # 1) Cluster
+    # clusterer = HDBSCAN(min_cluster_size=2, cluster_selection_method='leaf')
+    clusterer = HDBSCAN(
+        min_cluster_size=2,
+        core_dist_n_jobs=-1,
+        # prediction_data=True,
+        cluster_selection_method='leaf',
+        allow_single_cluster=True
+    )
+    labels = clusterer.fit_predict(nodes)   # -1 = noise
+
+    # 2) Recover per‐node spans
+    #    If you want "true" spans per node from your original mapping,
+    #    you can call the helper above. Otherwise assume line_spans is already per node.
+
+    # 3) Build lookup: local_idx -> (pid,graph)
+    # pid_graph = {i: selected_indices_for_batch[i] for i in range(len(selected_indices_for_batch))}
+
+    # 4) Count TP/FP and track which key‐rows we match exactly
+    TP = FP = 0
+    matched = set()   # (pair, (si,sj,ei,ej))
+
+    # all_keys = set(keys.keys())
+
+    for cluster in set(labels):
+        if cluster < 0: continue
+        members = np.where(labels == cluster)[0]
+        for i, j in itertools.combinations(members, 2):
+            g_i = batch[i]
+            g_j = batch[j]
+
+
+            # print(f"SEL {i}, {j}")
+            # pid_i, g_i = pid_graph[i]
+            # pid_j, g_j = pid_graph[j]
+            if g_i == g_j: continue
+
+            pid_i = pid_j = -1
+
+            for pid, g in selected_indices_for_batch:
+                if g == g_i:
+                    pid_i = pid
+                elif g == g_j:
+                    pid_j = pid
+                # Early return if both found
+                if pid_i > -1 and pid_j > -1:
+                    break
+
+            span_i = tuple(line_spans[i].tolist())
+            span_j = tuple(line_spans[j].tolist())
+
+            pair = (pid_i, pid_j)
+            arr = keys.get(pair, None)
+            if arr is None or arr.size == 0:
+                # no true spans → false positive
+                FP += 1
+                continue
+
+            # want to see [si, sj, ei, ej]
+            want1 = (span_i[0], span_j[0], span_i[1], span_j[1])
+            want2 = (span_j[0], span_i[0], span_j[1], span_i[1])
+
+            found = False
+            for row in arr:
+                row_t = (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+                if row_t == want1 or row_t == want2:
+                    TP += 1
+                    matched.add((pair, row_t))
+                    found = True
+                    break
+            if not found:
+                FP += 1
+
+    # 5) Count FN: ground‐truth rows never matched
+    FN = 0
+    for pair, arr in keys.items():
+        if arr.size == 0: continue
+        for row in arr:
+            row_t = (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+            if (pair, row_t) not in matched:
+                FN += 1
+
+    # 6) Precision/Recall/F1
+    precision = TP / (TP + FP) if TP + FP > 0 else 0.0
+    recall    = TP / (TP + FN) if TP + FN > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+
+    print(f"TP FP FN {TP} {FP} {FN}")
+
+    return f1
 
 def train(
     dataset: Dataset,
@@ -232,25 +393,24 @@ def train(
             # Selected graph indices are actually different than the assignments given by PyTorch
             # Zip them together for processing later
             selected_indices = batch.key_index
-            selected_indices = np.array(list(map(int, selected_indices)))
+            selected_indices = list(map(int, selected_indices))
             selected_batch_indices = list(range(torch.max(batch.batch) + 1))
             selected_indices = list(zip(selected_indices, selected_batch_indices))
 
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
-            print(f'SZ: X: {batch.x.shape} B: {batch.batch.shape} E: {batch.edge_index.shape}')
-            print(f'SEL IND: {selected_indices}')
-            print(f'MINMAX: {min_max_indices(batch.batch)}')
-            a_x, a_edge_index, merge_map, a_batch, a_perm = actor(batch.x, batch.edge_index, batch.batch)
-            print(f"BATCHMAX {torch.max(a_batch)}")
-            print(f'AX: {a_x.shape} MM: {merge_map.shape}')
-            print(merge_map)
+            # print(f'SZ: X: {batch.x.shape} B: {batch.batch.shape} E: {batch.edge_index.shape}')
+            # print(f'SEL IND: {selected_indices}')
+            # print(f'MINMAX: {min_max_indices(batch.batch)}')
+            a_x, a_edge_index, merge_map, a_batch, a_perm, a_logp_sum = actor(batch.x, batch.edge_index, batch.batch)
+            # print(f"BATCHMAX {torch.max(a_batch)}")
+            # print(f'AX: {a_x.shape} MM: {merge_map.shape}')
+            # print(merge_map)
             # print(np.where(merge_map.numpy() != np.arange(merge_map.numpy().max() + 1)))
             # assert len(np.unique(merge_map.numpy())) == a_x.shape[0], f"Some merge map entries reference nonexistent nodes! ({len(np.unique(merge_map.numpy()))} != {a_x.shape[0]})"
             pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
             reward = cluster_and_calculate_reward(
                 nodes=a_x.detach().numpy(),
-                edges=a_edge_index.detach().numpy(),
                 keys=keys,
                 merge_map=merge_map.numpy(),
                 selected_indices_for_batch=selected_indices,
@@ -259,9 +419,28 @@ def train(
                 perm=a_perm.numpy()
             )
 
+            reward = torch.tensor(reward)
+
+            advantage = (reward - pred_reward).detach()
+            actor_loss = -(advantage * a_logp_sum).mean()
+
+            actor_optim.zero_grad()
+            actor_loss.backward()
+            actor_optim.step()
+
+            critic_loss = nn.SmoothL1Loss()(pred_reward, reward)
+            critic_optim.zero_grad()
+            critic_loss.backward()
+            critic_optim.step()
+
+            total_actor_loss += actor_loss
+            total_critic_loss += critic_loss
+
         # Val
         for batch in val_data:
             pass
+
+        print(f'~~\nTotal Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~')
 
     # Test
     actor.eval()
@@ -273,9 +452,10 @@ def train(
 
 def rust_train(features: list[NDArray], edges: list[NDArray], feature_spans: list[NDArray], keys: dict[tuple[int, int], NDArray]):
     print('✅ Python initialization successful. Beginning training...')
+    print(f"KEYS\n\n{keys}\n\n")
     dataset = generate_dataset(edges, features, feature_spans)
 
-    actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 10], num_heads=[8, 8], pool_ratios=[0.6, 0.8])
+    actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 20, 20, 10, 10], num_heads=[8, 8, 8, 8, 4], pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8])
     critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8)
 
     train(

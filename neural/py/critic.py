@@ -11,4 +11,5 @@ class Critic(nn.Module):
     def forward(self, x, edge_index, a_x, a_edge_index):
         h = self.gat(x, edge_index)
         value = self.value_head(h).mean()  # Graph-level value score
+        print(f'VALUE {type(value)}')
         return value

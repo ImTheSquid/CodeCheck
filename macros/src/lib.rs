@@ -71,7 +71,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             let name = &f.sig.ident;
             let name_str = name.to_string();
 
-            let parser_rule = name_str.split('_').nth(1).unwrap().to_string();
+            let parser_rule = name_str.split_once('_').unwrap().1.to_string();
             let mut parser_rule_chars = parser_rule.chars().collect::<Vec<_>>();
             parser_rule_chars[0] = parser_rule_chars[0].to_ascii_uppercase();
             let pascal_case_parser_rule: String = parser_rule_chars.into_iter().collect();

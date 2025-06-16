@@ -6,7 +6,7 @@
 pub mod cpp14parservisitor;
 pub mod cvisitor;
 pub mod javaparservisitor;
-pub mod python3parservisitor;
+pub mod pythonparservisitor;
 
 // Private modules, only for support
 pub mod clexer;
@@ -21,6 +21,6 @@ pub mod javalexer;
 pub mod javaparser;
 mod javaparserlistener;
 
-mod python3lexer;
-mod python3parser;
-mod python3parserlistener;
+pub mod pythonlexer;
+pub mod pythonparser;
+mod pythonparserlistener;

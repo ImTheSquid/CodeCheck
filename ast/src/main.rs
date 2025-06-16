@@ -1,6 +1,9 @@
 use std::{env::args, fs::read_to_string, path::PathBuf, str::FromStr};
 
-use ast::{c::CTree, cpp::CppTree, guess_language_from_path, java::JavaTree, Language, SyntaxTree};
+use ast::{
+    c::CTree, cpp::CppTree, guess_language_from_path, java::JavaTree, python::PythonTree, Language,
+    SyntaxTree,
+};
 use ndarray::Array1;
 
 fn main() {
@@ -37,7 +40,17 @@ fn main() {
             tree.first().expect("non-empty java tree").value().into()
         }
         Language::Python => {
-            todo!();
+            let tt = target_text.clone();
+            let tree = PythonTree::try_from(target_text)
+                .expect("Valid Python parse")
+                .symbol_tree()
+                .expect("Python tree build");
+
+            let mut s = Vec::new();
+            syntree::print::print_with_source(&mut s, &tree, &tt).expect("print");
+            println!("TREE: {}", String::from_utf8(s).unwrap());
+
+            tree.first().expect("non-empty python tree").value().into()
         }
     };
 

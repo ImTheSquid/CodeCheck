@@ -1,7 +1,10 @@
 from collections import deque
 import torch
+from torch.distributions import Bernoulli
 import torch.nn as nn
 from torch_geometric.nn import GATv2Conv, TopKPooling
+from torch_geometric.utils import subgraph
+import torch.nn.functional as F
 import numpy as np
 
 def min_max_indices(tensor: torch.Tensor):
@@ -67,14 +70,14 @@ class Actor(nn.Module):
         super().__init__()
         self.num_layers = len(num_heads)
         self.gats = nn.ModuleList()
-        self.pools = nn.ModuleList()
+        # self.pools = nn.ModuleList()
         self.policy_heads = nn.ModuleList()
 
         dims = [in_dim] + hidden_dims
 
         for i in range(self.num_layers):
             self.gats.append(GATv2Conv(dims[i], dims[i + 1], heads=num_heads[i], concat=False))
-            self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
+            # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
             self.policy_heads.append(nn.Linear(dims[i + 1], 1)) # Node selection score
 
     def batch_update_merge_map(self, merge_map: torch.Tensor, perm: torch.Tensor, pre_pool_edge_index: torch.Tensor, batch: torch.Tensor, new_batch: torch.Tensor):
@@ -222,10 +225,20 @@ class Actor(nn.Module):
         # Sanity check
         start_num_graphs = torch.max(batch) + 1
 
+        logp_terms = []
+
         for i in range(self.num_layers):
             # 1) GAT + score
             x = self.gats[i](x, edge_index)
-            scores = torch.sigmoid(self.policy_heads[i](x))
+            logits = self.policy_heads[i](x).squeeze(-1)
+            probs = torch.sigmoid(logits)
+            dist = Bernoulli(probs)
+            actions = dist.sample()
+            logp = dist.log_prob(actions)
+            logp_terms.append(logp)
+
+            keep_mask = actions.bool()
+            perm = keep_mask.nonzero(as_tuple=True)[0]
 
             # 2) Save pre‐pool state for BFS
             pre_edge_index = edge_index.clone().detach()
@@ -233,11 +246,15 @@ class Actor(nn.Module):
             pre_global_map = global_map.clone().detach()
 
             # 3) Pool (returns new x, new edge_index, new batch, perm, _)
-            x, edge_index, _, batch, perm, _ = self.pools[i](
-                x, edge_index,
-                batch=batch,
-                attn=scores
-            )
+            # x, edge_index, _, batch, perm, _ = self.pools[i](
+            #     x, edge_index,
+            #     batch=batch,
+            #     attn=scores
+            # )
+
+            edge_index, _ = subgraph(perm, edge_index, relabel_nodes=True, num_nodes=x.size(0))
+            x = x[perm]
+            batch = batch[perm]
 
             # 4) Survivors in this layer, in original indexing
             surv_global = pre_global_map[perm]  # shape = [# kept nodes]
@@ -260,6 +277,8 @@ class Actor(nn.Module):
             # 8) Shrink your local→global map for the next layer
             global_map = surv_global.clone()
 
+            x = F.gelu(x)
+
         print(f'END OF FORWARD, {torch.max(batch) + 1} graphs remain')
 
         # Sanity check
@@ -270,4 +289,6 @@ class Actor(nn.Module):
         # nodes that failed to find a survivor.
         assert not torch.any(merge_map == -1), "Some nodes failed to find a survivor!"
 
-        return x, edge_index, merge_map, batch, perm
+        logp_total = torch.cat(logp_terms).sum()
+
+        return x, edge_index, merge_map, batch, perm, logp_total
