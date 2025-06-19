@@ -1,4 +1,4 @@
-use ast::{guess_language_from_path, Language, SyntaxTree};
+use ast::{guess_language_from_path, prune_tree, Language, SyntaxTree};
 use burn::{
     prelude::Backend,
     tensor::{Int, Tensor},
@@ -180,19 +180,23 @@ fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTe
         feature_spans,
     } = match language {
         Language::C => {
-            let tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
+            let mut tree = ast::c::CTree::try_from(file_data)?.symbol_tree()?;
+            prune_tree(&mut tree);
             convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Cpp => {
-            let tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
+            let mut tree = ast::cpp::CppTree::try_from(file_data)?.symbol_tree()?;
+            prune_tree(&mut tree);
             convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Java => {
-            let tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
+            let mut tree = ast::java::JavaTree::try_from(file_data)?.symbol_tree()?;
+            prune_tree(&mut tree);
             convert_tree_to_tensor(tree, language, char_map)?
         }
         Language::Python => {
-            let tree = ast::python::PythonTree::try_from(file_data)?.symbol_tree()?;
+            let mut tree = ast::python::PythonTree::try_from(file_data)?.symbol_tree()?;
+            prune_tree(&mut tree);
             convert_tree_to_tensor(tree, language, char_map)?
         }
     };
