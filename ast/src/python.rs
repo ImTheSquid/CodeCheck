@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::AtomicIsize;
 
 use antlr_rust::char_stream::CharStream;
 use antlr_rust::common_token_stream::CommonTokenStream;
 use antlr_rust::int_stream::EOF;
 use antlr_rust::lexer_atn_simulator::LexerATNSimulator;
-use antlr_rust::token::{CommonToken, TOKEN_DEFAULT_CHANNEL, TOKEN_EOF};
+use antlr_rust::token::{TOKEN_DEFAULT_CHANNEL, TOKEN_EOF};
 use antlr_rust::token_factory::TokenFactory;
 use antlr_rust::tree::{ErrorNode, ParseTreeVisitorCompat, TerminalNode};
 use antlr_rust::{BaseLexer, InputStream, Lexer, TokenSource};
@@ -197,7 +196,8 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
         }
 
         if self.indent_length_stack.is_empty() {
-            self.insert_encoding_token();
+            // Disable this, it's useless
+            // self.insert_encoding_token();
             self.set_current_and_following_tokens();
             self.handle_start_of_input();
         } else {
@@ -358,13 +358,8 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
     }
 
     fn handle_format_specification_mode(&mut self) {
-        if !self.mode_stack.is_empty()
-            && self
-                .ffg_token
-                .as_ref()
-                .is_some_and(|f| f.token_type == pythonlex::RBRACE)
-        {
-            let ffg = self.ffg_token.clone().expect("ffg tok");
+        let ffg = self.ffg_token.clone().expect("ffg tok");
+        if !self.mode_stack.is_empty() && ffg.token_type == pythonlex::RBRACE {
             match self.current_token.as_ref().expect("cur tok").token_type {
                 pythonlex::COLON => Self::create_and_add_pending_token(
                     &mut self.pending_tokens,
@@ -419,12 +414,8 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
                 tok.text = Cow::Borrowed(":");
                 tok.stop = tok.start;
             }
-            if let (Some(true), Some(ffg)) = (
-                self.ffg_token
-                    .as_ref()
-                    .map(|f| f.token_type == pythonlex::FSTRING_MIDDLE),
-                self.ffg_token.as_mut(),
-            ) {
+            let ffg = self.ffg_token.as_mut().expect("ffg tok");
+            if ffg.token_type == pythonlex::FSTRING_MIDDLE {
                 ffg.text = Cow::Owned(format!("={}", ffg.text));
                 ffg.start -= 1;
                 ffg.column -= 1;
@@ -451,58 +442,58 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
         );
     }
 
-    fn insert_encoding_token(&mut self) {
-        let stream = self.base.get_input_stream().expect("input stream");
-        let size = stream.size();
-        let mut lines_traversed = 0;
-        const WS_COMMENT_PATTERN: &str = r#"^[\t\f]*(#.*)?$"#;
-        let ws_comment_pat = regex::Regex::new(WS_COMMENT_PATTERN).unwrap();
-        const ENC_COMMENT_PATTERN: &str = r#"^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)"#;
-        let enc_comment_pat = regex::Regex::new(ENC_COMMENT_PATTERN).unwrap();
-        let mut collector = Vec::with_capacity(size as usize);
-        stream.seek(0);
-        let mut encoding_name = "utf-8".to_string();
+    // fn insert_encoding_token(&mut self) {
+    //     let stream = self.base.get_input_stream().expect("input stream");
+    //     let size = stream.size();
+    //     let mut lines_traversed = 0;
+    //     const WS_COMMENT_PATTERN: &str = r#"^[\t\f]*(#.*)?$"#;
+    //     let ws_comment_pat = regex::Regex::new(WS_COMMENT_PATTERN).unwrap();
+    //     const ENC_COMMENT_PATTERN: &str = r#"^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)"#;
+    //     let enc_comment_pat = regex::Regex::new(ENC_COMMENT_PATTERN).unwrap();
+    //     let mut collector = Vec::with_capacity(size as usize);
+    //     stream.seek(0);
+    //     let mut encoding_name = "utf-8".to_string();
 
-        for i in 0..size {
-            let c = stream.la(i + 1) as u8 as char;
-            collector.push(c);
-            if c == '\n' {
-                let line: String = collector.iter().collect();
-                if ws_comment_pat.is_match(&line) {
-                    if let Some(Some(encoding)) = enc_comment_pat.captures(&line).map(|c| c.get(1))
-                    {
-                        encoding_name = encoding.as_str().to_string();
-                    }
-                }
+    //     for i in 0..size {
+    //         let c = stream.la(i + 1) as u8 as char;
+    //         collector.push(c);
+    //         if c == '\n' {
+    //             let line: String = collector.iter().collect();
+    //             if ws_comment_pat.is_match(&line) {
+    //                 if let Some(Some(encoding)) = enc_comment_pat.captures(&line).map(|c| c.get(1))
+    //                 {
+    //                     encoding_name = encoding.as_str().to_string();
+    //                 }
+    //             }
 
-                lines_traversed += 1;
-                if lines_traversed >= 2 {
-                    break;
-                }
+    //             lines_traversed += 1;
+    //             if lines_traversed >= 2 {
+    //                 break;
+    //             }
 
-                collector = Vec::with_capacity(size as usize);
-            }
-        }
+    //             collector = Vec::with_capacity(size as usize);
+    //         }
+    //     }
 
-        let token = CommonToken {
-            token_type: pythonlex::ENCODING,
-            channel: TOKEN_HIDDEN_CHANNEL,
-            start: 0,
-            stop: 0,
-            line: 0,
-            column: 0,
-            text: Cow::Owned(encoding_name),
-            token_index: AtomicIsize::new(-1),
-            read_only: false,
-        };
+    //     let token = CommonToken {
+    //         token_type: pythonlex::ENCODING,
+    //         channel: TOKEN_HIDDEN_CHANNEL,
+    //         start: 0,
+    //         stop: 0,
+    //         line: 0,
+    //         column: 0,
+    //         text: Cow::Owned(encoding_name),
+    //         token_index: AtomicIsize::new(-1),
+    //         read_only: false,
+    //     };
 
-        Self::add_pending_token(
-            &mut self.pending_tokens,
-            Box::new(token),
-            &mut self.prev_pending_token_type,
-            &mut self.last_pending_token_type_from_default_channel,
-        );
-    }
+    //     Self::add_pending_token(
+    //         &mut self.pending_tokens,
+    //         Box::new(token),
+    //         &mut self.prev_pending_token_type,
+    //         &mut self.last_pending_token_type_from_default_channel,
+    //     );
+    // }
 
     fn handle_start_of_input(&mut self) {
         self.indent_length_stack.push(0);
@@ -615,7 +606,7 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
             self.current_token
                 .take_if(|ct| ct.token_type == TOKEN_EOF)
                 .unwrap_or_else(|| self.base.next_token()),
-        )
+        );
     }
 
     fn check_current_token(&mut self) {
@@ -632,7 +623,7 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
                     &mut self.prev_pending_token_type,
                     &mut self.last_pending_token_type_from_default_channel,
                 );
-                if current_token.token_type == pythonlex::FSTRING_START {
+                if current_token.token_type == pythonlex::FSTRING_MIDDLE {
                     return;
                 }
             }
@@ -701,13 +692,13 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
             return;
         }
 
-        let Some(&top) = self.paren_or_bracket_open_stack.last() else {
+        let Some(&top) = self.mode_stack.last() else {
             return;
         };
 
-        let top = if top <= 8 { top + 8 } else { top };
+        let mode = if top <= 8 { top + 8 } else { top };
 
-        self.push_lexer_mode(top);
+        self.push_lexer_mode(mode);
     }
 
     fn set_lexer_mode_after_rbrace_token(&mut self) {
@@ -958,14 +949,13 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
         .collect();
 
         // Retrieve the mode based on the token text
-        if let Some(mode) = mode_map.get(token_text_lower.as_str()) {
-            self.push_lexer_mode(*mode);
-        }
+        let mode = mode_map.get(token_text_lower.as_str()).expect("mode");
+        self.push_lexer_mode(*mode);
     }
 
     fn push_lexer_mode(&mut self, mode: usize) {
         self.base.push_mode(mode);
-        self.mode_stack.push(mode);
+        self.mode_stack.push(self.current_mode);
         self.current_mode = mode;
     }
 
@@ -1007,18 +997,7 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> TokenSource<'input>
 
     fn next_token(&mut self) -> Token<'input> {
         self.check_next_token();
-        // if let Some(tok) = self.pending_tokens.front() {
-        //     println!(
-        //         "TTYPE: {} ({}) LA {}",
-        //         tok.token_type,
-        //         pythonlex::_SYMBOLIC_NAMES[tok.token_type as usize].unwrap_or("UNKNOWN"),
-        //         self.base
-        //             .get_input_stream()
-        //             .as_mut()
-        //             .expect("input stream")
-        //             .la(1)
-        //     );
-        // }
+
         self.pending_tokens.pop_front().unwrap_or_else(|| {
             self.base.get_token_factory().create(
                 None::<&mut Input>,

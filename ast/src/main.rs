@@ -40,20 +40,25 @@ fn main() {
             tree.first().expect("non-empty java tree").value().into()
         }
         Language::Python => {
+            // Add a NEWLINE to the end, just to be safe
+            let target_text = format!("{target_text}\n");
             let tt = target_text.clone();
             let mut tree = PythonTree::try_from(target_text)
                 .expect("Valid Python parse")
                 .symbol_tree()
                 .expect("Python tree build");
 
-            let mut s = Vec::new();
-            syntree::print::print_with_source(&mut s, &tree, &tt).expect("print");
-            println!("TREE:\n{}", String::from_utf8(s).unwrap());
+            // let mut s = Vec::new();
+            // syntree::print::print_with_source(&mut s, &tree, &tt).expect("print");
+            // println!("TREE:\n{}", String::from_utf8(s).unwrap());
+            let old = tree.len();
 
             prune_tree(&mut tree);
             let mut s = Vec::new();
             syntree::print::print_with_source(&mut s, &tree, &tt).expect("print");
-            println!("PRUNED TREE:\n{}", String::from_utf8(s).unwrap());
+            // println!("PRUNED TREE:\n{}", String::from_utf8(s).unwrap());
+            let new = tree.len();
+            println!("Old: {old} New: {new} Diff: {diff}", diff = old - new);
 
             tree.first().expect("non-empty python tree").value().into()
         }

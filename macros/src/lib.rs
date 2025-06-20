@@ -109,7 +109,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
 
     let trait_name = &visitor_trait.ident;
-    let trait_name: Ident = syn::parse_str(&format!("{}Compat", trait_name)).unwrap();
+    let trait_name: Ident = syn::parse_str(&format!("{trait_name}Compat")).unwrap();
     let res = quote! {
         #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr)]
         pub enum #tree_enum {

@@ -57,7 +57,7 @@ pub enum TreeParseError {
     InvalidNode,
     #[error("Missing node")]
     MissingNode,
-    #[error(transparent)]
+    #[error("Tree build error: {0}")]
     TreeError(#[from] syntree::Error),
     #[error("ANTLR Error: {0}")]
     AntlrError(String),
