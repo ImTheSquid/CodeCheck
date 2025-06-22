@@ -5778,6 +5778,7 @@ dependencies = [
  "num_cpus",
  "numpy",
  "pyo3",
+ "rayon",
  "serde",
  "serde_json",
  "syntree 0.17.5",

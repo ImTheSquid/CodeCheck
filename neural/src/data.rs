@@ -5,6 +5,7 @@ use burn::{
 };
 use core::range::Range;
 use ndarray::{array, Array1, Array2, Axis};
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     fmt::Display,
@@ -149,9 +150,8 @@ impl CollatedAstDataset {
         #[allow(clippy::type_complexity)]
         let r: Result<Vec<(Array2<f64>, (Array2<usize>, Array2<usize>))>, DataError> = self
             .files
-            .into_iter()
+            .into_par_iter()
             .map(|f| {
-                println!("{}", f.path.to_string_lossy());
                 let bt = build_edges_and_features(&f.path, f.language)?;
                 Ok((bt.features, (bt.edges, bt.feature_spans)))
             })
@@ -171,6 +171,12 @@ impl CollatedAstDataset {
 
 fn build_edges_and_features(path: &Path, language: Language) -> Result<BatchedTensors, DataError> {
     let file_data = fs::read_to_string(path)?;
+    // Add an extra newline to prevent parsing errors if it's Python
+    let file_data = if matches!(language, Language::Python) {
+        format!("{file_data}\n")
+    } else {
+        file_data
+    };
     let char_map = resolve_line_numbers_from_character_positions(&file_data);
     // let num_lines = file_data.lines().count();
 
