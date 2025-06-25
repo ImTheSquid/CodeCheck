@@ -223,6 +223,7 @@ class Actor(nn.Module):
         perm = 0
 
         # Sanity check
+        b_start = torch.clone(batch)
         start_num_graphs = torch.max(batch) + 1
 
         logp_terms = []
@@ -283,7 +284,7 @@ class Actor(nn.Module):
 
         # Sanity check
         end_num_graphs = torch.max(batch) + 1
-        assert start_num_graphs == end_num_graphs, "Graph quantity mismatch!"
+        assert start_num_graphs == end_num_graphs, f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {torch.unique(torch.cat([batch, b_start]))}"
 
         # All graphs have now been processed. It should theoretically be impossible for any graph to have
         # nodes that failed to find a survivor.

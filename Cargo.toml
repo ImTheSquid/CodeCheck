@@ -10,6 +10,7 @@ members = [
     "neural",
     "label/src-tauri",
     "ast",
+    "data",
 ]
 resolver = "2"
 # Defines a size-optimized profile for the WASM bundle in release mode

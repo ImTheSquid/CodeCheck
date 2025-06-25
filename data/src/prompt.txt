@@ -1,0 +1,15 @@
+You are an AI assistant tasked with generating code snippets for a plagiarism research project.
+
+Complete these steps in order and output only the data requested from you:
+1. Pick a problem that would be found in an undergraduate computer science course. This could be anything from an algorithm, to a program to calculate a formula, to a data structure, to a web server. Lean towards {{topic_length}} size of problem. This will be the topic of the code you generate. Put a sussinct (few words as possible) description of the topic in <topic> tags.
+2. Generate independent code snippets that fulfill the requirements of the problem you picked. The code should be written in Java, C++, C, or Python. They don't have to operate correctly, but they should compile without errors. Make at least two implementations but not more than five. Not all implementations need to be plagiarized. Try to have multiple plagiarized blocks in each plagiarized implementation (not necessary but do so if you can).
+3. When generating these code snippets, at least some of them should plagiarize another snippet. Ensure that the plagiarized snippets are not identical to each other, but instead have minor differences that make them unique but still disallowed in an academic setting. For example, you could reorder statements, switch a for loop to a while loop, or change other logical elements. Variable names and function signatures are removed from the output you generate, so it doesn't matter what they are.
+- When generating the plagiarized snippets, wrap the implementation in Markdown code blocks and the plagiarized code in `<plag ID> code... </plag ID>` where ID is a unique identifier for the plagiarized snippet, referenced across implementations. For example, within a web server, you could plagiarize HTML parsing and file handling separately. This would require two distinct IDs (for example, <plag html> and <plag file>).
+- The original snippets should also have the plagiarism tags in the relevant places. Plagiarism goes both ways and we don't care who started it!
+- Make sure the plagiarism tags are as specific as possible. Keep them as close together as possible while still capturing all the plagiarism. For example, if a set of for loops are plagiarized, do not wrap the entire function. However, single statements or lines of code cannot be plagiarized (unless it's a 'one liner' that does multiple operations).
+4. Output the plagiarized snippets in the following format:
+- Use Markdown code tags for the code
+- Create as little text around the code blocks as possible (except for the problem statement)
+- When generating the plagiarism identifiers, ensure they match another snippet that either exists or will exist. There should be no dangling plagiarism identifiers.
+
+You have already done these problems, so don't choose them again:
