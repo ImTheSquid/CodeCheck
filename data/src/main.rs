@@ -151,18 +151,31 @@ async fn main() -> Result<()> {
 
     fs::create_dir_all(&args.dataset_dir).await?;
 
-    let p = ProgressBar::new(args.num_iters);
-    p.enable_steady_tick(Duration::from_millis(100));
-    p.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ({msg})")
-            .unwrap()
-            .progress_chars("#>-"));
-
-    p.set_message("avg ?s");
-
     let ollama = Ollama::new(args.ollama_host, args.ollama_port);
+    if !ollama
+        .list_local_models()
+        .await?
+        .iter()
+        .any(|m| m.name == args.model_name.as_str())
+    {
+        println!(
+            "Model \"{}\" not found locally, attempting to pull.",
+            args.model_name
+        );
+        ollama.pull_model(args.model_name.clone(), false).await?;
+    }
+
     let mut topics = Vec::with_capacity(args.memory);
     let mut durations = Vec::with_capacity(args.num_iters as usize);
     let mut dataset = Dataset::default();
+
+    let p = ProgressBar::new(args.num_iters);
+    p.enable_steady_tick(Duration::from_millis(100));
+    p.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ({msg})")
+                .unwrap()
+                .progress_chars("#>-"));
+
+    p.set_message("avg ?s");
 
     while !p.is_finished() {
         let start = Instant::now();
