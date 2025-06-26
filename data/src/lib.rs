@@ -6,6 +6,9 @@ use fancy_regex::Regex;
 use ollama_rs::{Ollama, generation::completion::request::GenerationRequest};
 
 const PROMPT: &str = include_str!("prompt.txt");
+const COMPLEX_EXAMPLES: &str = "Implement a Persistent Segment Tree with Lazy Propagation, Suffix Automaton Construction and Applications, Minimum Cost Maximum Flow, Dynamic Connectivity with Link-Cut Trees, Heavy-Light Decomposition with LCA and Path Queries, Implement Alpha-Beta Pruning with Transposition Tables for Chess, Reinforcement Learning from Scratch, Backpropagation for a Deep Neural Network without Libraries, Bayesian Network Inference Engine, Design and Implement a Minimal Multithreaded Kernel, Virtual Memory Management Simulator, Custom File System on a Virtual Disk, Distributed Consensus with Paxos or Raft, Build a Scalable Key-Value Store (like Redis), TCP over UDP (Reliable Data Transfer Protocol), RSA Cryptosystem Implementation with Attacks, Zero-Knowledge Proof Protocol Simulator, Design a Sandbox using Seccomp and Linux Namespaces, Write a Recursive Descent Parser and Intermediate Code Generator, Type Inference for Lambda Calculus with Hindley-Milner, Symbolic Execution Engine, Implement Convex Hull Trick with Line Container, Fast Multipoint Polynomial Evaluation using NTT, 3D Computational Geometry: Mesh Boolean Operations";
+const AVERAGE_EXAMPLES: &str = "Implement Dijkstra’s Algorithm, Depth-First Search and Breadth-First Search, Binary Search on a Sorted Array, Implement a Binary Search Tree with Insert/Delete, Find Lowest Common Ancestor in a Binary Tree, Implement Merge Sort and Quick Sort, Dynamic Programming: Longest Increasing Subsequence, Knapsack Problem (0/1), Detect Cycle in a Graph (DFS or Union-Find), Implement an LRU Cache, Two-Pointer Technique for Array Problems, Sliding Window Maximum, Design a HashMap from Scratch, Topological Sort of a Directed Acyclic Graph, Implement Trie with Insert/Search, Find All Anagrams in a String, Kadane’s Algorithm for Maximum Subarray Sum, Matrix Rotation (in-place), Implement a Queue using Stacks, Find All Paths Between Two Nodes in a Graph, Balanced Parentheses Checker using Stack, Floyd-Warshall All-Pairs Shortest Path, Binary Tree Level Order Traversal, Implement Min Heap and Max Heap";
+const SIMPLE_EXAMPLES: &str = "Reverse a String, Check if a Number is Prime, Find Factorial of a Number, Fibonacci Sequence (Iterative and Recursive), Find the Maximum Element in an Array, Check if a String is a Palindrome, Count Vowels in a String, Sum of Elements in an Array, Find the Largest of Three Numbers, Linear Search in an Array, Print Multiplication Table, Check if a Number is Even or Odd, Swap Two Variables, Find GCD of Two Numbers, Print First N Natural Numbers, Convert Celsius to Fahrenheit, Count Words in a String, Check for Armstrong Number, Find the Length of a String, Simple Calculator (Add, Subtract, Multiply, Divide), Find the Number of Digits in an Integer, Reverse an Integer, Check for Leap Year, Generate Random Numbers, Sort an Array using Bubble Sort";
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PlagiarismEvent {
@@ -22,26 +25,35 @@ pub struct GenerationOutput {
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum ContentLength {
-    Short,
-    Medium,
-    Long,
+pub enum ProblemComplexity {
+    Simple,
+    Average,
+    Complex,
 }
 
-impl Display for ContentLength {
+impl Display for ProblemComplexity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let res = match self {
-            ContentLength::Long => "long",
-            ContentLength::Short => "short",
-            ContentLength::Medium => "medium",
+            ProblemComplexity::Complex => "very complex",
+            ProblemComplexity::Simple => "simple",
+            ProblemComplexity::Average => "average",
         };
 
         f.write_str(res)
     }
 }
 
-fn generate_prompt(content_length: ContentLength, banned_topics: &[String]) -> String {
-    let mut prompt = PROMPT.replace("{{topic_length}}", &format!("{content_length}"));
+fn generate_prompt(complexity: ProblemComplexity, banned_topics: &[String]) -> String {
+    let mut prompt = PROMPT
+        .replace("{{topic_length}}", &format!("{complexity}"))
+        .replace(
+            "{{example_topics}}",
+            match complexity {
+                ProblemComplexity::Simple => SIMPLE_EXAMPLES,
+                ProblemComplexity::Average => AVERAGE_EXAMPLES,
+                ProblemComplexity::Complex => COMPLEX_EXAMPLES,
+            },
+        );
 
     prompt = format!("{prompt}\n{}", banned_topics.join("\n"));
 
@@ -75,8 +87,14 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
         let mut current_line_number = 1usize;
         for line in code.lines() {
             if line.contains("<plag ") {
-                if found_open_plag_on_line_number.is_some() {
-                    bail!("Mismatched plag markers found!");
+                if let Some(ln) = found_open_plag_on_line_number {
+                    eprintln!("Mismatched opening plagiarism tags detected. Ignoring first tag.");
+                    line_buffer = line_buffer
+                        .lines()
+                        .enumerate()
+                        .filter_map(|(i, l)| if i != ln - 1 { Some(l) } else { None })
+                        .collect();
+                    current_line_number -= 1;
                 } else {
                     found_open_plag_on_line_number = Some(current_line_number);
                 }
@@ -148,7 +166,7 @@ pub async fn generate_code(
     ollama: &Ollama,
     model_name: String,
     banned_topics: &[String],
-    content_length: ContentLength,
+    content_length: ProblemComplexity,
 ) -> Result<GenerationOutput> {
     let response = ollama
         .generate(GenerationRequest::new(

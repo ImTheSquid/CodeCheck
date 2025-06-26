@@ -51,8 +51,8 @@ pub trait SyntaxTree {
 pub enum TreeParseError {
     #[error(transparent)]
     FileError(#[from] std::io::Error),
-    #[error("Unknown language")]
-    UnknownLanguage,
+    #[error("Unknown language \"{0}\"")]
+    UnknownLanguage(String),
     #[error("Invalid node")]
     InvalidNode,
     #[error("Missing node")]
@@ -116,9 +116,9 @@ impl Language {
 pub fn guess_language_from_path(path: &Path) -> Result<Language, TreeParseError> {
     guess_language_from_extension(
         path.extension()
-            .ok_or(TreeParseError::UnknownLanguage)?
+            .ok_or(TreeParseError::UnknownLanguage("??NOEXTENSION".to_string()))?
             .to_str()
-            .ok_or(TreeParseError::UnknownLanguage)?,
+            .ok_or(TreeParseError::UnknownLanguage("??NOEXTENSION".to_string()))?,
     )
 }
 
@@ -127,8 +127,8 @@ pub fn guess_language_from_extension(ext: &str) -> Result<Language, TreeParseErr
         "java" => Ok(Language::Java),
         "py" | "python" => Ok(Language::Python),
         "c" | "h" => Ok(Language::C),
-        "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
-        _ => Err(TreeParseError::UnknownLanguage),
+        "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" | "c++" => Ok(Language::Cpp),
+        _ => Err(TreeParseError::UnknownLanguage(ext.to_string())),
     }
 }
 

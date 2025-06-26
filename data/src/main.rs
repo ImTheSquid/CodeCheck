@@ -6,7 +6,7 @@ use std::{
 
 use ast::Language;
 use clap::Parser;
-use data::{ContentLength, PlagiarismEvent, generate_code};
+use data::{PlagiarismEvent, ProblemComplexity, generate_code};
 use eyre::{Result, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
@@ -25,8 +25,8 @@ struct Args {
     /// The directory in which to place the dataset (created if doesn't exist)
     dataset_dir: PathBuf,
     /// How big of a problem the model should try to generate
-    #[arg(short = 'l', default_value = "medium")]
-    content_length: ContentLength,
+    #[arg(short = 'c', default_value = "average")]
+    complexity: ProblemComplexity,
     /// Number of examples to generate
     #[arg(short = 'n', default_value = "1")]
     num_iters: u64,
@@ -163,13 +163,7 @@ async fn main() -> Result<()> {
 
     for _ in 0..args.num_iters {
         let start = Instant::now();
-        let res = generate_code(
-            &ollama,
-            args.model_name.clone(),
-            &topics,
-            args.content_length,
-        )
-        .await;
+        let res = generate_code(&ollama, args.model_name.clone(), &topics, args.complexity).await;
         p.inc(1);
         let res = match res {
             Ok(res) => res,
