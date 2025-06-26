@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use ast::{Language, r#gen::cpp14parser::Default};
+use ast::Language;
 use clap::Parser;
 use data::{ContentLength, PlagiarismEvent, generate_code};
 use eyre::{Result, bail};
