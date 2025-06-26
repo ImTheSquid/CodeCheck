@@ -22,6 +22,7 @@ codegen-units = 1
 panic = "abort"
 
 [profile.release]
-# codegen-units = 1
-# lto = "fat"
+codegen-units = 1
+opt-level = "s"
+lto = "fat"
 debug = true

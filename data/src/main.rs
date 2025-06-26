@@ -93,12 +93,8 @@ async fn write_files_and_update_manifest(
     for plagiarising_set in pairs.values() {
         // Each of these combinations plagiarizes off eachother
         for (a, b) in plagiarising_set.iter().tuple_combinations() {
-            assert!(
-                a.file < b.file,
-                "a's file index should always be less than b's, but got a={}, b={}",
-                a.file,
-                b.file
-            );
+            // Make sure files always stay ordered
+            let (a, b) = if a.file < b.file { (a, b) } else { (b, a) };
 
             let mark = Mark {
                 a: MarkSpan {
@@ -168,7 +164,7 @@ async fn main() -> Result<()> {
     let mut durations = Vec::with_capacity(args.num_iters as usize);
     let mut dataset = Dataset::default();
 
-    for _ in 0..args.num_iters {
+    while !p.is_finished() {
         let start = Instant::now();
 
         let res = generate_code(&ollama, args.model_name.clone(), &topics, args.complexity).await;
@@ -181,11 +177,9 @@ async fn main() -> Result<()> {
             .reduce(|p, n| p.saturating_add(n))
             .unwrap_or_default();
         p.set_message(format!(
-            "avg {}s",
-            s.checked_div(durations.len() as u32).unwrap().as_secs()
+            "avg {}",
+            indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap())
         ));
-
-        p.inc(1);
 
         let res = match res {
             Ok(res) => res,
@@ -199,6 +193,11 @@ async fn main() -> Result<()> {
                 }
             }
         };
+
+        p.inc(1);
+        if p.position() == p.length().expect("length") {
+            p.finish();
+        }
 
         let base_index = dataset.pairs.keys().max().cloned().unwrap_or_default();
         write_files_and_update_manifest(
@@ -216,8 +215,6 @@ async fn main() -> Result<()> {
 
         topics.push(res.topic);
     }
-
-    p.finish();
 
     let mut f = OpenOptions::new()
         .create(true)

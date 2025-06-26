@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 use ast::{Language, guess_language_from_extension};
 use eyre::{Ok, Result, bail, eyre};
@@ -73,7 +76,8 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
     response = topic_regex.replace_all(&response, "").to_string();
 
     let code_regex = Regex::new(r#"(?ms)```([^\n]*)\n(.*?)\n?```"#)?;
-    let plagiarism_regex = Regex::new(r#"(?ms)\s*<plag (.+?)>(.*?)\s*</plag \1>"#)?;
+    let open_plagiarism_regex = Regex::new(r#"\s*<plag .+?>"#)?;
+    let plagiarism_regex = Regex::new(r#"(?ms)\s*<plag (.+?)>(.*?)\s*</plag( \1)?>"#)?;
     let mut cleaned_code: Vec<(String, Language)> = vec![];
 
     let mut plagiarism_by_id: HashMap<String, Vec<PlagiarismEvent>> = Default::default();
@@ -89,7 +93,7 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
         let mut found_open_plag_on_line_number: Option<usize> = None;
         let mut current_line_number = 1usize;
         for line in code.lines() {
-            if line.contains("<plag ") {
+            if open_plagiarism_regex.is_match(line)? {
                 if let Some(ln) = found_open_plag_on_line_number {
                     eprintln!("Mismatched opening plagiarism tags detected. Ignoring first tag.");
                     line_buffer = line_buffer
@@ -114,7 +118,7 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
 
                 let plag = caps[2].to_string();
                 let Some(start) = found_open_plag_on_line_number else {
-                    bail!("no start when found full capture!");
+                    bail!("No start when found full capture!");
                 };
                 let end = plag.lines().count() - 2 + start;
                 line_buffer = plagiarism_regex.replace(&line_buffer, "$2").to_string();
@@ -154,7 +158,12 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
 
     for (k, v) in plagiarism_by_id.iter() {
         if v.len() < 2 {
-            bail!("unpaired plagiarism identifier {k}!");
+            bail!("Unpaired plagiarism identifier \"{k}\"!");
+        }
+        // All of the files should be unique here. If they're not, something went wrong
+        let unique_files: HashSet<usize> = v.iter().map(|e| e.file).collect();
+        if unique_files.len() < v.len() {
+            bail!("Self-plagiarism detected on identifier \"{k}\"");
         }
     }
 
