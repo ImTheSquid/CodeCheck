@@ -170,8 +170,23 @@ async fn main() -> Result<()> {
 
     for _ in 0..args.num_iters {
         let start = Instant::now();
+
         let res = generate_code(&ollama, args.model_name.clone(), &topics, args.complexity).await;
+
+        let end = Instant::now();
+        durations.push(end - start);
+        let s = durations
+            .iter()
+            .cloned()
+            .reduce(|p, n| p.saturating_add(n))
+            .unwrap_or_default();
+        p.set_message(format!(
+            "avg {}s",
+            s.checked_div(durations.len() as u32).unwrap().as_secs()
+        ));
+
         p.inc(1);
+
         let res = match res {
             Ok(res) => res,
             Err(e) => {
@@ -200,17 +215,6 @@ async fn main() -> Result<()> {
         }
 
         topics.push(res.topic);
-        let end = Instant::now();
-        durations.push(end - start);
-        let s = durations
-            .iter()
-            .cloned()
-            .reduce(|p, n| p.saturating_add(n))
-            .unwrap_or_default();
-        p.set_message(format!(
-            "avg {}s",
-            s.checked_div(durations.len() as u32).unwrap().as_secs()
-        ));
     }
 
     p.finish();
