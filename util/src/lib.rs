@@ -19,7 +19,7 @@ pub struct Pair {
     pub marks: Vec<Mark>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct Dataset {
     /// The `usize` here is the pair index, a unique value for each pair of items in the dataset
     /// The `Pair` is specific information from the index

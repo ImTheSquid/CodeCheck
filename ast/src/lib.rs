@@ -114,14 +114,18 @@ impl Language {
 
 /// Attempts to guess the language of the file using a path
 pub fn guess_language_from_path(path: &Path) -> Result<Language, TreeParseError> {
-    match path
-        .extension()
-        .ok_or(TreeParseError::UnknownLanguage)?
-        .to_str()
-        .ok_or(TreeParseError::UnknownLanguage)?
-    {
+    guess_language_from_extension(
+        path.extension()
+            .ok_or(TreeParseError::UnknownLanguage)?
+            .to_str()
+            .ok_or(TreeParseError::UnknownLanguage)?,
+    )
+}
+
+pub fn guess_language_from_extension(ext: &str) -> Result<Language, TreeParseError> {
+    match ext {
         "java" => Ok(Language::Java),
-        "py" => Ok(Language::Python),
+        "py" | "python" => Ok(Language::Python),
         "c" | "h" => Ok(Language::C),
         "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
         _ => Err(TreeParseError::UnknownLanguage),
