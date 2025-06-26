@@ -21,7 +21,14 @@ use util::{Dataset, Mark, MarkSpan, Pair};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
+    /// The name of the model to use
     model_name: String,
+    /// The host at which Ollama is served
+    #[arg(short = 'h', default_value = "http://127.0.0.1")]
+    ollama_host: String,
+    /// The port at which Ollama is served
+    #[arg(short = 'p', default_value = "11434")]
+    ollama_port: u16,
     /// The directory in which to place the dataset (created if doesn't exist)
     dataset_dir: PathBuf,
     /// How big of a problem the model should try to generate
@@ -156,7 +163,7 @@ async fn main() -> Result<()> {
 
     p.set_message("avg ?s");
 
-    let ollama = Ollama::default();
+    let ollama = Ollama::new(args.ollama_host, args.ollama_port);
     let mut topics = Vec::with_capacity(args.memory);
     let mut durations = Vec::with_capacity(args.num_iters as usize);
     let mut dataset = Dataset::default();
