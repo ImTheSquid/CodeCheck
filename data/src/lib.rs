@@ -55,7 +55,10 @@ fn generate_prompt(complexity: ProblemComplexity, banned_topics: &[String]) -> S
             },
         );
 
-    prompt = format!("{prompt}\n{}", banned_topics.join("\n"));
+    prompt = format!(
+        "{prompt}\nYou have already explored these problems so don't pick them again: {}",
+        banned_topics.join(",")
+    );
 
     prompt
 }

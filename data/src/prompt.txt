@@ -11,5 +11,3 @@ Complete these steps in order and output only the data requested from you:
 - Use Markdown code tags for the code
 - Create as little text around the code blocks as possible (except for the problem statement)
 - When generating the plagiarism identifiers, ensure they are properly opened and closed (like HTML), are not nested, and match another snippet that either exists or will exist. There should be no dangling plagiarism identifiers.
-
-You have already done these problems, so don't choose them again:
