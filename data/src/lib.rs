@@ -3,8 +3,8 @@ use std::{
     fmt::Display,
 };
 
-use ast::{Language, guess_language_from_extension};
-use eyre::{Ok, Result, bail, eyre};
+use ast::{Language, SyntaxTree, guess_language_from_extension};
+use eyre::{Context, Ok, Result, bail};
 use fancy_regex::Regex;
 use ollama_rs::{Ollama, generation::completion::request::GenerationRequest};
 
@@ -24,7 +24,7 @@ pub struct PlagiarismEvent {
 pub struct GenerationOutput {
     pub pairs: HashMap<String, Vec<PlagiarismEvent>>,
     pub codes: Vec<(String, Language)>,
-    pub topic: String,
+    pub topic: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -66,18 +66,39 @@ fn generate_prompt(complexity: ProblemComplexity, banned_topics: &[String]) -> S
     prompt
 }
 
-fn process_code(mut response: String) -> Result<GenerationOutput> {
+fn parse(code: String, lang: Language) -> Result<()> {
+    // Add a NEWLINE to the end, just to be safe
+    let code = format!("{code}\n");
+    match lang {
+        Language::C => {
+            ast::c::CTree::try_from(code)?.symbol_tree()?;
+        }
+        Language::Cpp => {
+            ast::cpp::CppTree::try_from(code)?.symbol_tree()?;
+        }
+        Language::Java => {
+            ast::java::JavaTree::try_from(code)?.symbol_tree()?;
+        }
+        Language::Python => {
+            ast::python::PythonTree::try_from(code)?.symbol_tree()?;
+        }
+    }
+
+    Ok(())
+}
+
+fn process_code(
+    mut response: String,
+    disallow_non_plagiarized_code: bool,
+) -> Result<GenerationOutput> {
     let topic_regex = Regex::new(r"<topic>(.+?)</topic>")?;
-    let topic = topic_regex
-        .captures(&response)?
-        .ok_or(eyre!("no topic found!"))?[1]
-        .to_string();
+    let topic = topic_regex.captures(&response)?.map(|c| c[1].to_string());
 
     response = topic_regex.replace_all(&response, "").to_string();
 
     let code_regex = Regex::new(r#"(?ms)```([^\n]*)\n(.*?)\n?```"#)?;
     let open_plagiarism_regex = Regex::new(r#"\s*<plag .+?>"#)?;
-    let plagiarism_regex = Regex::new(r#"(?ms)\s*<plag (.+?)>(.*?)\s*</plag( \1)?>"#)?;
+    let plagiarism_regex = Regex::new(r#"(?ms)<plag (.+?)>(.*?)</plag( \1)?>"#)?;
     let mut cleaned_code: Vec<(String, Language)> = vec![];
 
     let mut plagiarism_by_id: HashMap<String, Vec<PlagiarismEvent>> = Default::default();
@@ -107,6 +128,12 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
                 }
             }
 
+            if line_buffer.is_empty() {
+                line_buffer = line.to_string();
+            } else {
+                line_buffer = format!("{line_buffer}\n{line}");
+            }
+
             if plagiarism_regex.is_match(&line_buffer)? {
                 // The current buffer has a full plagiarism match!
                 let caps = plagiarism_regex
@@ -120,15 +147,10 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
                 let Some(start) = found_open_plag_on_line_number else {
                     bail!("No start when found full capture!");
                 };
-                let end = plag.lines().count() - 2 + start;
+                let start = start + 1;
+                let end = plag.lines().count() - 3 + start;
                 line_buffer = plagiarism_regex.replace(&line_buffer, "$2").to_string();
                 found_open_plag_on_line_number = None;
-                // Start and end plagiarism tags removed
-                current_line_number -= match end - start {
-                    0 => 0,
-                    1 => 1,
-                    _ => 2,
-                };
 
                 let ev = PlagiarismEvent {
                     file: code_i,
@@ -145,26 +167,34 @@ fn process_code(mut response: String) -> Result<GenerationOutput> {
                 }
             }
 
-            if line_buffer.is_empty() {
-                line_buffer = line.to_string();
-            } else {
-                line_buffer = format!("{line_buffer}\n{line}");
-            }
             current_line_number += 1;
         }
+
+        // Make sure code parses properly, otherwise it's useless
+        parse(line_buffer.clone(), lang).context(format!(
+            "Failed to parse generated {lang:?} code:\n=ORIGINAL=\n{code}\n===PLAG===\n{line_buffer}\n=========="
+        ))?;
 
         cleaned_code.push((line_buffer, lang));
     }
 
-    for (k, v) in plagiarism_by_id.iter() {
-        if v.len() < 2 {
-            bail!("Unpaired plagiarism identifier \"{k}\"!");
-        }
-        // All of the files should be unique here. If they're not, something went wrong
-        let unique_files: HashSet<usize> = v.iter().map(|e| e.file).collect();
-        if unique_files.len() < v.len() {
-            bail!("Self-plagiarism detected on identifier \"{k}\"");
-        }
+    // First pass, filter self-plagiarism and remove unpaired identifiers
+    plagiarism_by_id.retain(|_, v| {
+        let mut seen = HashSet::new();
+        v.retain(|val| {
+            if seen.contains(&val.file) {
+                return false;
+            }
+            seen.insert(val.file);
+            true
+        });
+        v.len() >= 2
+    });
+
+    if plagiarism_by_id.is_empty() && disallow_non_plagiarized_code {
+        bail!(
+            "Invalid plagiarism dictionary! All data has been filtered out or removed in cleaning process."
+        );
     }
 
     Ok(GenerationOutput {
@@ -179,6 +209,7 @@ pub async fn generate_code(
     model_name: String,
     banned_topics: &[String],
     content_length: ProblemComplexity,
+    disallow_non_plagiarized_code: bool,
 ) -> Result<GenerationOutput> {
     let response = ollama
         .generate(GenerationRequest::new(
@@ -187,7 +218,7 @@ pub async fn generate_code(
         ))
         .await?;
 
-    process_code(response.response)
+    process_code(response.response, disallow_non_plagiarized_code)
 }
 
 #[cfg(test)]
@@ -201,20 +232,22 @@ mod tests {
     const INPUT: &str = r#"<topic>Binary Search Tree</topic>
 ```java
 public class BinaryTree {
-    <plag tree_init>
-    node = null;
-    if (value != null) {
-        node = new Node(value);
+    public void test() {
+        <plag tree_init>//
+        node = null;
+        if (value != null) {
+            node = new Node(value);
+        }
+        </plag tree_init>//
     }
-    </plag tree_init>
     public void insert(int value) {
-        <plag tree_insert>
+        <plag tree_insert>//
         if (node == null) {
             node = new Node(value);
         } else {
             insertRec(node, value);
         }
-        </plag tree_insert>
+        </plag tree_insert>//
     }
 
     private void insertRec(Node current, int value) {
@@ -237,20 +270,22 @@ public class BinaryTree {
 
 ```java
 public class AnotherTree {
-    <plag tree_init>
-    root = null;
-    if (data != null) {
-        root = new Node(data);
+    public void test() {
+        <plag tree_init>//
+        root = null;
+        if (data != null) {
+            root = new Node(data);
+        }
+        </plag tree_init>//
     }
-    </plag tree_init>
     public void add(int data) {
-        <plag tree_insert>
+        <plag tree_insert>//
         if (root == null) {
             root = new Node(data);
         } else {
             insertRecursive(root, data);
         }
-        </plag tree_insert>
+        </plag tree_insert>//
     }
 
     private void insertRecursive(Node current, int data) {
@@ -283,7 +318,7 @@ typedef struct Node {
 } Node;
 
 void insert_node(Node** node, int value) {
-    <plag tree_insert>
+    <plag tree_insert>//
     if (*node == NULL) {
         *node = malloc(sizeof(Node));
         (*node)->value = value;
@@ -292,7 +327,7 @@ void insert_node(Node** node, int value) {
     } else {
         insert_rec(*node, value);
     }
-    </plag tree_insert>
+    </plag tree_insert>//
 }
 
 void insert_rec(Node* current, int value) {
@@ -321,23 +356,23 @@ void insert_rec(Node* current, int value) {
 ```python
 class Node:
     def __init__(self, value):
-        <plag tree_init>
+        <plag tree_init>#
         self.value = value
         self.left = None
         self.right = None
-        </plag tree_init>
+        </plag tree_init>#
 
 class BinaryTree:
     def __init__(self):
         self.root = None
 
     def insert(self, value):
-        <plag tree_insert>
+        <plag tree_insert>#
         if self.root is None:
             self.root = Node(value)
         else:
             self.insert_rec(self.root, value)
-        </plag tree_insert>
+        </plag tree_insert>#
 
     def insert_rec(self, current, value):
         if value < current.value:
@@ -355,16 +390,22 @@ class BinaryTree:
 
     const CODES: [&str; 4] = [
         r#"public class BinaryTree {
-    node = null;
-    if (value != null) {
-        node = new Node(value);
+    public void test() {
+        //
+        node = null;
+        if (value != null) {
+            node = new Node(value);
+        }
+        //
     }
     public void insert(int value) {
+        //
         if (node == null) {
             node = new Node(value);
         } else {
             insertRec(node, value);
         }
+        //
     }
 
     private void insertRec(Node current, int value) {
@@ -384,16 +425,22 @@ class BinaryTree:
     }
 }"#,
         r#"public class AnotherTree {
-    root = null;
-    if (data != null) {
-        root = new Node(data);
+    public void test() {
+        //
+        root = null;
+        if (data != null) {
+            root = new Node(data);
+        }
+        //
     }
     public void add(int data) {
+        //
         if (root == null) {
             root = new Node(data);
         } else {
             insertRecursive(root, data);
         }
+        //
     }
 
     private void insertRecursive(Node current, int data) {
@@ -423,6 +470,7 @@ class BinaryTree:
 } Node;
 
 void insert_node(Node** node, int value) {
+    //
     if (*node == NULL) {
         *node = malloc(sizeof(Node));
         (*node)->value = value;
@@ -431,6 +479,7 @@ void insert_node(Node** node, int value) {
     } else {
         insert_rec(*node, value);
     }
+    //
 }
 
 void insert_rec(Node* current, int value) {
@@ -456,19 +505,23 @@ void insert_rec(Node* current, int value) {
 }"#,
         r#"class Node:
     def __init__(self, value):
+        #
         self.value = value
         self.left = None
         self.right = None
+        #
 
 class BinaryTree:
     def __init__(self):
         self.root = None
 
     def insert(self, value):
+        #
         if self.root is None:
             self.root = Node(value)
         else:
             self.insert_rec(self.root, value)
+        #
 
     def insert_rec(self, current, value):
         if value < current.value:
@@ -484,7 +537,7 @@ class BinaryTree:
     ];
     #[test]
     fn parsing_works() {
-        let res = process_code(INPUT.to_string()).expect("no errors");
+        let res = process_code(INPUT.to_string(), true).expect("no errors");
 
         const LANGS: [Language; 4] = [
             Language::Java,
@@ -493,49 +546,53 @@ class BinaryTree:
             Language::Python,
         ];
         for (i, (&l, r)) in CODES.iter().zip(res.codes.into_iter()).enumerate() {
-            assert_eq!((l.to_string(), LANGS[i]), r, "FAILED at index {i}");
+            if (l.to_string(), LANGS[i]) != r {
+                println!("LEFT: {l}");
+                println!("RIGHT: {}", r.0);
+                panic!("FAILED at index {i}");
+            }
         }
 
-        assert_eq!(res.topic, "Binary Search Tree");
+        assert_eq!(res.topic, Some("Binary Search Tree".to_string()));
 
         let tree_init_plag = vec![
             PlagiarismEvent {
                 file: 0,
-                start: 2,
-                end: 5,
+                start: 4,
+                end: 7,
             },
             PlagiarismEvent {
                 file: 1,
-                start: 2,
-                end: 5,
+                start: 4,
+                end: 7,
             },
             PlagiarismEvent {
                 file: 3,
-                start: 3,
-                end: 5,
+                start: 4,
+                end: 6,
             },
         ];
 
         let tree_insert_plag = vec![
             PlagiarismEvent {
                 file: 0,
-                start: 7,
-                end: 11,
+                start: 12,
+                end: 16,
             },
             PlagiarismEvent {
                 file: 1,
-                start: 7,
-                end: 11,
+                start: 12,
+                end: 16,
             },
             PlagiarismEvent {
                 file: 2,
-                start: 8,
-                end: 15,
+                start: 9,
+                end: 16,
             },
             PlagiarismEvent {
                 file: 3,
-                start: 12,
-                end: 15,
+                start: 15,
+                end: 18,
             },
         ];
 
@@ -545,5 +602,127 @@ class BinaryTree:
         ]);
 
         assert_eq!(res.pairs, map);
+    }
+
+    const HARD_PARSE: &str = "<topic>test</topic>
+```java
+public class Main {
+    public static int longestIncreasingSubsequence(int[] sequence) {
+        int[] lengths = new int[sequence.length];
+        for (int i = 0; i < sequence.length; i++) {
+            lengths[i] = 1;
+        }
+<plag lis3>
+        int[] indices = new int[sequence.length];
+        int indexCount = 0;
+        for (int i = 0; i < sequence.length; i++) {
+            if (lengths[i] == max(lengths)) {
+                indices[indexCount++] = i;
+            }
+        }
+</plag lis3>
+<plag lis1>
+        for (int i = 1; i < sequence.length; i++) {
+            for (int j = 0; j < i; j++) {
+                if (sequence[i] > sequence[j]) {
+                    lengths[i] = Math.max(lengths[i], lengths[j] + 1);
+                }
+            }
+        }
+</plag lis1>
+        int max = lengths[0];
+        for (int i = 1; i < lengths.length; i++) {
+            if (lengths[i] > max) {
+                max = lengths[i];
+            }
+        }
+        return max;
+    }
+
+    public static void main(String[] args) {
+        int[] sequence = {10, 22, 9, 33, 21, 50, 41, 60};
+        System.out.println(longestIncreasingSubsequence(sequence));
+    }
+}
+```
+
+```java
+public class Main {
+    public static int longestIncreasingSubsequence(int[] sequence) {
+        int[] lengths = new int[sequence.length];
+        for (int i = 0; i < sequence.length; i++) {
+            lengths[i] = 1;
+        }
+<plag lis3>
+        int[] indices = new int[sequence.length];
+        int indexCount = 0;
+        for (int i = 0; i < sequence.length; i++) {
+            if (lengths[i] == max(lengths)) {
+                indices[indexCount++] = i;
+            }
+        }
+</plag lis3>
+<plag lis1>
+        for (int i = 1; i < sequence.length; i++) {
+            for (int j = 0; j < i; j++) {
+                if (sequence[i] > sequence[j]) {
+                    lengths[i] = Math.max(lengths[i], lengths[j] + 1);
+                }
+            }
+        }
+</plag lis1>
+        int max = lengths[0];
+        for (int i = 1; i < lengths.length; i++) {
+            if (lengths[i] > max) {
+                max = lengths[i];
+            }
+        }
+        return max;
+    }
+
+    public static void main(String[] args) {
+        int[] sequence = {10, 22, 9, 33, 21, 50, 41, 60};
+        System.out.println(longestIncreasingSubsequence(sequence));
+    }
+}
+```
+```python
+# Plagiarized Implementation 1
+def knapsack(capacity, weights, values):
+    n = len(values)
+    dp = [[0 for _ in range(capacity + 1)] for _ in range(n + 1)]
+    <plag knapsack_init>
+    for i in range(1, n + 1):
+        for j in range(1, capacity + 1):
+            if weights[i - 1] <= j:
+                dp[i][j] = max(values[i - 1] + dp[i - 1][j - weights[i - 1]], dp[i - 1][j])
+            else:
+                dp[i][j] = dp[i - 1][j]
+                </plag knapsack_init>
+    return dp[n][capacity]
+
+print(knapsack(10, [3, 4, 5], [60, 100, 120]))
+```
+```python
+# Plagiarized Implementation 1
+def knapsack(capacity, weights, values):
+    n = len(values)
+    dp = [[0 for _ in range(capacity + 1)] for _ in range(n + 1)]
+    <plag knapsack_init>
+    for i in range(1, n + 1):
+        for j in range(1, capacity + 1):
+            if weights[i - 1] <= j:
+                dp[i][j] = max(values[i - 1] + dp[i - 1][j - weights[i - 1]], dp[i - 1][j])
+            else:
+                dp[i][j] = dp[i - 1][j]
+                </plag knapsack_init>
+    return dp[n][capacity]
+
+print(knapsack(10, [3, 4, 5], [60, 100, 120]))
+```";
+
+    #[test]
+    fn test_hard_parse() {
+        process_code(HARD_PARSE.to_string(), true).expect("good");
     }
 }

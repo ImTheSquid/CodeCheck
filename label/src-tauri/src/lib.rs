@@ -31,8 +31,6 @@ enum DirectoryValidationError {
     AstError(#[from] TreeParseError),
     #[error("Insufficient data points")]
     InsufficientData,
-    #[error("Multiple languages found")]
-    MultipleLanguages,
     #[error("Dataset loading error: {0}")]
     DatasetLoadingError(#[from] std::io::Error),
     #[error("Bad dataset format: {0}")]
@@ -77,13 +75,6 @@ fn validate_directory(
     // Check that there is at least two files
     if detected_languages.len() <= 1 {
         return Err(DirectoryValidationError::InsufficientData);
-    }
-
-    if !detected_languages
-        .iter()
-        .all(|l| *l == detected_languages[0])
-    {
-        return Err(DirectoryValidationError::MultipleLanguages);
     }
 
     // Set this directory as the current state directory, creating a data file for it if it doesn't exist

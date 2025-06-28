@@ -40,12 +40,15 @@ struct Args {
     /// How many previous tasks the model can remember
     #[arg(short = 'm', default_value = "10")]
     memory: usize,
-    /// Ignore errors from generation
-    #[arg(long = "ignore-errors", default_value = "false")]
-    ignore_errors: bool,
+    /// Ignore generation failures
+    #[arg(long = "ignore-failures", default_value = "false")]
+    ignore_failures: bool,
     /// Overwrites output directory if it exists
     #[arg(long = "overwrite", default_value = "false")]
     overwrite: bool,
+    /// Forbids non-plagiarized entries in the dataset
+    #[arg(long = "forbid-np", default_value = "false")]
+    disallow_non_plagiarized_code: bool,
 }
 
 async fn write_files_and_update_manifest(
@@ -168,6 +171,7 @@ async fn main() -> Result<()> {
     let mut topics = Vec::with_capacity(args.memory);
     let mut durations = Vec::with_capacity(args.num_iters as usize);
     let mut dataset = Dataset::default();
+    let mut failures = 0usize;
 
     let p = ProgressBar::new(args.num_iters);
     p.enable_steady_tick(Duration::from_millis(100));
@@ -175,12 +179,19 @@ async fn main() -> Result<()> {
                 .unwrap()
                 .progress_chars("#>-"));
 
-    p.set_message("avg ?s");
+    p.set_message("avg ?s, 0 failures");
 
     while !p.is_finished() {
         let start = Instant::now();
 
-        let res = generate_code(&ollama, args.model_name.clone(), &topics, args.complexity).await;
+        let res = generate_code(
+            &ollama,
+            args.model_name.clone(),
+            &topics,
+            args.complexity,
+            args.disallow_non_plagiarized_code,
+        )
+        .await;
 
         let end = Instant::now();
         durations.push(end - start);
@@ -189,44 +200,48 @@ async fn main() -> Result<()> {
             .cloned()
             .reduce(|p, n| p.saturating_add(n))
             .unwrap_or_default();
-        p.set_message(format!(
-            "avg {}",
-            indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap())
-        ));
 
-        let res = match res {
-            Ok(res) => res,
+        match res {
+            Ok(res) => {
+                p.inc(1);
+                if p.position() == p.length().expect("length") {
+                    p.finish();
+                }
+
+                let base_index = dataset.pairs.keys().max().cloned().unwrap_or_default();
+                write_files_and_update_manifest(
+                    &mut dataset,
+                    &res.codes,
+                    &res.pairs,
+                    &args.dataset_dir,
+                    if base_index == 0 { 0 } else { base_index + 1 },
+                )
+                .await?;
+
+                if topics.len() == args.memory {
+                    topics.clear();
+                }
+
+                if let Some(topic) = res.topic {
+                    topics.push(topic);
+                }
+            }
             Err(e) => {
-                if args.ignore_errors {
+                if args.ignore_failures {
                     eprintln!("Error encountered: {e}");
-
-                    continue;
+                    failures += 1;
                 } else {
                     bail!(e);
                 }
             }
-        };
-
-        p.inc(1);
-        if p.position() == p.length().expect("length") {
-            p.finish();
         }
 
-        let base_index = dataset.pairs.keys().max().cloned().unwrap_or_default();
-        write_files_and_update_manifest(
-            &mut dataset,
-            &res.codes,
-            &res.pairs,
-            &args.dataset_dir,
-            if base_index == 0 { 0 } else { base_index + 1 },
-        )
-        .await?;
-
-        if topics.len() == args.memory {
-            topics.clear();
-        }
-
-        topics.push(res.topic);
+        p.set_message(format!(
+            "avg {}, {} failure{}",
+            indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap()),
+            failures,
+            if failures != 1 { "s" } else { "" }
+        ));
     }
 
     let mut f = OpenOptions::new()
