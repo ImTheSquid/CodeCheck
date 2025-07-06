@@ -9,6 +9,6 @@ anyhow = "1.0.90"
 macros = { path = "../macros" }
 regex = "1.11.0"
 syntree = "0.17.5"
-strum = { version = "0.26.3", features = ["derive"] }
+strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "1.0.64"
 ndarray = "0.16.1"

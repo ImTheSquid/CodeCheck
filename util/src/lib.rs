@@ -49,8 +49,8 @@ pub enum DatasetError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Tree(#[from] ast::TreeParseError),
-    #[error("Dataset is empty or mixes languages")]
-    InvalidComposition,
+    #[error("Dataset is empty")]
+    NoFiles,
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 }

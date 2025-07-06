@@ -12,7 +12,7 @@ import numpy as np
 import itertools
 from collections import defaultdict
 
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
 class GraphDataset(Dataset):
     def __init__(self, graphs: list[Data]):
@@ -182,8 +182,8 @@ def cluster_and_calculate_reward(
 ) -> float:
     assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
     assert batch.shape[0] == nodes.shape[0], "Something is wrong, nodes must match batch"
-    print(f'BART {batch.shape}')
-    print(f'LAFB {selected_line_assignments_for_batch} ({selected_line_assignments_for_batch.shape})')
+    # print(f'BART {batch.shape}')
+    # print(f'LAFB {selected_line_assignments_for_batch} ({selected_line_assignments_for_batch.shape})')
     # print(f'SIFB: {selected_indices_for_batch}')
     line_assignments = []
     # print('Processing (graph, pid): ', end='')
@@ -236,7 +236,7 @@ def cluster_and_calculate_reward(
     # print(line_assignments)
 
     relevant = find_relevant_keys_for_clustering(keys, selected_indices_for_batch)
-    print(f'RELEVANT KEYS FOUND: {relevant}')
+    print(f'Relevant keys for clustering: {relevant}')
     # If there aren't any relevant keys in this dataset then no change in score
     if len(relevant) == 0:
         return 0.0
@@ -359,7 +359,7 @@ def cluster_and_calculate_reward(
     recall    = TP / (TP + FN) if TP + FN > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
 
-    print(f"TP FP FN {TP} {FP} {FN}")
+    print(f"True Positives: {TP}\nFalse Positives: {FP}\nFalse Negatives: {FN}\nF1: {f1}")
 
     return f1
 
@@ -381,6 +381,7 @@ def train(
     test_data = DataLoader(test_set, batch_size=25) #type: ignore
 
     for epoch in range(episodes):
+        print(f'\n⏰ EPOCH {epoch}')
         actor.train()
         critic.train()
 
@@ -410,16 +411,16 @@ def train(
             # assert len(np.unique(merge_map.numpy())) == a_x.shape[0], f"Some merge map entries reference nonexistent nodes! ({len(np.unique(merge_map.numpy()))} != {a_x.shape[0]})"
             pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
             reward = cluster_and_calculate_reward(
-                nodes=a_x.detach().numpy(),
+                nodes=a_x.cpu().detach().numpy(),
                 keys=keys,
-                merge_map=merge_map.numpy(),
+                merge_map=merge_map.cpu().numpy(),
                 selected_indices_for_batch=selected_indices,
-                selected_line_assignments_for_batch=selected_spans.numpy(),
-                batch=a_batch.numpy(),
-                perm=a_perm.numpy()
+                selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
+                batch=a_batch.cpu().numpy(),
+                perm=a_perm.cpu().numpy()
             )
 
-            reward = torch.tensor(reward)
+            reward = torch.tensor(reward).to(DEVICE)
 
             advantage = (reward - pred_reward).detach()
             actor_loss = -(advantage * a_logp_sum).mean()
@@ -428,7 +429,7 @@ def train(
             actor_loss.backward()
             actor_optim.step()
 
-            critic_loss = nn.SmoothL1Loss()(pred_reward, reward)
+            critic_loss = nn.HuberLoss()(pred_reward, reward)
             critic_optim.zero_grad()
             critic_loss.backward()
             critic_optim.step()
@@ -455,8 +456,8 @@ def rust_train(features: list[NDArray], edges: list[NDArray], feature_spans: lis
     print(f"KEYS\n\n{keys}\n\n")
     dataset = generate_dataset(edges, features, feature_spans)
 
-    actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 20, 20, 10, 10], num_heads=[8, 8, 8, 8, 4], pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8])
-    critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8)
+    actor = Actor(in_dim=features[0].shape[1], hidden_dims=[20, 20, 20, 10, 10], num_heads=[8, 8, 8, 8, 4], pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8]).to(DEVICE)
+    critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
 
     train(
         dataset,

@@ -8,13 +8,11 @@ clap = { version = "4.5.40", features = ["derive"] }
 eyre = "0.6.12"
 fancy-regex = "0.14.0"
 indicatif = { version = "0.17.11", features = ["tokio"] }
-ollama-rs = { version = "0.3.2", features = [
-    "rustls",
-    "tokio",
-], default-features = false }
+ollama-rs = { version = "0.3.2", features = ["rustls", "stream", "tokio"], default-features = false }
 rand = "0.9.1"
 tokio = { version = "1.45.1", features = ["macros"] }
 util = { path = "../util" }
 ast = { path = "../ast" }
 itertools = "0.14.0"
 serde_json = "1.0.140"
+tokio-stream = "0.1.17"

@@ -23,8 +23,7 @@ use walkdir::WalkDir;
 
 /// AST dataset as it exists on the filesystem
 pub struct RawAstDataset {
-    language: Language,
-    files: Vec<PathBuf>,
+    files: Vec<LanguageBoundPath>,
     dataset: MarkDataset,
     // self_ref: Weak<Self>,
 }
@@ -41,26 +40,28 @@ pub struct RawAstDataset {
 impl TryFrom<&Path> for RawAstDataset {
     type Error = DatasetError;
     fn try_from(value: &Path) -> Result<Self, Self::Error> {
-        let (entries, langs): (Vec<_>, Vec<_>) = WalkDir::new(value)
+        let entries: Vec<_> = WalkDir::new(value)
             .into_iter()
             .filter_map(|entry| {
                 let entry = entry.ok()?;
 
                 let lang = guess_language_from_path(entry.path()).ok()?;
 
-                Some((entry.path().to_path_buf(), lang))
+                Some(LanguageBoundPath {
+                    path: entry.path().to_path_buf(),
+                    language: lang,
+                })
             })
-            .unzip();
+            .collect();
 
-        if langs.is_empty() || langs.iter().any(|l| *l != langs[0]) {
-            return Err(DatasetError::InvalidComposition);
+        if entries.is_empty() {
+            return Err(DatasetError::NoFiles);
         }
 
         let dataset: MarkDataset =
             serde_json::from_str(&fs::read_to_string(value.join("dataset.json"))?)?;
 
         Ok(Self {
-            language: langs[0],
             files: entries,
             dataset,
             // self_ref: Default::default(),
@@ -139,11 +140,7 @@ impl CollatedAstDataset {
                 .map(|(k, v)| (find_paired_indices_from_pair_index(k, n), v)),
         );
 
-        self.files
-            .extend(dataset.files.into_iter().map(|p| LanguageBoundPath {
-                language: dataset.language,
-                path: p,
-            }));
+        self.files.extend(dataset.files);
     }
 
     pub fn compile(self) -> Result<CompilationOutput, DataError> {
@@ -272,8 +269,7 @@ where
             let (leading, trailing) = language.padding();
             let leading_padding = Array1::from_shape_simple_fn([leading], || 0.0);
             let trailing_padding = Array1::from_shape_simple_fn([trailing], || 0.0);
-            let padding = Array1::from_shape_simple_fn([MAX_FEATURES - node.dim() - 1], || 0.0);
-            ndarray::concatenate![Axis(0), leading_padding, node, padding, trailing_padding]
+            ndarray::concatenate![Axis(0), leading_padding, node, trailing_padding]
         };
         features.push(node_feature);
         let span = node.span();

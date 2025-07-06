@@ -3,6 +3,7 @@ import torch
 from torch.distributions import Bernoulli
 import torch.nn as nn
 from torch_geometric.nn import GATv2Conv, TopKPooling
+from torch_geometric.nn.norm.batch_norm import BatchNorm
 from torch_geometric.utils import subgraph
 import torch.nn.functional as F
 import numpy as np
@@ -70,6 +71,7 @@ class Actor(nn.Module):
         super().__init__()
         self.num_layers = len(num_heads)
         self.gats = nn.ModuleList()
+        self.norms = nn.ModuleList()
         # self.pools = nn.ModuleList()
         self.policy_heads = nn.ModuleList()
 
@@ -77,6 +79,7 @@ class Actor(nn.Module):
 
         for i in range(self.num_layers):
             self.gats.append(GATv2Conv(dims[i], dims[i + 1], heads=num_heads[i], concat=False))
+            self.norms.append(BatchNorm(dims[i+1]))
             # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
             self.policy_heads.append(nn.Linear(dims[i + 1], 1)) # Node selection score
 
@@ -231,6 +234,7 @@ class Actor(nn.Module):
         for i in range(self.num_layers):
             # 1) GAT + score
             x = self.gats[i](x, edge_index)
+            x = self.norms[i](x)
             logits = self.policy_heads[i](x).squeeze(-1)
             probs = torch.sigmoid(logits)
             dist = Bernoulli(probs)
@@ -284,7 +288,7 @@ class Actor(nn.Module):
 
         # Sanity check
         end_num_graphs = torch.max(batch) + 1
-        assert start_num_graphs == end_num_graphs, f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {torch.unique(torch.cat([batch, b_start]))}"
+        assert start_num_graphs == end_num_graphs, f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {b_start[~torch.isin(b_start, batch)]}"
 
         # All graphs have now been processed. It should theoretically be impossible for any graph to have
         # nodes that failed to find a survivor.

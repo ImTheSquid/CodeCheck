@@ -83,7 +83,7 @@ pub enum Language {
 }
 
 impl Language {
-    fn num_types(&self) -> usize {
+    pub fn num_types(&self) -> usize {
         match self {
             Language::C => c::CTreeItem::iter().count(),
             Language::Cpp => cpp::CppTreeItem::iter().count(),
@@ -95,18 +95,20 @@ impl Language {
     /// Returns leading and trailing padding for the language
     pub fn padding(&self) -> (usize, usize) {
         let mut leading_sum = 0;
-        let mut trailing_sum: usize = Language::iter().skip(1).map(|l| l.num_types()).sum();
+        let mut trailing_sum: usize = Language::iter().map(|l| l.num_types()).sum();
 
         let langs = Language::iter().collect::<Vec<_>>();
-        for (i, lang) in langs.iter().enumerate() {
+        for lang in langs.iter() {
+            trailing_sum -= lang.num_types();
             if *lang == *self {
+                debug_assert_eq!(
+                    leading_sum + trailing_sum + lang.num_types(),
+                    Language::iter().map(|l| l.num_types()).sum::<usize>(),
+                    "Invalid padding for node with language {self:?}"
+                );
                 return (leading_sum, trailing_sum);
             }
             leading_sum += lang.num_types();
-            // Safety: If trailing sum is greater than zero, it means there are more languages to process.
-            if trailing_sum > 0 {
-                trailing_sum -= langs[i + 1].num_types();
-            }
         }
         unreachable!()
     }

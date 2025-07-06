@@ -1,12 +1,15 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    time::Duration,
 };
 
 use ast::{Language, SyntaxTree, guess_language_from_extension};
 use eyre::{Context, Ok, Result, bail};
 use fancy_regex::Regex;
 use ollama_rs::{Ollama, generation::completion::request::GenerationRequest};
+use tokio::time::timeout;
+use tokio_stream::StreamExt;
 
 const PROMPT: &str = include_str!("prompt.txt");
 const COMPLEX_EXAMPLES: &str = "Implement a Persistent Segment Tree with Lazy Propagation, Suffix Automaton Construction and Applications, Minimum Cost Maximum Flow, Dynamic Connectivity with Link-Cut Trees, Heavy-Light Decomposition with LCA and Path Queries, Implement Alpha-Beta Pruning with Transposition Tables for Chess, Reinforcement Learning from Scratch, Backpropagation for a Deep Neural Network without Libraries, Bayesian Network Inference Engine, Design and Implement a Minimal Multithreaded Kernel, Virtual Memory Management Simulator, Custom File System on a Virtual Disk, Distributed Consensus with Paxos or Raft, Build a Scalable Key-Value Store (like Redis), TCP over UDP (Reliable Data Transfer Protocol), RSA Cryptosystem Implementation with Attacks, Zero-Knowledge Proof Protocol Simulator, Design a Sandbox using Seccomp and Linux Namespaces, Write a Recursive Descent Parser and Intermediate Code Generator, Type Inference for Lambda Calculus with Hindley-Milner, Symbolic Execution Engine, Implement Convex Hull Trick with Line Container, Fast Multipoint Polynomial Evaluation using NTT, 3D Computational Geometry: Mesh Boolean Operations";
@@ -211,14 +214,25 @@ pub async fn generate_code(
     content_length: ProblemComplexity,
     disallow_non_plagiarized_code: bool,
 ) -> Result<GenerationOutput> {
-    let response = ollama
-        .generate(GenerationRequest::new(
+    let mut response = ollama
+        .generate_stream(GenerationRequest::new(
             model_name,
             generate_prompt(content_length, banned_topics),
         ))
         .await?;
 
-    process_code(response.response, disallow_non_plagiarized_code)
+    let mut response_vec = Vec::with_capacity(response.size_hint().0);
+    while let Some(res) = timeout(Duration::from_secs(10), response.try_next())
+        .await
+        .context("timeout while resolving stream")?
+        .context("stream encountered error")?
+    {
+        for resp in res {
+            response_vec.push(resp.response);
+        }
+    }
+
+    process_code(response_vec.join(""), disallow_non_plagiarized_code)
 }
 
 #[cfg(test)]
