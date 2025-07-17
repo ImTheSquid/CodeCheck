@@ -102,6 +102,6 @@ macro_rules! arr_vec_to_view {
 
 pub fn view<T, D: ndarray::Dimension>(
     arr: &[ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>],
-) -> Vec<ndarray::ArrayView<T, D>> {
+) -> Vec<ndarray::ArrayView<'_, T, D>> {
     arr.iter().map(|a| a.view()).collect()
 }

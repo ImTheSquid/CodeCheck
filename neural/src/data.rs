@@ -434,13 +434,7 @@ where
 //     device: B::Device,
 // }
 
-struct BatchedTensors {
-    edges: Array2<usize>,
-    // edges_hash: HashMap<usize, Vec<usize>>,
-    features: Array2<f64>,
-    feature_spans: Array2<usize>,
-    // num_lines: usize,
-}
+type BatchedTensors = TensorBuildData;
 
 struct TensorBuildData {
     edges: Array2<usize>,

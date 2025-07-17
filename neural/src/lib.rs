@@ -34,6 +34,7 @@ mod python_files {
     pub const MAIN: &CStr = c_str!(include_str!("../py/main.py"));
     pub const ACTOR: &CStr = c_str!(include_str!("../py/actor.py"));
     pub const CRITIC: &CStr = c_str!(include_str!("../py/critic.py"));
+    pub const GRAPHHAM: &CStr = c_str!(include_str!("../py/graphham.py"));
 }
 
 #[allow(unused)]
@@ -106,6 +107,13 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         c_str!("critic"),
     )
     .expect("Import critic");
+    PyModule::from_code(
+        py,
+        python_files::GRAPHHAM,
+        c_str!("graphham.py"),
+        c_str!("graphham"),
+    )
+    .expect("Import graphham");
     PyModule::from_code(
         py,
         python_files::MAIN,
