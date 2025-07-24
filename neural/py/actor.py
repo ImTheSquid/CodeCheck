@@ -1,12 +1,13 @@
 from collections import deque
-import torch
-from torch.distributions import Bernoulli
-import torch.nn as nn
-from torch_geometric.nn import GATv2Conv, TopKPooling
-from torch_geometric.nn.norm.batch_norm import BatchNorm
-from torch_geometric.utils import subgraph, degree
-import torch.nn.functional as F
+
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Bernoulli
+from torch_geometric.nn import GATv2Conv
+from torch_geometric.nn.norm.batch_norm import BatchNorm
+from torch_geometric.utils import degree, subgraph
 
 
 def min_max_indices(tensor: torch.Tensor):
@@ -57,12 +58,18 @@ def find_closest_surviving_node(
 
             # Find neighbors
             # Neighbors for which `node` is a source
-            source_neighbors = pre_pool_edge_index[1, pre_pool_edge_index[0] == node]
+            source_neighbors = pre_pool_edge_index[
+                1, pre_pool_edge_index[0] == node
+            ]
             # Neighbors for which `node` is a target
-            target_neighbors = pre_pool_edge_index[0, pre_pool_edge_index[1] == node]
+            target_neighbors = pre_pool_edge_index[
+                0, pre_pool_edge_index[1] == node
+            ]
 
             # Do target neighbors first to work up the tree
-            for neighbor in torch.cat([target_neighbors, source_neighbors]).tolist():
+            for neighbor in torch.cat(
+                [target_neighbors, source_neighbors]
+            ).tolist():
                 if neighbor not in visited:
                     # print(f"NEIGHBOR {neighbor}")
                     queue.append(neighbor)
@@ -76,13 +83,14 @@ class Actor(nn.Module):
         in_dim: int,
         hidden_dims: list[int],
         num_heads: list[int],
-        pool_ratios: list[float],
+        # pool_ratios: list[float],
         selection_dropout: float = 0.3,
         alpha: float = 0.5,
         beta: float = 0.5,
     ):
         """
-        alpha: The weight between the policy and prior for handling node biases within the AST
+        alpha: The weight between the policy and degree prior for handling node biases within the AST
+        beta: Weight for depth
         """
 
         super().__init__()
@@ -98,7 +106,9 @@ class Actor(nn.Module):
 
         for i in range(self.num_layers):
             self.gats.append(
-                GATv2Conv(dims[i], dims[i + 1], heads=num_heads[i], concat=False)
+                GATv2Conv(
+                    dims[i], dims[i + 1], heads=num_heads[i], concat=False
+                )
             )
             self.norms.append(BatchNorm(dims[i + 1]))
             # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
@@ -160,7 +170,9 @@ class Actor(nn.Module):
         probabilities: torch.Tensor,
     ) -> torch.Tensor:
         # Compute node degree (per node)
-        deg = degree(edge_index[0], x.size(0), dtype=x.dtype)  # size: [num_nodes]
+        deg = degree(
+            edge_index[0], x.size(0), dtype=x.dtype
+        )  # size: [num_nodes]
 
         # Optional: normalize per graph
         centrality_prior = torch.zeros_like(deg)
@@ -180,9 +192,9 @@ class Actor(nn.Module):
             )
             centrality_prior[mask] = gaussian
 
-        prior = self.beta * centrality_prior + (1 - self.beta) * self.compute_depths(
-            edge_index, batch
-        )
+        prior = self.beta * centrality_prior + (
+            1 - self.beta
+        ) * self.compute_depths(edge_index, batch)
 
         # Mix centrality bias with learnable policy
         return self.alpha * probabilities + (1 - self.alpha) * prior
@@ -222,7 +234,9 @@ class Actor(nn.Module):
         all_nodes = torch.arange(merge_map.shape[0], device=merge_map.device)
         not_yet_merged = merge_map == all_nodes
         removed_this_layer = ~torch.isin(all_nodes, perm)
-        removed_node_indices = torch.where(not_yet_merged & removed_this_layer)[0]
+        removed_node_indices = torch.where(not_yet_merged & removed_this_layer)[
+            0
+        ]
         # removed_node_indices = torch.where(~torch.isin(all_nodes, perm))[0]
         perm_set = set(perm.tolist())
         print(
@@ -283,12 +297,15 @@ class Actor(nn.Module):
         for node_index in removed_node_indices.tolist():
             removed_node_graph_id = batch[node_index]
             surviving_node = find_closest_surviving_node(node_index)
-            assert surviving_node in perm or surviving_node == -1, "BFS did not work"
+            assert surviving_node in perm or surviving_node == -1, (
+                "BFS did not work"
+            )
             new_merge_map[node_index] = surviving_node
 
             surviving_node_graph_id = perm_to_batch[surviving_node]
             assert (
-                surviving_node_graph_id == removed_node_graph_id or surviving_node == -1
+                surviving_node_graph_id == removed_node_graph_id
+                or surviving_node == -1
             ), (
                 f"CROSSOVER DETECTED: Node association {node_index} -> {surviving_node} crosses graph boundary {removed_node_graph_id.item()} -> {surviving_node_graph_id.item()}"
             )
@@ -326,6 +343,7 @@ class Actor(nn.Module):
         start_num_graphs = b_start.shape[0]
 
         logp_terms = []
+        logp_last = None
 
         for i in range(self.num_layers):
             # 1) GAT + score
@@ -344,7 +362,9 @@ class Actor(nn.Module):
                 if actions[mask_indices].sum() == 0:
                     top_idx = probs[mask_indices].argmax()
                     actions[mask_indices[top_idx]] = 1.0
+
             logp = dist.log_prob(actions)
+            logp_last = logp
             logp_terms.append(logp)
 
             keep_mask = actions.bool()
@@ -365,6 +385,7 @@ class Actor(nn.Module):
             edge_index, _ = subgraph(
                 perm, edge_index, relabel_nodes=True, num_nodes=x.size(0)
             )
+            logp_last = logp_last[perm]
             x = x[perm]
             batch = batch[perm]
 
@@ -378,7 +399,9 @@ class Actor(nn.Module):
             perm_set = set(perm.tolist())
             # 6) For each removed local node, find its BFS‐nearest surviving *local* node:
             for loc in removed_local.tolist():
-                rep_loc = find_closest_surviving_node(loc, pre_edge_index, perm_set)
+                rep_loc = find_closest_surviving_node(
+                    loc, pre_edge_index, perm_set
+                )
                 rep_glob = pre_global_map[rep_loc]
                 orig = pre_global_map[loc]
                 merge_map[orig] = rep_glob
@@ -399,8 +422,10 @@ class Actor(nn.Module):
 
         # All graphs have now been processed. It should theoretically be impossible for any graph to have
         # nodes that failed to find a survivor.
-        assert not torch.any(merge_map == -1), "Some nodes failed to find a survivor!"
+        assert not torch.any(merge_map == -1), (
+            "Some nodes failed to find a survivor!"
+        )
 
         logp_total = torch.cat(logp_terms).sum()
 
-        return x, edge_index, merge_map, batch, perm, logp_total
+        return x, edge_index, merge_map, batch, perm, logp_total, logp_last

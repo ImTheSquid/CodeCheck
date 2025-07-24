@@ -19,13 +19,13 @@ pub mod data;
 pub mod elu;
 pub mod gat;
 pub mod loss;
-pub mod model;
-pub mod node_process;
+// pub mod model;
+// pub mod node_process;
 pub mod sequential;
 
-fn leaky_gain(slope: f64) -> f64 {
-    (2.0 / (1.0 + slope.powi(2))).sqrt()
-}
+// fn leaky_gain(slope: f64) -> f64 {
+//     (2.0 / (1.0 + slope.powi(2))).sqrt()
+// }
 
 mod python_files {
     use std::ffi::CStr;
@@ -123,6 +123,7 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
     .expect("Import main");
 }
 
+#[derive(Debug, Clone)]
 pub struct KeyData {
     pub a: usize,
     pub b: usize,

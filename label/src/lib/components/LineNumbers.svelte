@@ -41,13 +41,13 @@
 		) {
 			currentSpan = {
 				start: i,
-				end: i
+				end: i + 1
 			};
 		} else if (currentSpan.start === currentSpan.end) {
 			if (i < currentSpan.start) {
 				currentSpan.start = i;
 			} else if (i > currentSpan.end) {
-				currentSpan.end = i;
+				currentSpan.end = i + 1;
 			} else {
 				currentSpan = null;
 			}

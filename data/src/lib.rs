@@ -151,7 +151,8 @@ fn process_code(
                     bail!("No start when found full capture!");
                 };
                 let start = start + 1;
-                let end = plag.lines().count() - 3 + start;
+                // Plus one makes it exclusive
+                let end = plag.lines().count() - 3 + start + 1;
                 line_buffer = plagiarism_regex.replace(&line_buffer, "$2").to_string();
                 found_open_plag_on_line_number = None;
 

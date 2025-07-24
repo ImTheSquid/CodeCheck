@@ -5,8 +5,12 @@ description = "The Python portion of the CodeCheck project"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "numpy>=2.3.0",
     "scikit-learn>=1.6.1",
     "tabulate>=0.9.0",
     "torch>=2.6.0",
     "torch-geometric>=2.6.1",
 ]
+
+[tool.pyright]
+reportRedeclaration = "none"

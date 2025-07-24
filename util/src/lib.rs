@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct MarkSpan {
     pub start: usize,
@@ -21,10 +19,7 @@ pub struct Pair {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct Dataset {
-    /// The `usize` here is the pair index, a unique value for each pair of items in the dataset
-    /// The `Pair` is specific information from the index
-    /// I didn't use a `Vec` here because it would be very sparse
-    pub pairs: HashMap<usize, Pair>,
+    pub pairs: Vec<Pair>,
 }
 
 #[macro_export]

@@ -16,10 +16,7 @@ use std::path::PathBuf;
 //     },
 // };
 use clap::Parser;
-use neural::{
-    data::{CollatedAstDataset, CompilationOutput, RawAstDataset},
-    KeyData,
-};
+use neural::data::{CollatedAstDataset, CompilationOutput, RawAstDataset};
 use pyo3::Python;
 
 // type Backend = ::burn::backend::Wgpu;
@@ -146,14 +143,14 @@ fn main() {
         dataset: keys,
     } = collated.compile().expect("valid load for path");
 
-    let keys = keys
-        .into_iter()
-        .map(|(k, v)| KeyData {
-            a: k.0,
-            b: k.1,
-            marks: v.marks,
-        })
-        .collect::<Vec<_>>();
+    // let keys = keys
+    //     .into_iter()
+    //     .map(|(k, v)| KeyData {
+    //         a: k.0,
+    //         b: k.1,
+    //         marks: v.marks,
+    //     })
+    //     .collect::<Vec<_>>();
 
     // Initialize Python manually to allow for venv loading
     // SAFETY: All calls here are checked

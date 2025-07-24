@@ -11,13 +11,13 @@ use std::{
     fmt::Display,
     fs,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::{Arc, Weak},
 };
-use util::{
-    arr_vec_to_view, find_paired_indices_from_pair_index, Dataset as MarkDataset, DatasetError,
-    Pair,
-};
+use util::{arr_vec_to_view, Dataset as MarkDataset, DatasetError};
 use walkdir::WalkDir;
+
+use crate::KeyData;
 
 // const TRAIN_SPLIT: f32 = 0.8;
 
@@ -25,6 +25,7 @@ use walkdir::WalkDir;
 pub struct RawAstDataset {
     files: Vec<LanguageBoundPath>,
     dataset: MarkDataset,
+    base: PathBuf,
     // self_ref: Weak<Self>,
 }
 
@@ -45,6 +46,10 @@ impl TryFrom<&Path> for RawAstDataset {
             .filter_map(|entry| {
                 let entry = entry.ok()?;
 
+                if entry.path().extension()?.eq_ignore_ascii_case("json") {
+                    return None;
+                }
+
                 let lang = guess_language_from_path(entry.path()).ok()?;
 
                 Some(LanguageBoundPath {
@@ -64,6 +69,7 @@ impl TryFrom<&Path> for RawAstDataset {
         Ok(Self {
             files: entries,
             dataset,
+            base: value.to_path_buf(),
             // self_ref: Default::default(),
         })
     }
@@ -108,7 +114,7 @@ pub struct LanguageBoundPath {
 #[derive(Debug, Default, Clone)]
 pub struct CollatedAstDataset {
     files: Vec<LanguageBoundPath>,
-    dataset: HashMap<(usize, usize), Pair>,
+    dataset: Vec<KeyData>,
     self_ref: Weak<Self>,
 }
 
@@ -116,7 +122,7 @@ pub struct CompilationOutput {
     pub features: Vec<Array2<f64>>,
     pub edges: Vec<Array2<usize>>,
     pub feature_spans: Vec<Array2<usize>>,
-    pub dataset: HashMap<(usize, usize), Pair>,
+    pub dataset: Vec<KeyData>,
 }
 
 impl CollatedAstDataset {
@@ -131,14 +137,29 @@ impl CollatedAstDataset {
         // Adding new datasets to the existing set means all their pair indices need to be recalculated, from scratch
         // Instead, I will reverse-lookup the indices
         // Very inefficient but only used during training
-        let n = dataset.files.len();
-        self.dataset.extend(
-            dataset
-                .dataset
-                .pairs
-                .into_iter()
-                .map(|(k, v)| (find_paired_indices_from_pair_index(k, n), v)),
-        );
+        let file_lookup = dataset
+            .files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                (
+                    f.path
+                        .strip_prefix(&dataset.base)
+                        .expect("base on dataset")
+                        .to_path_buf(),
+                    i,
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let offset = self.dataset.len();
+
+        self.dataset
+            .extend(dataset.dataset.pairs.into_iter().map(|p| KeyData {
+                a: file_lookup[&PathBuf::from_str(&p.a).expect("a path")] + offset,
+                b: file_lookup[&PathBuf::from_str(&p.b).expect("a path")] + offset,
+                marks: p.marks,
+            }));
 
         self.files.extend(dataset.files);
     }
@@ -273,6 +294,7 @@ where
         };
         features.push(node_feature);
         let span = node.span();
+        // Spans are not inclusive
         spans.push(array![
             *character_map
                 .get(&span.start)
@@ -449,10 +471,10 @@ struct TensorBuildData {
 //     }
 // }
 
-pub const MAX_SPANS: usize = 20;
-pub const MAX_NODES: usize = 1_000;
-pub const MAX_FEATURES: usize = 200;
-pub const MAX_EDGES: usize = MAX_NODES - 1;
+// pub const MAX_SPANS: usize = 20;
+// pub const MAX_NODES: usize = 1_000;
+// pub const MAX_FEATURES: usize = 200;
+// pub const MAX_EDGES: usize = MAX_NODES - 1;
 
 // impl<B: Backend> Batcher<B, AstDatasetSingle, AstBatch<B>> for AstBuilder<B> {
 //     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {

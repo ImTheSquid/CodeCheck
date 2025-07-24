@@ -1,17 +1,21 @@
+import itertools
+from collections import deque
+
+import numpy as np
+import torch
+import torch.nn.functional as F
 from numpy.typing import NDArray
-from torch import nn, optim, manual_seed
+from sklearn.cluster import HDBSCAN
+from tabulate import tabulate
+from torch import Tensor, manual_seed, nn, optim
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset
-from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
-import torch
-from actor import Actor
-from critic import Critic
-from sklearn.cluster import HDBSCAN
-import numpy as np
-import itertools
-from collections import defaultdict
+from torch_geometric.loader import DataLoader
+from torch_geometric.utils import k_hop_subgraph
 
+from actor import Actor
+from critic import MergeCritic
 from graphham import GraphHAMLayer
 
 DEVICE = torch.device(
@@ -48,7 +52,6 @@ def generate_dataset(
     assert len(edges) == len(features), (
         "Invalid shape configuration!!! Stack of edges must have same number of graphs as features!"
     )
-    # assert edges[0].shape[0] == 2, "Invalid edge shape! Must have shape [B, 2, E]"
 
     # Iterate over each batch
     # Since the y values are only relevant for the entire graph, they will be stored separately
@@ -107,34 +110,102 @@ def find_relevant_keys_for_clustering(
     out = {k: keys[k] for k in keys.keys() if k in pairs}
     return out
 
+def diou_loss_1d(a: NDArray, b: NDArray) -> NDArray:
+    EPSILON = 1e-6
 
-# def min_max_indices(tensor: torch.Tensor):
-#     """
-#     Find the minimum and maximum indices for each unique number in the tensor.
+    if a.ndim == 1:
+        a = np.expand_dims(a, 0)
+    if b.ndim == 1:
+        b = np.expand_dims(b, 0)
 
-#     Args:
-#         tensor (torch.Tensor): Input tensor with numbers.
+    assert a.ndim == 2 and b.ndim == 2 and a.shape[1] == b.shape[1] == 2, f"Bad data: a: {a.shape} b: {b.shape}"
+    a, b = np.broadcast_arrays(a, b)
 
-#     Returns:
-#         results (dict): A dictionary where keys are unique values, and values
-#                         are tuples containing the min and max index of occurrences.
-#     """
-#     # Get all unique values
-#     unique_values = torch.unique(tensor)
-#     results = {}
+    a_center = np.mean(a, axis=1)
+    b_center = np.mean(b, axis=1)
+    dist_sq = (a_center - b_center) ** 2
+    farthest_end = np.max(np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1)
+    closest_start = np.min(np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1)
+    outer_distance_sq = (farthest_end - closest_start) ** 2
 
-#     for value in unique_values:
-#         # Find indices of this value in the tensor
-#         indices = torch.where(tensor == value)[0]
+    start = np.max(np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1)
+    end = np.min(np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1)
+    valid = start < end
+    intersection = np.hstack((start[:, None], end[:, None]))
+    intersection[~valid] = 0
+    intersection = np.diff(intersection, axis=1)
+    union = (np.diff(a, axis=1) + np.diff(b, axis=1)) - intersection
+    iou = intersection / (union + EPSILON)
 
-#         # Calculate min and max indices
-#         min_index = torch.min(indices).item()
-#         max_index = torch.max(indices).item()
+    return 1.0 - iou.squeeze(1) + dist_sq / (outer_distance_sq + EPSILON)
 
-#         # Store results
-#         results[value.item()] = (min_index, max_index)
+def find_closest_mapping_index(line_mappings: NDArray, target: NDArray) -> int:
+    return np.argmin(diou_loss_1d(line_mappings, target)).astype(int)
 
-#     return results
+def diou_loss(line_mappings: NDArray, edge_index: NDArray, batch: NDArray, keys: NDArray, key_batch_associations: NDArray, k: int = 5, decay_alpha: float = 0.5, log_transform_diou: bool = True):
+    """
+    Calculates DIoU loss for the closest node in the graph to each key (based on DIoU) and fans out `k` hops
+    with decay `decay_alpha`
+    """
+
+    assert line_mappings.shape[0] == batch.shape[0], f"line_mappings.shape[0] ({line_mappings.shape[0]}) != batch.shape[0] ({batch.shape[0]})"
+    num_nodes = line_mappings.shape[0]
+
+    # Shuffle keys to make it slightly more stochastic
+    np.random.shuffle(keys)
+    # Find the absolute best nodes (lowest DIoU loss) for each key
+    best_node_indices = []
+    for i, key in enumerate(keys):
+        mask = batch == key_batch_associations[i]
+        map_to_original = np.arange(batch.shape[0])[mask]
+        best_node_indices.append(map_to_original[find_closest_mapping_index(line_mappings[mask], key)])
+        # print(f'Best index for {key} is {best_node_indices[-1]} (with value {line_mappings[best_node_indices[-1]]}) from \n {line_mappings[mask]} w/loss\n {diou_loss_1d(line_mappings[mask], key)}')
+
+    # Do k hop subgraph for each key, assigning the DIoU to each node in the graph
+    edge_index: Tensor = torch.tensor(edge_index)
+    subset, edge_index, mapping, edge_mask = k_hop_subgraph(best_node_indices, num_hops=k, edge_index=edge_index, num_nodes=num_nodes)
+
+    # Always want to add DIoU loss since multiple spans can be close enough to eachother for them to overlap
+
+    # ChatGPT made this
+    def decay_fn(depth: int):
+        return decay_alpha ** depth
+
+
+    # Initialize full loss vector (global node indices)
+    losses_full = torch.zeros(num_nodes, dtype=torch.float)
+
+    # Build adjacency list for full graph
+    adj = [[] for _ in range(num_nodes)]
+    for src, dst in edge_index.t().tolist():
+        adj[src].append(dst)
+        adj[dst].append(src)  # if undirected
+
+    # Propagate DIoU loss from each source node
+    for i, node_index in enumerate(best_node_indices):
+        diou_val = torch.tensor(diou_loss_1d(line_mappings[node_index], keys[i]))
+        if log_transform_diou:
+            diou_val = torch.log(diou_val + 1e-8)
+        # print(f'Loss for node {node_index} is {diou_val} using {line_mappings[node_index]} and {keys[i]}')
+
+        visited = set()
+        queue = deque()
+        queue.append((node_index, 0))  # (current_node, depth)
+
+        while queue:
+            current, depth = queue.popleft()
+            if current in visited or depth > k:
+                continue
+            visited.add(current)
+
+            losses_full[current] += diou_val.sum(dim=0) * decay_fn(depth)
+
+            if depth < k:
+                for neighbor in adj[current]:
+                    if neighbor not in visited:
+                        queue.append((neighbor, depth + 1))
+
+    return losses_full
 
 
 def create_line_number_mappings(
@@ -158,8 +229,6 @@ def create_line_number_mappings(
             lookup[itm].append(i)
         else:
             lookup[itm] = [i]
-
-    # print(f'LOOKUP DATA: {lookup}')
 
     for target, values in lookup.items():
         min_num = 999999999
@@ -209,38 +278,39 @@ def recombine_per_graph_spans(
     return full_spans
 
 
-def cluster_and_calculate_reward(
-    nodes: NDArray,
-    keys: dict[tuple[int, int], NDArray],
-    merge_map: NDArray,
-    selected_indices_for_batch: list[tuple[int, int]],
-    selected_line_assignments_for_batch: NDArray,
-    batch: NDArray,
-    perm: NDArray,
-) -> float:
-    from tabulate import tabulate
+def mean_pool_same_lines(
+    x: NDArray, batch: NDArray, lines: NDArray
+) -> tuple[NDArray, NDArray, NDArray]:
+    """
+    Mean pool all of the x values that are on the same line in the same graph
+    """
 
-    assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
-    assert batch.shape[0] == nodes.shape[0], (
-        "Something is wrong, nodes must match batch"
-    )
-    # print(f'BART {batch.shape}')
-    # print(f'LAFB {selected_line_assignments_for_batch} ({selected_line_assignments_for_batch.shape})')
-    # print(f'SIFB: {selected_indices_for_batch}')
-    line_assignments = []
-    # print('Processing (graph, pid): ', end='')
-    for persistent_id, graph in selected_indices_for_batch:
-        # print(f'{graph, persistent_id};', end='')
-        # relevant_indices = np.where(batch == graph)[0]
-        # line_assignments_for_graph = selected_line_assignments_for_batch[relevant_indices]
-        # merge_map_for_graph = merge_map[relevant_indices]
-        # # print(line_assignments_for_graph)
-        # print("Merge Map:")
-        # print(merge_map_for_graph)
-        # print("LAFG:")
-        # print(line_assignments_for_graph)
-        # assert line_assignments_for_graph.shape[0] == merge_map_for_graph.shape[0]
+    batch_with_lines = np.hstack([lines, np.expand_dims(batch, 1)])
+    meaned = []
+    batch_lines = []
+    for collection in np.unique(batch_with_lines, axis=0):
+        mask = np.all(batch_with_lines == collection, axis=1)
+        all_x = x[mask]
+        all_x_mean = all_x.mean(axis=0)
+        meaned.append(all_x_mean)
+        batch_lines.append(collection)
 
+    meaned = np.vstack(meaned)
+    batch_lines = np.vstack(batch_lines)
+
+    return meaned, batch_lines[:, 2], batch_lines[:, :2]
+
+
+def calculate_line_spans(
+        merge_map: NDArray,
+        selected_indices_for_batch: list[tuple[int, int]],
+        selected_line_assignments_for_batch: NDArray,
+        batch: NDArray,
+        perm: NDArray,
+):
+    line_spans = []
+
+    for _persistent_id, graph in selected_indices_for_batch:
         mask = batch == graph  # select survivors of that graph
         local_pos = np.nonzero(mask)[0]  # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
 
@@ -267,19 +337,31 @@ def cluster_and_calculate_reward(
         # Build per-node spans:
         node_spans = recovered_assignments[merge_map_for_graph]
 
-        assert nodes[mask].shape[0] == node_spans.shape[0], (
-            f"Nodes for graph don't match assignments! {nodes[mask].shape[0]} != {recovered_assignments.shape[0]}"
+        # assert nodes[mask].shape[0] == node_spans.shape[0], (
+        #     f"Nodes for graph don't match assignments! {nodes[mask].shape[0]} != {recovered_assignments.shape[0]}"
+        # )
+        line_spans.append(node_spans)
+
+    # assert line_spans.shape[0] == nodes.shape[0], "Nodes don't match line assignments!"
+
+    return recombine_per_graph_spans(
+            batch, line_spans, selected_indices_for_batch
         )
-        line_assignments.append(node_spans)
-    # print()
-    line_assignments = recombine_per_graph_spans(
-        batch, line_assignments, selected_indices_for_batch
+
+def cluster_and_calculate_reward(
+    nodes: NDArray,
+    keys: dict[tuple[int, int], NDArray],
+    selected_indices_for_batch: list[tuple[int, int]],
+    batch: NDArray,
+    line_spans: NDArray,
+) -> float:
+
+    assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
+    assert batch.shape[0] == nodes.shape[0], (
+        "Something is wrong, nodes must match batch"
     )
-    assert line_assignments.shape[0] == nodes.shape[0], (
-        "Nodes don't match line assignments!"
-    )
-    line_spans = line_assignments
-    # print(line_assignments)
+
+    nodes, batch, line_spans = mean_pool_same_lines(nodes, batch, line_spans)
 
     relevant = find_relevant_keys_for_clustering(keys, selected_indices_for_batch)
     print(
@@ -298,50 +380,14 @@ def cluster_and_calculate_reward(
         tabulate(
             list(
                 zip(
-                    map(lambda arr: f"{arr[0]}, {arr[1]}", line_assignments),
                     batch.tolist(),
                     map(lambda bid: selected_indices_dictionary[bid], batch),
+                    map(lambda arr: f"{arr[0]}, {arr[1]}", line_spans),
                 )
             ),
-            headers=["Line Assignments", "Batch", "Persistent ID"],
+            headers=["Batch", "Persistent ID", "Line Assignments"],
         )
     )
-
-    # for line_assignment, batch_id in zip(line_assignments, batch):
-    #     print(
-    #         f"Line assignment for node in graph {selected_indices_dictionary[batch_id]} (this batch {batch_id}) is {line_assignment}"
-    #     )
-
-    # No prediction data for now, maybe later but get it working without first
-    clusterer = HDBSCAN(
-        min_cluster_size=2,
-        # n_jobs=-1,
-        # prediction_data=True,
-        cluster_selection_method="leaf",
-        allow_single_cluster=True,
-    ).fit(nodes)
-    labels = clusterer.labels_
-    print(f"{labels.max()} clusters created")
-    # print('Finding all points membership vectors...')
-    # vecs = all_points_membership_vectors(clusterer)
-
-    cluster_dict = defaultdict(list)
-    for idx, label in enumerate(labels):
-        cluster_dict[label].append(idx)
-
-    # If you want a plain dict instead of defaultdict:
-    cluster_dict = dict(cluster_dict)
-
-    # print(vecs)
-    # Look through the returned set of membership
-    # For each pair in the relevant keys, see if a pair exists in the generated clusters
-    # If they do, add points. If not, subtract
-    # If there are any clusters unaccounted for, return a negative value for now to
-    # disincentivise false positive
-    # score = 0.0
-    # for cluster_members in cluster_dict.values():
-    #     print(f'CLUSTER MEMBERSHIPS: {cluster_members}')
-    #     pass
 
     # 1) Cluster
     # clusterer = HDBSCAN(min_cluster_size=2, cluster_selection_method='leaf')
@@ -353,6 +399,28 @@ def cluster_and_calculate_reward(
         allow_single_cluster=True,
     )
     labels = clusterer.fit_predict(nodes)  # -1 = noise
+
+    print(f"{labels.max()} clusters created")
+
+    for label in np.unique(labels):
+        mask = label == labels
+        print(f"\n\nMEMBERS IN CLUSTER {label} (total {np.count_nonzero(mask)}):\n")
+
+        line_data = line_spans[mask]
+        bid = batch[mask]
+        pid = map(lambda b: selected_indices_dictionary[b], bid)
+        print(
+            tabulate(
+                list(
+                    zip(
+                        bid,
+                        pid,
+                        map(lambda arr: f"{arr[0]}, {arr[1]}", line_data),
+                    )
+                ),
+                headers=["Batch", "Persistent ID", "Line Assignments"],
+            )
+        )
 
     # 2) Recover per‐node spans
     #    If you want "true" spans per node from your original mapping,
@@ -484,59 +552,89 @@ def train(
 
             # Selected graph indices are actually different than the assignments given by PyTorch
             # Zip them together for processing later
-            selected_indices = batch.key_index
-            selected_indices = list(map(int, selected_indices))
             selected_batch_indices = list(range(torch.max(batch.batch) + 1))
-            selected_indices = list(zip(selected_indices, selected_batch_indices))
+            persistent_to_batch_id_map = list(zip(map(int, batch.key_index), selected_batch_indices))
 
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
-            # print(f'SZ: X: {batch.x.shape} B: {batch.batch.shape} E: {batch.edge_index.shape}')
-            # print(f'SEL IND: {selected_indices}')
-            # print(f'MINMAX: {min_max_indices(batch.batch)}')
 
             x = batch.x
             embedding_loss = torch.tensor(0.0).to(DEVICE)
             for model in embedding_models:
                 x, layer_loss = model(x, batch.edge_index)
-                # print(f"X out : {x.shape}")
                 embedding_loss = embedding_loss + layer_loss
 
-            a_x, a_edge_index, merge_map, a_batch, a_perm, a_logp_sum = actor(
+            a_x, a_edge_index, merge_map, a_batch, a_perm, a_logp_sum, a_logp_last = actor(
                 batch.x, batch.edge_index, batch.batch
             )
-            # print(f"BATCHMAX {torch.max(a_batch)}")
-            # print(f'AX: {a_x.shape} MM: {merge_map.shape}')
-            # print(merge_map)
-            # print(np.where(merge_map.numpy() != np.arange(merge_map.numpy().max() + 1)))
-            # assert len(np.unique(merge_map.numpy())) == a_x.shape[0], f"Some merge map entries reference nonexistent nodes! ({len(np.unique(merge_map.numpy()))} != {a_x.shape[0]})"
-            pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
-            reward = cluster_and_calculate_reward(
-                nodes=a_x.cpu().detach().numpy(),
-                keys=keys,
-                merge_map=merge_map.cpu().numpy(),
-                selected_indices_for_batch=selected_indices,
-                selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
-                batch=a_batch.cpu().numpy(),
-                perm=a_perm.cpu().numpy(),
-            )
 
-            reward = torch.tensor(reward).to(DEVICE)
 
-            advantage = (reward - pred_reward).detach()
-            actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
+            # pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
 
-            actor_optim.zero_grad()
-            actor_loss.backward()
-            actor_optim.step()
+            line_spans = calculate_line_spans(merge_map=merge_map.cpu().numpy(), selected_indices_for_batch=persistent_to_batch_id_map, batch=a_batch.cpu().numpy(), perm=a_perm.cpu().numpy(), selected_line_assignments_for_batch=selected_spans.cpu().numpy())
+            assert line_spans.shape[0] == a_batch.shape[0], f"line_spans.shape[0] ({line_spans.shape[0]}) != a_batch.shape[0] ({a_batch.shape[0]})"
 
-            critic_loss = nn.HuberLoss()(pred_reward, reward)
+            # reward = cluster_and_calculate_reward(
+            #     nodes=a_x.cpu().detach().numpy(),
+            #     keys=keys,
+            #     selected_indices_for_batch=persistent_to_batch_id_map,
+            #     batch=a_batch.cpu().numpy(),
+            #     line_spans=line_spans
+            # )
+
+            # reward = torch.tensor(reward).to(DEVICE)
+
+            # Keys from this batch specifically along with their associations
+            keys_1d = []
+            key_batch = []
+            def add_key_to_keys_and_batch(val: NDArray, gid, target_left: bool):
+                nonlocal keys_1d, key_batch
+                if target_left:
+                    keys_1d.append(val[:, [0, 2]])
+                else:
+                    keys_1d.append(val[:, [1, 3]])
+                key_batch += [gid] * val.shape[0]
+            for pid, gid in persistent_to_batch_id_map:
+                for left, right in keys.keys():
+                    if pid == left or pid == right:
+                        add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
+
+            # TODO: Deduplicate keys_1d
+            diou_l = diou_loss(line_mappings=line_spans, edge_index=a_edge_index.cpu().numpy(), batch=a_batch.cpu().numpy(), keys=np.vstack(keys_1d), key_batch_associations=np.vstack(key_batch).squeeze(1), k=10, decay_alpha=0.7)
+            diou_l = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
+            diou_l = diou_l.to(DEVICE)
+
+
+            together = torch.cat([a_x.detach(), a_logp_last.detach().unsqueeze(1)], dim=1)
+
+            pred_diou_l = critic(together, a_edge_index, a_batch)
+
+            critic_loss = F.mse_loss(pred_diou_l.squeeze(1), diou_l)
             critic_optim.zero_grad()
             critic_loss.backward()
             critic_optim.step()
 
+            # advantage = (reward - pred_reward).detach()
+            # actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
+
+            # actor_optim.zero_grad()
+            # actor_loss.backward()
+            # actor_optim.step()
+
+            # critic_loss = nn.HuberLoss()(pred_reward, reward)
+            # critic_optim.zero_grad()
+            # critic_loss.backward()
+            # critic_optim.step()
+
+            advantage = (diou_l.detach() - pred_diou_l.detach().squeeze(1))
+            actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
+            actor_optim.zero_grad()
+            actor_loss.backward()
+            actor_optim.step()
+
             total_actor_loss += actor_loss
             total_critic_loss += critic_loss
+            print('*' * 10 + f'\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n' + '*' * 10)
 
         # Val
         for batch in val_data:
@@ -571,16 +669,19 @@ def rust_train(
         in_dim=features[0].shape[1],
         hidden_dims=[20, 20, 20, 10, 10],
         num_heads=[8, 8, 8, 8, 4],
-        pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
+        # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
+        alpha=0.5,
+        beta=0.7,
     ).to(DEVICE)
-    critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
+    # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
+    critic = MergeCritic(in_dim=11, hidden_dim=6, num_heads=2).to(DEVICE)
 
     train(
         dataset,
         actor,
         critic,
         optim.Adam(actor.parameters(), lr=0.001, weight_decay=0.01),
-        optim.Adam(critic.parameters(), lr=0.001, weight_decay=0.01),
+        optim.Adam(critic.parameters(), lr=0.0001, weight_decay=0.01),
         NUM_EPISODES,
         keys,
         embedding_in_features=embedding_in_features,
