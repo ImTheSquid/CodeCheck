@@ -1,7 +1,8 @@
 from typing import Any, Tuple
-from torch import nn, Tensor
+
 import torch
 import torch.nn.functional as F
+from torch import Tensor, nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import softmax
 

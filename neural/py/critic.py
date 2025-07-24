@@ -33,7 +33,13 @@ class MergeCritic(nn.Module):
         super().__init__()
         self.gat = GATv2Conv(in_dim, hidden_dim, heads=num_heads, concat=False)
         self.norm = BatchNorm(hidden_dim)
-        self.value_head = nn.Sequential(nn.Linear(hidden_dim, hidden_dim // 2), nn.ReLU(), nn.Linear(hidden_dim // 2, hidden_dim // 4), nn.ReLU(), nn.Linear(hidden_dim //4,1))
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, hidden_dim // 4),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 4, 1),
+        )
 
     def forward(self, x: Tensor, edge_index: Tensor, batch: Tensor) -> Tensor:
         """
