@@ -28,8 +28,8 @@ struct Arguments {
     /// Embeddings only: Top-k for triplet mining
     #[arg(short = 'k', default_value = "3")]
     top_k: usize,
-    #[arg(long = "cpu", default_value = "false")]
-    force_cpu: bool,
+    #[arg(short = 'd')]
+    device: Option<String>,
     #[arg(long = "multiprocessing-fork", default_value = "false")]
     _mpf: bool,
 }
@@ -112,7 +112,7 @@ fn main() {
                     .expect("artifact dir")
                     .to_string_lossy(),
                 args.top_k,
-                args.force_cpu,
+                args.device,
             ) {
                 e.print(py);
                 std::process::exit(1);

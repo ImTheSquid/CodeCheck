@@ -3,7 +3,7 @@ import itertools
 import os
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 import psutil
@@ -1167,11 +1167,11 @@ def rust_train(
     ast_embeddings: NDArray,
     mode: Literal["train", "embed", "embed-test"] = "train",
     top_k: int = 3,
-    force_cpu: bool = False,
+    device: Optional[str] = None,
 ):
     global DEVICE
-    if force_cpu:
-        DEVICE = torch.device("cpu")
+    if device:
+        DEVICE = torch.device(device)
 
     torch.manual_seed(0xDEADBEEF)
     print(

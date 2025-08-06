@@ -168,7 +168,7 @@ pub fn train(
     mode: &str,
     artifact_dir: &str,
     top_k: usize,
-    force_cpu: bool,
+    device: Option<String>,
 ) -> PyResult<()> {
     let mut ast_embeddings =
         ndarray_npy::NpzReader::new(Cursor::new(AST_NAME_EMBEDDINGS)).expect("valid read");
@@ -184,7 +184,7 @@ pub fn train(
     kwargs.set_item("mode", mode)?;
     kwargs.set_item("ast_embeddings", numpy::PyArray2::from_array(py, &emb))?;
     kwargs.set_item("top_k", top_k)?;
-    kwargs.set_item("force_cpu", force_cpu)?;
+    kwargs.set_item("device", device)?;
 
     codecheck
         .getattr(intern!(py, "rust_train"))
