@@ -1,14 +1,15 @@
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.nn.norm import BatchNorm
+from torch_geometric.nn.norm import LayerNorm
 
 
 class Critic(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_heads):
         super().__init__()
         self.gat = GATv2Conv(in_dim, hidden_dim, heads=num_heads, concat=False)
-        self.norm = BatchNorm(hidden_dim)
+        self.norm = LayerNorm(hidden_dim)
         self.value_head = nn.Linear(hidden_dim, 1)  # Value estimation
 
     def forward(self, x, edge_index, a_x, a_edge_index):
@@ -29,15 +30,27 @@ class MergeCritic(nn.Module):
     If no points in the graph are in the true labels, then it doesn't matter
     """
 
-    def __init__(self, in_dim, hidden_dim, num_heads):
+    def __init__(self, in_dim, hidden_dim):
         super().__init__()
-        self.gat = GATv2Conv(in_dim, hidden_dim, heads=num_heads, concat=False)
-        self.norm = BatchNorm(hidden_dim)
+        self.gats = nn.ModuleList(
+            [
+                GATv2Conv(in_dim, hidden_dim, heads=8),
+                GATv2Conv(hidden_dim * 8, hidden_dim, heads=4),
+                GATv2Conv(hidden_dim * 4, hidden_dim, concat=False),
+            ]
+        )
+        self.norms = nn.ModuleList(
+            [
+                LayerNorm(hidden_dim * 8),
+                LayerNorm(hidden_dim * 4),
+                LayerNorm(hidden_dim),
+            ]
+        )
         self.value_head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(hidden_dim // 2, hidden_dim // 4),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(hidden_dim // 4, 1),
         )
 
@@ -45,9 +58,11 @@ class MergeCritic(nn.Module):
         """
         Takes in the logits and predicts the MSE for each node
         """
-        h = self.gat(x, edge_index)
-        h = self.norm(h)
-        values = self.value_head(h)
+        for gat, norm in zip(self.gats, self.norms):
+            x = gat(x, edge_index)
+            x = F.gelu(x)
+            x = norm(x)
+        values = self.value_head(x)
 
         return values
 

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fs::File,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -10,45 +11,64 @@ use data::{PlagiarismEvent, ProblemComplexity, generate_code};
 use eyre::{Result, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use ollama_rs::Ollama;
+use ndarray::Axis;
+use ollama_rs::{
+    Ollama,
+    generation::embeddings::{
+        GenerateEmbeddingsResponse,
+        request::{EmbeddingsInput, GenerateEmbeddingsRequest},
+    },
+};
 use rand::distr::{Alphanumeric, SampleString};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
     time::Instant,
 };
-use util::{Dataset, Mark, MarkSpan, Pair};
+use util::{Dataset, Mark, MarkSpan, Pair, arr_vec_to_view};
 
 #[derive(Debug, clap::Parser)]
 struct Args {
     /// The name of the model to use
     model_name: String,
     /// The host at which Ollama is served
-    #[arg(short = 'h', default_value = "http://127.0.0.1")]
+    #[arg(short = 'o', default_value = "http://127.0.0.1")]
     ollama_host: String,
     /// The port at which Ollama is served
     #[arg(short = 'p', default_value = "11434")]
     ollama_port: u16,
-    /// The directory in which to place the dataset (created if doesn't exist)
-    dataset_dir: PathBuf,
-    /// How big of a problem the model should try to generate
-    #[arg(short = 'c', default_value = "average")]
-    complexity: ProblemComplexity,
-    /// Number of examples to generate
-    #[arg(short = 'n', default_value = "1")]
-    num_iters: u64,
-    /// How many previous tasks the model can remember
-    #[arg(short = 'm', default_value = "10")]
-    memory: usize,
-    /// Ignore generation failures
-    #[arg(long = "ignore-failures", default_value = "false")]
-    ignore_failures: bool,
-    /// Overwrites output directory if it exists
-    #[arg(long = "overwrite", default_value = "false")]
-    overwrite: bool,
-    /// Forbids non-plagiarized entries in the dataset
-    #[arg(long = "forbid-np", default_value = "false")]
-    disallow_non_plagiarized_code: bool,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    Data {
+        /// The directory in which to place the dataset (created if doesn't exist)
+        dataset_dir: PathBuf,
+        /// How big of a problem the model should try to generate
+        #[arg(short = 'c', default_value = "average")]
+        complexity: ProblemComplexity,
+        /// Number of examples to generate
+        #[arg(short = 'n', default_value = "1")]
+        num_iters: u64,
+        /// How many previous tasks the model can remember
+        #[arg(short = 'm', default_value = "10")]
+        memory: usize,
+        /// Ignore generation failures
+        #[arg(long = "ignore-failures", default_value = "false")]
+        ignore_failures: bool,
+        /// Overwrites output directory if it exists
+        #[arg(long = "overwrite", default_value = "false")]
+        overwrite: bool,
+        /// Forbids non-plagiarized entries in the dataset
+        #[arg(long = "forbid-np", default_value = "false")]
+        disallow_non_plagiarized_code: bool,
+    },
+    Embeddings {
+        /// The path to output the numpy file
+        output_path: PathBuf,
+    },
 }
 
 async fn write_files_and_update_manifest(
@@ -134,125 +154,183 @@ async fn write_files_and_update_manifest(
     Ok(())
 }
 
+async fn create_embeddings(
+    ollama: &Ollama,
+    model_name: String,
+    output_path: PathBuf,
+) -> Result<()> {
+    use ast::{c::CTreeItem, cpp::CppTreeItem, java::JavaTreeItem, python::PythonTreeItem};
+    use strum::VariantNames;
+    let all_items: Vec<_> = [
+        CTreeItem::VARIANTS,
+        CppTreeItem::VARIANTS,
+        JavaTreeItem::VARIANTS,
+        PythonTreeItem::VARIANTS,
+    ]
+    .into_iter()
+    .flatten()
+    .map(|s| s.to_string())
+    .collect();
+
+    let GenerateEmbeddingsResponse { embeddings } = ollama
+        .generate_embeddings(GenerateEmbeddingsRequest::new(
+            model_name,
+            EmbeddingsInput::Multiple(all_items.clone()),
+        ))
+        .await?;
+
+    let embeddings = embeddings
+        .into_iter()
+        .map(ndarray::Array1::from_vec)
+        .collect::<Vec<_>>();
+    let embeddings = ndarray::stack(Axis(0), arr_vec_to_view!(embeddings))?;
+    let f = File::create(output_path)?;
+    let mut w = ndarray_npy::NpzWriter::new(f);
+    w.add_array("embeddings", &embeddings)?;
+    w.finish()?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    let Args {
+        model_name,
+        ollama_host,
+        ollama_port,
+        ..
+    } = args;
 
-    if fs::try_exists(&args.dataset_dir).await?
-        && fs::read_dir(&args.dataset_dir)
-            .await?
-            .next_entry()
-            .await?
-            .is_some()
-    {
-        if args.overwrite {
-            fs::remove_dir_all(&args.dataset_dir).await?;
-        } else {
-            bail!("Dataset directory not empty!");
-        }
-    }
-
-    fs::create_dir_all(&args.dataset_dir).await?;
-
-    let ollama = Ollama::new(args.ollama_host, args.ollama_port);
+    let ollama = Ollama::new(ollama_host, ollama_port);
     if !ollama
         .list_local_models()
         .await?
         .iter()
-        .any(|m| m.name == args.model_name.as_str())
+        .any(|m| m.name == model_name.as_str())
     {
         println!(
             "Model \"{}\" not found locally, attempting to pull.",
-            args.model_name
+            model_name
         );
-        ollama.pull_model(args.model_name.clone(), false).await?;
+        ollama.pull_model(model_name.clone(), false).await?;
     }
 
-    let mut topics = Vec::with_capacity(args.memory);
-    let mut durations = Vec::with_capacity(args.num_iters as usize);
-    let mut dataset = Dataset::default();
-    let mut failures = 0usize;
+    match args.command {
+        Command::Embeddings { output_path } => {
+            create_embeddings(&ollama, model_name, output_path).await?;
+        }
+        Command::Data {
+            dataset_dir,
+            complexity,
+            num_iters,
+            memory,
+            ignore_failures,
+            overwrite,
+            disallow_non_plagiarized_code,
+        } => {
+            if fs::try_exists(&dataset_dir).await?
+                && fs::read_dir(&dataset_dir)
+                    .await?
+                    .next_entry()
+                    .await?
+                    .is_some()
+            {
+                if overwrite {
+                    fs::remove_dir_all(&dataset_dir).await?;
+                } else {
+                    bail!("Dataset directory not empty!");
+                }
+            }
 
-    let p = ProgressBar::new(args.num_iters);
-    p.enable_steady_tick(Duration::from_millis(100));
-    p.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ({msg})")
-                .unwrap()
-                .progress_chars("#>-"));
+            fs::create_dir_all(&dataset_dir).await?;
 
-    p.set_message("avg ?s, 0 failures");
+            let mut topics = Vec::with_capacity(memory);
+            let mut durations = Vec::with_capacity(num_iters as usize);
+            let mut dataset = Dataset::default();
+            let mut failures = 0usize;
 
-    while !p.is_finished() {
-        let start = Instant::now();
+            let p = ProgressBar::new(num_iters);
+            p.enable_steady_tick(Duration::from_millis(100));
+            p.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {human_pos}/{human_len} ({msg})")
+                            .unwrap()
+                            .progress_chars("#>-"));
 
-        let res = generate_code(
-            &ollama,
-            args.model_name.clone(),
-            &topics,
-            args.complexity,
-            args.disallow_non_plagiarized_code,
-        )
-        .await;
+            p.set_message("avg ?s, 0 failures");
 
-        let end = Instant::now();
-        durations.push(end - start);
-        let s = durations
-            .iter()
-            .cloned()
-            .reduce(|p, n| p.saturating_add(n))
-            .unwrap_or_default();
+            while !p.is_finished() {
+                let start = Instant::now();
 
-        match res {
-            Ok(res) => {
-                p.inc(1);
-                if p.position() == p.length().expect("length") {
-                    p.finish();
+                let res = generate_code(
+                    &ollama,
+                    model_name.clone(),
+                    &topics,
+                    complexity,
+                    disallow_non_plagiarized_code,
+                )
+                .await;
+
+                let end = Instant::now();
+                durations.push(end - start);
+                let s = durations
+                    .iter()
+                    .cloned()
+                    .reduce(|p, n| p.saturating_add(n))
+                    .unwrap_or_default();
+
+                match res {
+                    Ok(res) => {
+                        p.inc(1);
+                        if p.position() == p.length().expect("length") {
+                            p.finish();
+                        }
+
+                        let base_index = dataset.pairs.len();
+                        write_files_and_update_manifest(
+                            &mut dataset,
+                            &res.codes,
+                            &res.pairs,
+                            &dataset_dir,
+                            if base_index == 0 { 0 } else { base_index + 1 },
+                        )
+                        .await?;
+
+                        if topics.len() == memory {
+                            topics.clear();
+                        }
+
+                        if let Some(topic) = res.topic {
+                            topics.push(topic);
+                        }
+                    }
+                    Err(e) => {
+                        if ignore_failures {
+                            eprintln!("Error encountered: {e}");
+                            failures += 1;
+                        } else {
+                            bail!(e);
+                        }
+                    }
                 }
 
-                let base_index = dataset.pairs.keys().max().cloned().unwrap_or_default();
-                write_files_and_update_manifest(
-                    &mut dataset,
-                    &res.codes,
-                    &res.pairs,
-                    &args.dataset_dir,
-                    if base_index == 0 { 0 } else { base_index + 1 },
-                )
+                p.set_message(format!(
+                    "avg {}, {} failure{}",
+                    indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap()),
+                    failures,
+                    if failures != 1 { "s" } else { "" }
+                ));
+            }
+
+            let mut f = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(dataset_dir.join("dataset.json"))
                 .await?;
 
-                if topics.len() == args.memory {
-                    topics.clear();
-                }
-
-                if let Some(topic) = res.topic {
-                    topics.push(topic);
-                }
-            }
-            Err(e) => {
-                if args.ignore_failures {
-                    eprintln!("Error encountered: {e}");
-                    failures += 1;
-                } else {
-                    bail!(e);
-                }
-            }
+            f.write_all(serde_json::to_string(&dataset)?.as_bytes())
+                .await?;
         }
-
-        p.set_message(format!(
-            "avg {}, {} failure{}",
-            indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap()),
-            failures,
-            if failures != 1 { "s" } else { "" }
-        ));
     }
-
-    let mut f = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(args.dataset_dir.join("dataset.json"))
-        .await?;
-
-    f.write_all(serde_json::to_string(&dataset)?.as_bytes())
-        .await?;
 
     Ok(())
 }

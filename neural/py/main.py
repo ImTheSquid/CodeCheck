@@ -1,22 +1,30 @@
+import gc
 import itertools
-from collections import deque
+import os
+from collections import defaultdict, deque
+from pathlib import Path
+from typing import Literal
 
 import numpy as np
+import psutil
 import torch
 import torch.nn.functional as F
+from diskcache import Cache
 from numpy.typing import NDArray
+from progress.bar import Bar
 from sklearn.cluster import HDBSCAN
 from tabulate import tabulate
-from torch import Tensor, manual_seed, nn, optim
+from torch import Tensor, nn, optim
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
-from torch_geometric.utils import k_hop_subgraph
+from torch_geometric.nn import global_mean_pool
+from torch_geometric.utils import k_hop_subgraph, subgraph
 
 from actor import Actor
 from critic import MergeCritic
-from graphham import GraphHAMLayer
+from embedding import EmbeddingPredictor, GatGraphEmbedding
 
 DEVICE = torch.device(
     "cuda"
@@ -27,64 +35,65 @@ DEVICE = torch.device(
 )
 
 
+BYTES_TO_GB = 1024**3
+
+
+def memory_usage() -> tuple[int, int | None]:
+    return psutil.Process().memory_info().rss, (
+        torch.cuda.memory_allocated()
+        if torch.cuda.is_available()
+        else torch.mps.current_allocated_memory()
+        if torch.mps.is_available
+        else None
+    )
+
+
+def empty_cache():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif torch.mps.is_available():
+        torch.mps.empty_cache()
+
+
+def sync_device():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    elif torch.mps.is_available():
+        torch.mps.synchronize()
+
+
+def cleanup():
+    sync_device()
+    gc.collect()
+    empty_cache()
+
+
 class GraphDataset(Dataset):
-    def __init__(self, graphs: list[Data]):
+    def __init__(self, dataset, languages: NDArray):
         super().__init__()
-        self.graphs = graphs
+        self.dataset = dataset
+        self.languages = languages
         # for i, graph in enumerate(self.graphs):
         #     graph.key_index = i
 
     def __len__(self):
-        return len(self.graphs)
+        return len(self.dataset)
 
     def get(self, idx: int):
-        return self.graphs[idx]
+        d: dict[str, NDArray] = self.dataset.get(idx)
+        data = Data(
+            x=torch.tensor(d["features"], dtype=torch.float),
+            edge_index=torch.tensor(d["edge_index"], dtype=torch.long),
+            # This is the only way I could get this to not freak out for some reason
+            key_index=f"{idx}",
+            language=torch.tensor([self.languages[idx]], dtype=torch.long),
+            lines=torch.tensor(d["feature_spans"], dtype=torch.long),
+        )
+        del d
+        return data
 
     def __getitem__(self, lookup):
         return self.get(lookup)
-
-
-def generate_dataset(
-    edges: list[NDArray],
-    features: list[NDArray],
-    feature_spans: list[NDArray],
-) -> GraphDataset:
-    assert len(edges) == len(features), (
-        "Invalid shape configuration!!! Stack of edges must have same number of graphs as features!"
-    )
-
-    # Iterate over each batch
-    # Since the y values are only relevant for the entire graph, they will be stored separately
-    # However since the indexing is sensitive the y value for each graph will just be its index
-    graphs = []
-    for i in range(len(edges)):
-        edge_index = edges[i]
-        x = features[i]
-
-        # Padding will always be at the end of these, so easy to just get rid of them
-        valid_nodes = ~(x == -1).all(axis=1)  # Boolean mask for real nodes
-        x_pruned = x[valid_nodes]  # Filter node features
-
-        valid_edges = ~(edge_index == -1).all(axis=0)  # Boolean mask for real edges
-        edge_index_pruned = edge_index[:, valid_edges]  # Remove invalid edges
-
-        graphs.append(
-            Data(
-                x=torch.tensor(x_pruned, dtype=torch.float),
-                edge_index=torch.tensor(edge_index_pruned, dtype=torch.long),
-                # This is the only way I could get this to not freak out for some reason
-                key_index=f"{i}",
-                lines=torch.tensor(feature_spans[i], dtype=torch.long),
-            )
-        )
-
-    stats = np.sum(
-        list(map(lambda g: np.array([g.x.shape[0], g.edge_index.shape[1]]), graphs)), 0
-    )
-    print(
-        f"📶 Dataset generated with {len(graphs)} entries, {stats[0]} features, {stats[1]} edges"
-    )
-    return GraphDataset(graphs)
 
 
 NUM_EPISODES = 25
@@ -127,8 +136,12 @@ def diou_loss_1d(a: NDArray, b: NDArray) -> NDArray:
     a_center = np.mean(a, axis=1)
     b_center = np.mean(b, axis=1)
     dist_sq = (a_center - b_center) ** 2
-    farthest_end = np.max(np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1)
-    closest_start = np.min(np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1)
+    farthest_end = np.max(
+        np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1
+    )
+    closest_start = np.min(
+        np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1
+    )
     outer_distance_sq = (farthest_end - closest_start) ** 2
 
     start = np.max(np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1)
@@ -175,14 +188,19 @@ def diou_loss(
         mask = batch == key_batch_associations[i]
         map_to_original = np.arange(batch.shape[0])[mask]
         best_node_indices.append(
-            map_to_original[find_closest_mapping_index(line_mappings[mask], key)]
+            map_to_original[
+                find_closest_mapping_index(line_mappings[mask], key)
+            ]
         )
         # print(f'Best index for {key} is {best_node_indices[-1]} (with value {line_mappings[best_node_indices[-1]]}) from \n {line_mappings[mask]} w/loss\n {diou_loss_1d(line_mappings[mask], key)}')
 
     # Do k hop subgraph for each key, assigning the DIoU to each node in the graph
     edge_index: Tensor = torch.tensor(edge_index)
     subset, edge_index, mapping, edge_mask = k_hop_subgraph(
-        best_node_indices, num_hops=k, edge_index=edge_index, num_nodes=num_nodes
+        best_node_indices,
+        num_hops=k,
+        edge_index=edge_index,
+        num_nodes=num_nodes,
     )
 
     # Always want to add DIoU loss since multiple spans can be close enough to eachother for them to overlap
@@ -202,7 +220,9 @@ def diou_loss(
 
     # Propagate DIoU loss from each source node
     for i, node_index in enumerate(best_node_indices):
-        diou_val = torch.tensor(diou_loss_1d(line_mappings[node_index], keys[i]))
+        diou_val = torch.tensor(
+            diou_loss_1d(line_mappings[node_index], keys[i])
+        )
         if log_transform_diou:
             diou_val = torch.log(diou_val + 1e-8)
         # print(f'Loss for node {node_index} is {diou_val} using {line_mappings[node_index]} and {keys[i]}')
@@ -235,7 +255,9 @@ def create_line_number_mappings(
     Uses an iterative algorithm to determine merges for each item in the merge map.
     The returned tensor contains the feature and it's start and end line numbers
     """
-    assert merge_map.shape[0] == original_line_mappings.shape[0], "Invalid arrays!"
+    assert merge_map.shape[0] == original_line_mappings.shape[0], (
+        "Invalid arrays!"
+    )
     num_features = np.unique(merge_map).shape[0]
     # assert num_features <= merge_map.shape[0], "Num features must be lte size of merge map"
     line_mappings = np.zeros([num_features, 2], dtype=np.long)
@@ -331,11 +353,15 @@ def calculate_line_spans(
 
     for _persistent_id, graph in selected_indices_for_batch:
         mask = batch == graph  # select survivors of that graph
-        local_pos = np.nonzero(mask)[0]  # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
+        local_pos = np.nonzero(mask)[
+            0
+        ]  # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
 
         assert local_pos.size != 0, "Graphs should never be fully removed"
 
-        global_nodes = perm[local_pos]  # now these are the true original indices
+        global_nodes = perm[
+            local_pos
+        ]  # now these are the true original indices
 
         # pull out their merge_map entries in the global map:
         merge_map_for_graph = merge_map[global_nodes]
@@ -347,7 +373,9 @@ def calculate_line_spans(
         merge_map_for_graph = np.array([remap[v] for v in merge_map_for_graph])
 
         # and likewise your line spans:
-        line_assignments_for_graph = selected_line_assignments_for_batch[global_nodes]
+        line_assignments_for_graph = selected_line_assignments_for_batch[
+            global_nodes
+        ]
 
         recovered_assignments = create_line_number_mappings(
             merge_map_for_graph, line_assignments_for_graph
@@ -363,7 +391,9 @@ def calculate_line_spans(
 
     # assert line_spans.shape[0] == nodes.shape[0], "Nodes don't match line assignments!"
 
-    return recombine_per_graph_spans(batch, line_spans, selected_indices_for_batch)
+    return recombine_per_graph_spans(
+        batch, line_spans, selected_indices_for_batch
+    )
 
 
 def cluster_and_calculate_reward(
@@ -380,7 +410,9 @@ def cluster_and_calculate_reward(
 
     nodes, batch, line_spans = mean_pool_same_lines(nodes, batch, line_spans)
 
-    relevant = find_relevant_keys_for_clustering(keys, selected_indices_for_batch)
+    relevant = find_relevant_keys_for_clustering(
+        keys, selected_indices_for_batch
+    )
     print(
         f"Graphs in this batch are:\n{tabulate(selected_indices_for_batch, headers=['Persistent ID', 'Batch ID'])}"
     )
@@ -421,7 +453,9 @@ def cluster_and_calculate_reward(
 
     for label in np.unique(labels):
         mask = label == labels
-        print(f"\n\nMEMBERS IN CLUSTER {label} (total {np.count_nonzero(mask)}):\n")
+        print(
+            f"\n\nMEMBERS IN CLUSTER {label} (total {np.count_nonzero(mask)}):\n"
+        )
 
         line_data = line_spans[mask]
         bid = batch[mask]
@@ -516,7 +550,9 @@ def cluster_and_calculate_reward(
     precision = TP / (TP + FP) if TP + FP > 0 else 0.0
     recall = TP / (TP + FN) if TP + FN > 0 else 0.0
     f1 = (
-        2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+        2 * precision * recall / (precision + recall)
+        if precision + recall > 0
+        else 0.0
     )
 
     print(
@@ -528,17 +564,18 @@ def cluster_and_calculate_reward(
 
 def train(
     dataset: Dataset,
+    embedder: nn.Module,
     actor: nn.Module,
     critic: nn.Module,
     actor_optim: optim.Optimizer,
     critic_optim: optim.Optimizer,
     episodes: int,
     keys: dict[tuple[int, int], NDArray],
-    embedding_in_features: int,
 ):
-    manual_seed(0xDEADBEEF)
-
-    train_set, val_set, test_set = random_split(dataset, make_splits(len(dataset)))  # type: ignore
+    train_set, val_set, test_set = random_split(
+        dataset,
+        make_splits(len(dataset)),  # type: ignore
+    )
 
     train_data = DataLoader(train_set, batch_size=25, shuffle=True)  # type: ignore
     val_data = DataLoader(val_set, batch_size=12)  # type: ignore
@@ -546,22 +583,11 @@ def train(
 
     for epoch in range(episodes):
         print(f"\n⏰ EPOCH {epoch}")
+        embedder.train()
         actor.train()
         critic.train()
 
         total_actor_loss, total_critic_loss = 0.0, 0.0
-
-        embedding_models = [
-            GraphHAMLayer(
-                in_features=embedding_in_features,
-                out_features=20,
-                num_heads=4,
-                num_groups=20,
-            ).to(DEVICE),
-            GraphHAMLayer(
-                in_features=20, out_features=20, num_heads=4, num_groups=5
-            ).to(DEVICE),
-        ]
 
         # Train
         for batch in train_data:
@@ -577,15 +603,17 @@ def train(
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
 
-            x = batch.x
-            embedding_loss = torch.tensor(0.0).to(DEVICE)
-            for model in embedding_models:
-                x, layer_loss = model(x, batch.edge_index)
-                embedding_loss = embedding_loss + layer_loss
+            x = embedder(batch.x, batch.edge_index)
 
-            a_x, a_edge_index, merge_map, a_batch, a_perm, a_logp_sum, a_logp_last = (
-                actor(batch.x, batch.edge_index, batch.batch)
-            )
+            (
+                a_x,
+                a_edge_index,
+                merge_map,
+                a_batch,
+                a_perm,
+                a_logp_sum,
+                a_logp_last,
+            ) = actor(x, batch.edge_index, batch.batch)
 
             # pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
 
@@ -625,7 +653,9 @@ def train(
             for pid, gid in persistent_to_batch_id_map:
                 for left, right in keys.keys():
                     if pid == left or pid == right:
-                        add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
+                        add_key_to_keys_and_batch(
+                            keys[(left, right)], gid, pid == left
+                        )
 
             # TODO: Deduplicate keys_1d
             diou_l = diou_loss(
@@ -664,7 +694,7 @@ def train(
             # critic_optim.step()
 
             advantage = diou_l.detach() - pred_diou_l.detach().squeeze(1)
-            actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
+            actor_loss = -(advantage * a_logp_sum).mean()
             actor_optim.zero_grad()
             actor_loss.backward()
             actor_optim.step()
@@ -694,36 +724,544 @@ def train(
     print("Training complete")
 
 
-def rust_train(
-    features: list[NDArray],
-    edges: list[NDArray],
-    feature_spans: list[NDArray],
-    keys: dict[tuple[int, int], NDArray],
-):
-    print("✅ Python initialization successful. Beginning training...")
-    # print(f"KEYS\n\n{keys}\n\n")
-    dataset = generate_dataset(edges, features, feature_spans)
+def find_root_nodes(edge_index: Tensor, node_indices: Tensor) -> list[int]:
+    """
+    Finds root nodes in a given graph using node indices.
+    A root node is one with no incoming edges.
+    """
+    incoming = defaultdict(int)
+    for src, dst in edge_index.t().tolist():
+        if dst in node_indices:
+            incoming[dst] += 1
 
-    embedding_in_features = features[0].shape[1]
+    return [
+        int(node.item())
+        for node in node_indices
+        if incoming[int(node.item())] == 0
+    ]
 
-    actor = Actor(
-        in_dim=features[0].shape[1],
-        hidden_dims=[20, 20, 20, 10, 10],
-        num_heads=[8, 8, 8, 8, 4],
-        # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
-        alpha=0.5,
-        beta=0.7,
-    ).to(DEVICE)
-    # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
-    critic = MergeCritic(in_dim=11, hidden_dim=6, num_heads=2).to(DEVICE)
 
-    train(
-        dataset,
-        actor,
-        critic,
-        optim.Adam(actor.parameters(), lr=0.001, weight_decay=0.01),
-        optim.Adam(critic.parameters(), lr=0.0001, weight_decay=0.01),
-        NUM_EPISODES,
-        keys,
-        embedding_in_features=embedding_in_features,
+def preorder_traversal(edge_index: Tensor, root: int) -> list[int]:
+    """
+    Performs a preorder traversal (node → children) of a tree rooted at `root`.
+    `edge_index` is expected to be a 2 x E tensor of directed edges.
+    """
+    tree = defaultdict(list)
+    for src, dst in edge_index.t().tolist():
+        tree[src].append(dst)
+
+    visited = set()
+    order = []
+
+    def dfs(node):
+        if node in visited:
+            return
+        visited.add(node)
+        order.append(node)
+        for child in tree[node]:
+            dfs(child)
+
+    dfs(root)
+    return order
+
+
+def get_projections_and_targets_for_each_batch(proj, batch, cache: Cache):
+    tgt = torch.argmax(batch.x, dim=1)
+
+    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
+    persistent_to_batch_id_map = list(
+        zip(map(int, batch.key_index), selected_batch_indices)
     )
+
+    batch_to_persistent_id_map = {
+        bid: pid for pid, bid in persistent_to_batch_id_map
+    }
+
+    for batch_id in torch.unique(batch.batch):
+        if batch_to_persistent_id_map[int(batch_id)] in cache:
+            preorder = cache[batch_to_persistent_id_map[int(batch_id)]]
+        else:
+            subgraph_mask = batch.batch == batch_id
+            node_indices = subgraph_mask.nonzero(as_tuple=True)[0]
+            subgraph_edge_index, _ = subgraph(
+                edge_index=batch.edge_index,
+                subset=node_indices,
+                relabel_nodes=True,
+            )
+
+            # Find root node(s)
+            roots = find_root_nodes(
+                subgraph_edge_index, torch.arange(node_indices.shape[0])
+            )
+            assert len(roots) == 1, "AST should have exactly one root"
+
+            # Traverse
+            preorder = preorder_traversal(subgraph_edge_index, roots[0])
+            cache[batch_to_persistent_id_map[int(batch_id)]] = preorder
+
+        from collections import deque
+
+        def window(seq, n=2):
+            it = iter(seq)
+            win = deque((next(it, None) for _ in range(n)), maxlen=n)
+            yield win
+            append = win.append
+            for e in it:
+                append(e)
+                yield win
+
+        projs = []
+        tgts = []
+        for a, b in window(preorder):
+            projs.append(proj[a])
+            tgts.append(tgt[b])
+
+        projs = torch.stack(projs)
+        tgts = torch.stack(tgts)
+        yield projs, tgts
+
+
+def mine_triplets(
+    x: torch.Tensor,
+    embeddings: torch.Tensor,
+    top_k: int = 3,
+    distance_metric: str = "cosine",
+) -> torch.Tensor:
+    """
+    Args:
+        x: (N, D) one-hot node type matrix.
+        embeddings: (D, E) embedding lookup for node types.
+        top_k: number of types to mine for positives and negatives.
+        distance_metric: 'cosine' or 'euclidean'.
+
+    Returns:
+        triplets: (T, 3) LongTensor with anchor, positive, and negative indices.
+    """
+    node_types = x.argmax(dim=1)  # (N,)
+    N, D = x.shape
+
+    # === 1. Compute (D, D) distance matrix between types ===
+    if distance_metric == "cosine":
+        type_embs = torch.nn.functional.normalize(embeddings, dim=1)
+        dist_type_type = 1 - type_embs @ type_embs.T
+    elif distance_metric == "euclidean":
+        diff = embeddings[:, None, :] - embeddings[None, :, :]
+        dist_type_type = torch.norm(diff, dim=2)
+    else:
+        raise ValueError("Unsupported distance metric")
+
+    # Exclude self-types using NaN (so they don't appear in topk either way)
+    dist_type_type.fill_diagonal_(float("nan"))
+
+    # === 2. Precompute type -> indices map ===
+    type_to_indices = [[] for _ in range(D)]
+    for idx, t in enumerate(node_types.tolist()):
+        type_to_indices[t].append(idx)
+
+    # === 3. Mine triplets ===
+    triplets = []
+
+    for i in range(N):
+        anchor_type = node_types[i]
+        dists = dist_type_type[anchor_type]  # (D,)
+
+        if dists.isnan().all():
+            continue  # no other types to compare to
+
+        # Top-k closest and farthest *types* (excluding self via NaN)
+        _, closest_types = torch.topk(dists, top_k, largest=False)
+        _, farthest_types = torch.topk(dists, top_k, largest=True)
+
+        for pt in closest_types.tolist():
+            pos_candidates = type_to_indices[pt]
+            if not pos_candidates:
+                continue
+            pos_idx = pos_candidates[torch.randint(len(pos_candidates), (1,))]
+
+            for nt in farthest_types.tolist():
+                neg_candidates = type_to_indices[nt]
+                if not neg_candidates:
+                    continue
+                neg_idx = neg_candidates[
+                    torch.randint(len(neg_candidates), (1,))
+                ]
+                triplets.append((i, pos_idx, neg_idx))
+
+    assert len(triplets) > 0, "Triples array empty, probably bad"
+
+    return torch.tensor(triplets, dtype=torch.long)
+
+
+class AverageAccumulator:
+    def __init__(self, init: float | Tensor = 0.0) -> None:
+        self.sum = init
+        self.num = 0
+
+    def __iadd__(self, o):
+        self.sum += o
+        self.num += 1
+        return self
+
+    def mean(self) -> float | Tensor:
+        return self.sum / max(self.num, 1)
+
+
+def train_embeddings(
+    dataset: Dataset,
+    num_episodes: int,
+    embedder: nn.Module,
+    optimizer: optim.Optimizer,
+    artifact_dir: Path,
+    ast_embeddings: Tensor,
+    top_k: int,
+    traversal_cache: Cache,
+):
+    train_set, val_set, test_set = random_split(
+        dataset,
+        make_splits(len(dataset)),  # type: ignore
+    )
+
+    checkpoint_dir = artifact_dir / "embedding_checkpoints"
+    if checkpoint_dir.exists():
+        import shutil
+
+        shutil.rmtree(checkpoint_dir)
+    os.makedirs(checkpoint_dir)
+
+    train_data = DataLoader(
+        train_set,  # type: ignore
+        batch_size=80,
+        shuffle=True,
+        num_workers=10,
+    )
+    val_data = DataLoader(val_set, batch_size=100, num_workers=10)  # type: ignore
+    test_data = DataLoader(test_set, batch_size=100, num_workers=10)  # type: ignore
+
+    LANG_LOSS_SCALE = 2.0
+    TRIPLET_LOSS_SCALE = 4.0
+    NEXT_NODE_LOSS_SCALE = 1.0
+
+    for epoch in range(num_episodes):
+        total_loss = AverageAccumulator()
+        bar = Bar()
+        for batch in bar.iter(train_data):
+            cpu, gpu = memory_usage()
+            bar.suffix = f"Batch %(index)d/%(max)d Epoch {epoch} CPU: {(cpu / BYTES_TO_GB):.02f} GB GPU: {(gpu / BYTES_TO_GB if gpu else 0.0):.02f} GB"
+
+            batch = batch.to(DEVICE)
+
+            triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+
+            proj, lang = embedder(batch.x, batch.edge_index)
+
+            triplet_loss = F.triplet_margin_loss(
+                proj[triplets[0]], proj[triplets[1]], proj[triplets[2]]
+            )
+
+            lang = global_mean_pool(lang, batch.batch)
+
+            next_node_loss = AverageAccumulator()
+            for projs, tgts in get_projections_and_targets_for_each_batch(
+                proj, batch, traversal_cache
+            ):
+                next_node_loss += F.cross_entropy(projs, tgts)
+
+            batch_loss = (
+                F.cross_entropy(lang, batch.language) * LANG_LOSS_SCALE
+                + triplet_loss * TRIPLET_LOSS_SCALE
+                + next_node_loss.mean() * NEXT_NODE_LOSS_SCALE
+            )
+
+            batch_loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            total_loss += batch_loss.item()
+
+            del (
+                batch,
+                triplets,
+                proj,
+                lang,
+                batch_loss,
+                triplet_loss,
+                next_node_loss,
+            )
+
+            cleanup()
+
+        print(f"Epoch {epoch} mean loss {total_loss.mean()}")
+
+        torch.save(
+            embedder.embedding_model,
+            checkpoint_dir / f"{epoch}.pt",
+        )
+
+        val_loss = AverageAccumulator()
+        for batch in val_data:
+            with torch.no_grad():
+                batch = batch.to(DEVICE)
+                triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+
+                proj, lang = embedder(batch.x, batch.edge_index)
+
+                triplet_loss = F.triplet_margin_loss(
+                    proj[triplets[0]], proj[triplets[1]], proj[triplets[2]]
+                )
+                lang = global_mean_pool(lang, batch.batch)
+
+                next_node_loss = AverageAccumulator()
+                for (
+                    projs,
+                    tgts,
+                ) in get_projections_and_targets_for_each_batch(
+                    proj, batch, traversal_cache
+                ):
+                    next_node_loss += F.cross_entropy(projs, tgts)
+
+                batch_loss = (
+                    F.cross_entropy(lang, batch.language) * LANG_LOSS_SCALE
+                    + triplet_loss * TRIPLET_LOSS_SCALE
+                    + next_node_loss.mean() * NEXT_NODE_LOSS_SCALE
+                )
+                val_loss += batch_loss.item()
+
+                del (
+                    batch,
+                    triplets,
+                    proj,
+                    lang,
+                    batch_loss,
+                    triplet_loss,
+                    next_node_loss,
+                )
+
+                cleanup()
+        print(f"Mean val loss {val_loss.mean()}")
+        cleanup()
+
+    test_loss = AverageAccumulator()
+    for batch in test_data:
+        batch = batch.to(DEVICE)
+        with torch.no_grad():
+            triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+            proj, lang = embedder(batch.x, batch.edge_index)
+            lang = global_mean_pool(lang, batch.batch)
+
+            triplet_loss = F.triplet_margin_loss(
+                proj[triplets[0]], proj[triplets[1]], proj[triplets[2]]
+            )
+
+            next_node_loss = AverageAccumulator()
+            for projs, tgts in get_projections_and_targets_for_each_batch(
+                proj, batch, traversal_cache
+            ):
+                next_node_loss += F.cross_entropy(projs, tgts)
+
+            batch_loss = (
+                F.cross_entropy(lang, batch.language) * LANG_LOSS_SCALE
+                + triplet_loss * TRIPLET_LOSS_SCALE
+                + next_node_loss.mean() * NEXT_NODE_LOSS_SCALE
+            )
+
+            test_loss += batch_loss.item()
+
+            del (
+                batch,
+                triplets,
+                proj,
+                lang,
+                batch_loss,
+                triplet_loss,
+                next_node_loss,
+            )
+
+            cleanup()
+
+    print(f"Mean test loss: {test_loss.mean()}")
+    print("Saving to artifact directory")
+
+    torch.save(embedder.embedding_model, artifact_dir / "embeddings.pt")
+
+
+def test_embeddings(embedder: nn.Module, dataset: Dataset, artifact_dir: Path):
+    import datetime
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import plotly.express as px
+    from sklearn.manifold import TSNE
+
+    plot_dir = (
+        datetime.datetime.now()
+        .replace(microsecond=0)
+        .isoformat()
+        .replace(":", "_")
+    )
+
+    print(f"Saving plots to {artifact_dir / plot_dir}")
+
+    os.makedirs(artifact_dir / plot_dir)
+
+    data = DataLoader(dataset, batch_size=50, shuffle=True)  # type: ignore
+    for i, batch in enumerate(data):
+        batch = batch.to(DEVICE)
+        print(f"Batch {i}")
+        embeddings = embedder(batch.x, batch.edge_index)
+
+        labels = batch.language[batch.batch].detach().cpu().numpy()
+
+        labels = np.array(["C", "C++", "Java", "Python"])[labels]
+
+        tsne = TSNE(n_components=3, perplexity=30)
+        X_tsne = tsne.fit_transform(embeddings.cpu())
+        df = pd.DataFrame(
+            {
+                "TSNE1": X_tsne[:, 0],
+                "TSNE2": X_tsne[:, 1],
+                "TSNE3": X_tsne[:, 2],
+                "Label": labels,  # or y_encoded if you want numeric labels
+            }
+        )
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        scatter = ax.scatter(
+            df["TSNE1"],
+            df["TSNE2"],
+            df["TSNE3"],
+            c=pd.factorize(df["Label"])[0],  # Color by label
+            cmap="tab10",
+            alpha=0.8,
+        )
+
+        # Optional: Add a legend with label names
+        legend_labels = df["Label"].unique()
+        ax.legend(
+            handles=scatter.legend_elements()[0], labels=legend_labels.tolist()
+        )
+
+        ax.set_xlabel("TSNE1")
+        ax.set_ylabel("TSNE2")
+        ax.set_zlabel("TSNE3")  # pyright: ignore
+        plt.tight_layout()
+        fig.savefig(artifact_dir / plot_dir / f"{i}.png")
+        fig.clear()
+
+        fig = px.scatter_3d(
+            df,
+            x="TSNE1",
+            y="TSNE2",
+            z="TSNE3",
+            color="Label",
+            title="3D t-SNE Visualization",
+            opacity=0.8,
+        )
+
+        # Save to interactive HTML file
+        fig.write_html(str(artifact_dir / plot_dir / f"{i}.html"))
+
+
+def rust_train(
+    dataset,
+    artifact_dir: str,
+    ast_embeddings: NDArray,
+    mode: Literal["train", "embed", "embed-test"] = "train",
+    top_k: int = 3,
+    force_cpu: bool = False,
+):
+    global DEVICE
+    if force_cpu:
+        DEVICE = torch.device("cpu")
+
+    torch.manual_seed(0xDEADBEEF)
+    print(
+        f"✅ Python initialization successful. Beginning training on device {DEVICE}..."
+    )
+    artifact_dir: Path = Path(artifact_dir)
+    # print(f"KEYS\n\n{keys}\n\n")
+    # dataset = generate_dataset(edges, features, feature_spans, languages)
+    languages = dataset.languages
+    keys = dataset.keys
+    dataset = GraphDataset(dataset.loader, languages)
+
+    embedding_in_features = dataset[0].x.shape[1]  # pyright: ignore reportOptionalMemberAccess
+
+    # embedder = GraphEmbedding(
+    #     embedding_in_features=embedding_in_features, embedding_dim=12
+    # ).to(DEVICE)
+
+    embedding_dim = min(500, embedding_in_features // 2)
+
+    embedder = GatGraphEmbedding(
+        in_channels=embedding_in_features, embedding_dim=embedding_dim
+    ).to(DEVICE)
+
+    match mode:
+        case "embed-test":
+            embedder = torch.load(
+                artifact_dir / "embeddings.pt", weights_only=False
+            )
+            with torch.no_grad():
+                test_embeddings(
+                    embedder=embedder,
+                    dataset=dataset,
+                    artifact_dir=artifact_dir,
+                )
+        case "embed":
+            print(
+                f"Embedding with top k={top_k} from dim {embedding_in_features} to dim {embedding_dim}"
+            )
+            embedder = EmbeddingPredictor(
+                embedding_model=embedder,
+                embedding_dim=embedding_dim,
+                hidden_dim=embedding_dim // 2,
+                out_dim=embedding_in_features,
+                num_langs=np.max(languages) + 1,
+            ).to(DEVICE)
+
+            with Cache() as traversal_cache:
+                train_embeddings(
+                    dataset,
+                    num_episodes=50,
+                    embedder=embedder,
+                    optimizer=optim.Adam(
+                        embedder.parameters(), lr=0.0005, weight_decay=0.01
+                    ),
+                    artifact_dir=artifact_dir,
+                    ast_embeddings=torch.Tensor(ast_embeddings).to(DEVICE),
+                    top_k=top_k,
+                    traversal_cache=traversal_cache,
+                )
+        case "train":
+            if os.path.exists(artifact_dir / "embeddings.pt"):
+                print("Loading embeddings model into memory")
+                embedder = torch.load(
+                    artifact_dir / "embeddings.pt", weights_only=False
+                )
+
+            actor = Actor(
+                in_dim=12,
+                hidden_dims=[12, 12, 12, 10, 10],
+                num_heads=[4, 4, 4, 4, 4],
+                # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
+                alpha=0.5,
+                beta=0.7,
+                selection_dropout=0.2,
+            ).to(DEVICE)
+            # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
+            critic = MergeCritic(in_dim=11, hidden_dim=10).to(DEVICE)
+
+            train(
+                dataset,
+                embedder=embedder,
+                actor=actor,
+                critic=critic,
+                actor_optim=optim.Adam(
+                    actor.parameters(), lr=0.001, weight_decay=0.01
+                ),
+                critic_optim=optim.Adam(
+                    critic.parameters(), lr=0.0001, weight_decay=0.01
+                ),
+                episodes=NUM_EPISODES,
+                keys=keys,
+            )

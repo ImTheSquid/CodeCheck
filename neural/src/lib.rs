@@ -2,9 +2,13 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use std::{ffi::CStr, path::PathBuf};
+use std::{
+    ffi::{CStr, CString},
+    io::Cursor,
+    path::PathBuf,
+};
 
-use ndarray::arr2;
+use mimalloc::MiMalloc;
 use pyo3::{
     ffi::c_str,
     intern,
@@ -13,19 +17,26 @@ use pyo3::{
 };
 use util::Mark;
 
-pub mod contrastive;
-pub mod critic;
+use crate::data::{rust_data, TmpDirDataset};
+
+// pub mod contrastive;
+// pub mod critic;
 pub mod data;
-pub mod elu;
-pub mod gat;
-pub mod loss;
+// pub mod elu;
+// pub mod gat;
+// pub mod loss;
 // pub mod model;
 // pub mod node_process;
-pub mod sequential;
+// pub mod sequential;
 
 // fn leaky_gain(slope: f64) -> f64 {
 //     (2.0 / (1.0 + slope.powi(2))).sqrt()
 // }
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+const AST_NAME_EMBEDDINGS: &[u8] = include_bytes!("ast_name_embeddings.npz");
 
 mod python_files {
     use std::ffi::CStr;
@@ -35,23 +46,24 @@ mod python_files {
     pub const ACTOR: &CStr = c_str!(include_str!("../py/actor.py"));
     pub const CRITIC: &CStr = c_str!(include_str!("../py/critic.py"));
     pub const GRAPHHAM: &CStr = c_str!(include_str!("../py/graphham.py"));
+    pub const EMBEDDING: &CStr = c_str!(include_str!("../py/embedding.py"));
 }
 
 #[allow(unused)]
 fn debug_python_env(py: Python<'_>) {
     let sys = py.import("sys").unwrap();
     let version: String = sys.getattr("version").unwrap().extract().unwrap();
-    println!("Python version: {}", version);
+    println!("Python version: {version}");
 
     let prefix: String = sys.getattr("prefix").unwrap().extract().unwrap();
-    println!("Python prefix: {}", prefix);
+    println!("Python prefix: {prefix}");
 
     let executable: String = sys.getattr("executable").unwrap().extract().unwrap();
-    println!("Python executable: {}", executable);
+    println!("Python executable: {executable}");
 
     let python_path = sys.getattr("path").unwrap();
     let python_path: Vec<String> = python_path.extract().unwrap();
-    println!("Python path: {:?}", python_path);
+    println!("Python path: {python_path:?}");
 
     let os = py.import("os").unwrap();
     let path: String = os
@@ -61,7 +73,25 @@ fn debug_python_env(py: Python<'_>) {
         .unwrap()
         .extract()
         .unwrap();
-    println!("Current directory: {}", path);
+    println!("Current directory: {path}");
+}
+
+pub fn add_rust_data(py: Python<'_>) -> PyResult<()> {
+    let rd = rust_data::_PYO3_DEF.make_module(py, rust_data::__PYO3_GIL_USED)?;
+    let sys = PyModule::import(py, "sys")?;
+    let py_modules: Bound<'_, PyDict> = sys.getattr("modules")?.downcast_into()?;
+
+    py_modules.set_item("rust_data", rd)?;
+
+    Ok(())
+}
+
+pub fn mp_mode(py: Python<'_>) -> PyResult<()> {
+    let sys = PyModule::import(py, "sys")?;
+    let argv: Bound<'_, PyList> = sys.getattr("argv")?.downcast_into()?;
+    argv.append("--multiprocessing-fork")?;
+
+    Ok(())
 }
 
 pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
@@ -71,7 +101,6 @@ pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
             .expect("valid canoicalization")
             .join("bin/activate_this.py");
         let location = location.to_string_lossy();
-        println!("🔄 Loading venv from {location}");
         let code = format!(
             r#"
 activate_this = "{location}"
@@ -79,7 +108,7 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         );
 
         py.run(
-            unsafe { CStr::from_ptr(code.as_ptr() as *const i8) },
+            CString::new(code).expect("valid cstr").as_c_str(),
             None,
             None,
         )
@@ -116,6 +145,13 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
     .expect("Import graphham");
     PyModule::from_code(
         py,
+        python_files::EMBEDDING,
+        c_str!("embedding.py"),
+        c_str!("embedding"),
+    )
+    .expect("Import embedding");
+    PyModule::from_code(
+        py,
         python_files::MAIN,
         c_str!("main.py"),
         c_str!("codecheck"),
@@ -132,60 +168,32 @@ pub struct KeyData {
 
 pub fn train(
     py: Python<'_>,
-    features: &[ndarray::Array2<f64>],
-    edges: &[ndarray::Array2<usize>],
-    feature_spans: &[ndarray::Array2<usize>],
-    keys: &[KeyData],
+    dataset: TmpDirDataset,
+    mode: &str,
+    artifact_dir: &str,
+    top_k: usize,
+    force_cpu: bool,
 ) -> PyResult<()> {
-    let keys = PyList::new(
-        py,
-        keys.iter().map(|k| {
-            let marks = k
-                .marks
-                .iter()
-                .map(|m| {
-                    [
-                        m.a.start as f64,
-                        m.b.start as f64,
-                        m.a.end as f64,
-                        m.b.end as f64,
-                    ]
-                })
-                .collect::<Vec<_>>();
-
-            let marks = arr2(&marks);
-
-            let marks = numpy::PyArray2::from_array(py, &marks);
-
-            ((k.a, k.b), marks)
-        }),
-    )?;
-
-    let keys = PyDict::from_sequence(&keys)?;
-
-    let features = PyList::new(
-        py,
-        features.iter().map(|a| numpy::PyArray2::from_array(py, a)),
-    )
-    .expect("valid list");
-
-    let edges = PyList::new(py, edges.iter().map(|a| numpy::PyArray2::from_array(py, a)))
-        .expect("valid list");
-
-    let feature_spans = PyList::new(
-        py,
-        feature_spans
-            .iter()
-            .map(|a| numpy::PyArray2::from_array(py, a)),
-    )
-    .expect("valid list");
+    let mut ast_embeddings =
+        ndarray_npy::NpzReader::new(Cursor::new(AST_NAME_EMBEDDINGS)).expect("valid read");
+    let emb: ndarray::Array2<f32> = ast_embeddings
+        .by_name("embeddings")
+        .expect("has embeddings");
 
     let codecheck = py.import("codecheck")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dataset", dataset)?;
+    kwargs.set_item("artifact_dir", artifact_dir)?;
+    kwargs.set_item("mode", mode)?;
+    kwargs.set_item("ast_embeddings", numpy::PyArray2::from_array(py, &emb))?;
+    kwargs.set_item("top_k", top_k)?;
+    kwargs.set_item("force_cpu", force_cpu)?;
 
     codecheck
         .getattr(intern!(py, "rust_train"))
         .expect("codecheck module to contain rust entry point")
-        .call1((features, edges, feature_spans, keys))?;
+        .call((), Some(&kwargs))?;
 
     Ok(())
 }

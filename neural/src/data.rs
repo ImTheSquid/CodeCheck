@@ -1,15 +1,22 @@
 use ast::{guess_language_from_path, prune_tree, Language, SyntaxTree};
-use burn::{
-    prelude::Backend,
-    tensor::{Int, Tensor},
-};
+use pythonize::{depythonize, pythonize};
+
 use core::range::Range;
-use ndarray::{array, Array1, Array2, Axis};
+use ndarray::{arr2, array, Array1, Array2, Axis};
+use ndarray_npy::NpzReader;
+use pyo3::{
+    exceptions::{PyFileNotFoundError, PyRuntimeError},
+    pyclass, pymethods, pymodule,
+    types::{PyAnyMethods, PyDict, PyDictMethods, PyList, PyTuple},
+    Bound, IntoPyObject, PyAny, PyRef, PyResult, Python,
+};
+use rand::distr::{Alphanumeric, SampleString};
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
+    env::temp_dir,
     fmt::Display,
-    fs,
+    fs::{self, create_dir_all, remove_dir_all, File},
     path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Weak},
@@ -26,17 +33,7 @@ pub struct RawAstDataset {
     files: Vec<LanguageBoundPath>,
     dataset: MarkDataset,
     base: PathBuf,
-    // self_ref: Weak<Self>,
 }
-
-// impl RawAstDataset {
-//     fn to_arc(mut self) -> Arc<Self> {
-//         Arc::new_cyclic(|d| {
-//             self.self_ref = d.clone();
-//             self
-//         })
-//     }
-// }
 
 impl TryFrom<&Path> for RawAstDataset {
     type Error = DatasetError;
@@ -82,35 +79,6 @@ pub struct LanguageBoundPath {
     path: PathBuf,
 }
 
-// impl LanguageBoundPath {
-//     fn as_ref(&self) -> LanguageBoundPathRef<'_> {
-//         LanguageBoundPathRef {
-//             language: self.language,
-//             path: self.path.as_path(),
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct LanguageBoundPathRef<'a> {
-//     language: Language,
-//     path: &'a Path,
-// }
-
-// pub trait AnyDataset: Send + Sync {
-//     fn num_comps(&self) -> usize;
-
-//     fn train(&self) -> AstDataset<Self>;
-
-//     fn test(&self) -> AstDataset<Self>;
-
-//     fn file(&self, index: usize) -> LanguageBoundPath;
-
-//     fn pair(&self, index: usize) -> Option<&Pair>;
-
-//     fn num_files(&self) -> usize;
-// }
-
 #[derive(Debug, Default, Clone)]
 pub struct CollatedAstDataset {
     files: Vec<LanguageBoundPath>,
@@ -123,6 +91,7 @@ pub struct CompilationOutput {
     pub edges: Vec<Array2<usize>>,
     pub feature_spans: Vec<Array2<usize>>,
     pub dataset: Vec<KeyData>,
+    pub languages: Vec<usize>,
 }
 
 impl CollatedAstDataset {
@@ -164,26 +133,227 @@ impl CollatedAstDataset {
         self.files.extend(dataset.files);
     }
 
+    pub fn compile_to_tmpdir(self) -> Result<TmpDirDataset, DataError> {
+        let tmpdir = temp_dir().join(format!(
+            "dataset-{}",
+            Alphanumeric.sample_string(&mut rand::rng(), 10)
+        ));
+        create_dir_all(&tmpdir)?;
+        let r: Result<Vec<usize>, DataError> = self
+            .files
+            .into_par_iter()
+            .enumerate()
+            .map(|(index, f)| {
+                let bt = build_edges_and_features(&f.path, f.language)?;
+
+                TmpDirDataset::write(&tmpdir, index, &bt.features, &bt.edges, &bt.feature_spans);
+
+                Ok(f.language.id())
+            })
+            .collect();
+
+        let languages = r?;
+
+        Ok(TmpDirDataset {
+            keys: self.dataset,
+            languages: ndarray::Array1::from_vec(languages),
+            dir: tmpdir,
+        })
+    }
+
     pub fn compile(self) -> Result<CompilationOutput, DataError> {
+        use itertools::MultiUnzip;
         #[allow(clippy::type_complexity)]
-        let r: Result<Vec<(Array2<f64>, (Array2<usize>, Array2<usize>))>, DataError> = self
+        let r: Result<Vec<(Array2<f64>, Array2<usize>, Array2<usize>, usize)>, DataError> = self
             .files
             .into_par_iter()
             .map(|f| {
                 let bt = build_edges_and_features(&f.path, f.language)?;
-                Ok((bt.features, (bt.edges, bt.feature_spans)))
+                Ok((bt.features, bt.edges, bt.feature_spans, f.language.id()))
             })
             .collect();
         let r = r?;
-        let (features, edges_and_feature_spans): (_, Vec<_>) = r.into_iter().unzip();
-        let (edges, feature_spans): (Vec<Array2<usize>>, Vec<Array2<usize>>) =
-            edges_and_feature_spans.into_iter().unzip();
+        let (features, edges, feature_spans, languages) = r.into_iter().multiunzip();
+
         Ok(CompilationOutput {
             features,
             edges,
             feature_spans,
             dataset: self.dataset,
+            languages,
         })
+    }
+}
+
+#[pyclass(frozen)]
+pub struct TmpDirDataset {
+    keys: Vec<KeyData>,
+    languages: ndarray::Array1<usize>,
+    dir: PathBuf,
+}
+
+#[pymodule]
+pub mod rust_data {
+    #[pymodule_export]
+    use super::{TmpDirDataset, TransferrableLoader};
+}
+
+impl TmpDirDataset {
+    fn write(
+        dir: &Path,
+        index: usize,
+        features: &ndarray::Array2<f64>,
+        edges: &ndarray::Array2<usize>,
+        feature_spans: &ndarray::Array2<usize>,
+    ) {
+        let f = dir.join(format!("{index}.npz"));
+        let f = File::create(f).expect("file creation");
+        let mut w = ndarray_npy::NpzWriter::new(f);
+        w.add_array("features", &features.mapv(|v| v as f32))
+            .expect("add features");
+        w.add_array("edges", &edges.mapv(|e| e as u64))
+            .expect("add edges");
+        w.add_array("feature_spans", &feature_spans.mapv(|fs| fs as u64))
+            .expect("add feature spans");
+        w.finish().expect("finish writing");
+    }
+
+    pub fn new(compiled: CompilationOutput, dir: PathBuf) -> Self {
+        for i in 0..compiled.features.len() {
+            Self::write(
+                &dir,
+                i,
+                &compiled.features[i],
+                &compiled.edges[i],
+                &compiled.feature_spans[i],
+            );
+        }
+        Self {
+            keys: compiled.dataset,
+            languages: ndarray::Array1::from_vec(compiled.languages),
+            dir,
+        }
+    }
+}
+
+impl Drop for TmpDirDataset {
+    fn drop(&mut self) {
+        let _ = remove_dir_all(&self.dir);
+    }
+}
+
+#[pymethods]
+impl TmpDirDataset {
+    #[getter]
+    pub fn keys<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyDict>> {
+        let keys = PyList::new(
+            py,
+            self.keys.iter().map(|k| {
+                let marks = k
+                    .marks
+                    .iter()
+                    .map(|m| {
+                        [
+                            m.a.start as f64,
+                            m.b.start as f64,
+                            m.a.end as f64,
+                            m.b.end as f64,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+
+                let marks = arr2(&marks);
+
+                let marks = numpy::PyArray2::from_array(py, &marks);
+
+                ((k.a, k.b), marks)
+            }),
+        )?;
+
+        PyDict::from_sequence(&keys)
+    }
+
+    #[getter]
+    pub fn languages<'a>(&self, py: Python<'a>) -> Bound<'a, numpy::PyArray1<usize>> {
+        numpy::PyArray1::from_array(py, &self.languages)
+    }
+
+    pub fn __len__(&self) -> usize {
+        self.languages.len()
+    }
+
+    pub fn get<'a>(&self, py: Python<'a>, i: usize) -> PyResult<Bound<'a, PyDict>> {
+        self.loader().get(py, i)
+    }
+
+    #[getter]
+    pub fn loader(&self) -> TransferrableLoader {
+        TransferrableLoader {
+            dir: self.dir.clone(),
+            len: self.__len__(),
+        }
+    }
+}
+
+#[pyclass(frozen, module = "rust_data")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TransferrableLoader {
+    dir: PathBuf,
+    len: usize,
+}
+
+#[pymethods]
+impl TransferrableLoader {
+    pub fn __len__(&self) -> usize {
+        self.len
+    }
+
+    pub fn get<'a>(&self, py: Python<'a>, i: usize) -> PyResult<Bound<'a, PyDict>> {
+        let path = self.dir.to_path_buf().join(format!("{i}.npz"));
+        if !path.exists() {
+            return Err(PyFileNotFoundError::new_err(format!(
+                "File not found: {}",
+                path.display()
+            )));
+        }
+
+        let f = File::open(path)?;
+        let mut r = NpzReader::new(f).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let f: Array2<f32> = r
+            .by_name("features")
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let f = numpy::PyArray2::from_array(py, &f);
+        let e: Array2<u64> = r
+            .by_name("edges")
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let e = numpy::PyArray2::from_array(py, &e);
+        let fs: Array2<u64> = r
+            .by_name("feature_spans")
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let fs = numpy::PyArray2::from_array(py, &fs);
+
+        let d = PyDict::new(py);
+        d.set_item("features", f)?;
+        d.set_item("edge_index", e)?;
+        d.set_item("feature_spans", fs)?;
+
+        Ok(d)
+    }
+
+    #[staticmethod]
+    fn from_encoded(serialized: &Bound<'_, PyAny>) -> PyResult<Self> {
+        depythonize(serialized).map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn __reduce__<'a>(slf: PyRef<'a, Self>, py: Python<'a>) -> PyResult<Bound<'a, PyTuple>> {
+        let serialized =
+            pythonize(py, &*slf).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        (
+            slf.into_pyobject(py)?.getattr("from_encoded")?,
+            PyTuple::new(py, [serialized])?,
+        )
+            .into_pyobject(py)
     }
 }
 
@@ -344,118 +514,6 @@ where
     })
 }
 
-// impl AnyDataset for CollatedAstDataset {
-//     fn num_comps(&self) -> usize {
-//         self.files.len()
-//     }
-
-//     fn train(&self) -> AstDataset<Self> {
-//         AstDataset {
-//             base: self.self_ref.upgrade().expect("upgrade to allocted"),
-//             range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
-//         }
-//     }
-
-//     fn test(&self) -> AstDataset<Self> {
-//         AstDataset {
-//             base: self.self_ref.upgrade().expect("upgrade to allocted"),
-//             range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
-//         }
-//     }
-
-//     fn file(&self, index: usize) -> LanguageBoundPath {
-//         self.files[index].clone()
-//     }
-
-//     fn pair(&self, index: usize) -> Option<&Pair> {
-//         // self.dataset.get(&index)
-//         unimplemented!()
-//     }
-
-//     fn num_files(&self) -> usize {
-//         self.files.len()
-//     }
-// }
-
-// impl AnyDataset for RawAstDataset {
-//     fn num_comps(&self) -> usize {
-//         self.files.len()
-//     }
-
-//     fn train(&self) -> AstDataset<Self> {
-//         AstDataset {
-//             base: self.self_ref.upgrade().expect("upgrade to allocated"),
-//             range: Range::from(0..(self.num_comps() as f32 * TRAIN_SPLIT) as usize),
-//         }
-//     }
-
-//     fn test(&self) -> AstDataset<Self> {
-//         AstDataset {
-//             base: self.self_ref.upgrade().expect("upgrade to allocated"),
-//             range: Range::from((self.num_comps() as f32 * TRAIN_SPLIT) as usize..self.num_comps()),
-//         }
-//     }
-
-//     fn file(&self, index: usize) -> LanguageBoundPath {
-//         LanguageBoundPath {
-//             path: self.files[index].clone(),
-//             language: self.language,
-//         }
-//     }
-
-//     fn pair(&self, index: usize) -> Option<&Pair> {
-//         self.dataset.pairs.get(&index)
-//     }
-
-//     fn num_files(&self) -> usize {
-//         self.files.len()
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct AstDataset<Base: AnyDataset + ?Sized> {
-//     base: Arc<Base>,
-//     range: Range<usize>,
-// }
-
-// impl<Base: AnyDataset + ?Sized> Dataset<AstDatasetSingle> for AstDataset<Base> {
-//     fn len(&self) -> usize {
-//         self.range.end - self.range.start
-//     }
-
-//     fn get(&self, index: usize) -> Option<AstDatasetSingle> {
-//         if !self.range.contains(&index) {
-//             return None;
-//         }
-
-//         let PairedIndices { i, j } =
-//             find_paired_indices_from_pair_index(index, self.base.num_files());
-
-//         Some(AstDatasetSingle {
-//             a: self.base.file(i),
-//             b: self.base.file(j),
-//             marks: self
-//                 .base
-//                 .pair(index)
-//                 .cloned()
-//                 .map(|p| p.marks)
-//                 .unwrap_or_default(),
-//         })
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct AstDatasetSingle {
-//     a: LanguageBoundPath,
-//     b: LanguageBoundPath,
-//     marks: Vec<Mark>,
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub struct AstBuilder<B: Backend> {
-//     device: B::Device,
-// }
-
 type BatchedTensors = TensorBuildData;
 
 struct TensorBuildData {
@@ -464,190 +522,6 @@ struct TensorBuildData {
     features: Array2<f64>,
     feature_spans: Array2<usize>,
 }
-
-// impl<B: Backend> AstBuilder<B> {
-//     pub fn new(device: B::Device) -> Self {
-//         AstBuilder { device }
-//     }
-// }
-
-// pub const MAX_SPANS: usize = 20;
-// pub const MAX_NODES: usize = 1_000;
-// pub const MAX_FEATURES: usize = 200;
-// pub const MAX_EDGES: usize = MAX_NODES - 1;
-
-// impl<B: Backend> Batcher<B, AstDatasetSingle, AstBatch<B>> for AstBuilder<B> {
-//     fn batch(&self, items: Vec<AstDatasetSingle>) -> AstBatch<B> {
-//         // Read each item in the dataset, loading in all of the files in each batch
-//         // This is gonna take a ton of memory but oh well
-//         struct FeaturePair<B: Backend> {
-//             a: Tensor<B, 2>,
-//             b: Tensor<B, 2>,
-//         }
-//         let num_items = items.len();
-//         let (edges, features, spans): (Vec<_>, Vec<_>, Vec<_>) = itertools::multiunzip(
-//             items
-//                 .into_iter()
-//                 .map(|AstDatasetSingle { a, b, marks }| {
-//                     // Traverse the tree in the default order that syntree does, converting nodes to features
-//                     let BatchedTensors {
-//                         edges: a_edge,
-//                         edges_hash: a_edges_hash,
-//                         features: a_feature,
-//                         num_lines: a_lines,
-//                     } = self
-//                         .build_edges_and_features(a.path.as_path(), a.language)
-//                         .expect("Valid tree build A");
-
-//                     let BatchedTensors {
-//                         edges: b_edge,
-//                         edges_hash: b_edges_hash,
-//                         features: b_feature,
-//                         num_lines: b_lines,
-//                     } = self
-//                         .build_edges_and_features(b.path.as_path(), b.language)
-//                         .expect("Valid tree build B");
-
-//                     let a_lines = a_lines as f32;
-//                     let b_lines = b_lines as f32;
-
-//                     // let edge = Tensor::cat(vec![a_edge, b_edge], 0);
-//                     // let features = Tensor::cat(vec![a_feature, b_feature], 0);
-//                     let features = FeaturePair {
-//                         a: a_feature,
-//                         b: b_feature,
-//                     };
-
-//                     // Load spans
-//                     assert!(
-//                         marks.len() <= MAX_SPANS,
-//                         "Too many marks for files {a:?} {b:?}"
-//                     );
-
-//                     let num_marks = marks.len();
-
-//                     let spans = if num_marks > 0 {
-//                         let marks = marks.iter().map(|m| {
-//                             Tensor::<B, 1>::from_floats(
-//                                 // s_1 s_2 e_1 e_2
-//                                 [
-//                                     m.a.start as f32 / a_lines,
-//                                     m.b.start as f32 / b_lines,
-//                                     (m.a.end as f32 + if m.a.start == m.a.end { 1.0 } else { 0.0 })
-//                                         / a_lines,
-//                                     (m.b.end as f32 + if m.b.start == m.b.end { 1.0 } else { 0.0 })
-//                                         / b_lines,
-//                                 ],
-//                                 &self.device,
-//                             )
-//                         });
-
-//                         let marks = Tensor::stack(marks.collect(), 0);
-
-//                         let padding =
-//                             Tensor::<B, 2>::full([MAX_SPANS - num_marks, 4], -1.0, &self.device);
-
-//                         Tensor::cat(vec![marks, padding], 0)
-//                     } else {
-//                         Tensor::<B, 2>::full([MAX_SPANS, 4], -1.0, &self.device)
-//                     };
-
-//                     ([a_edge, b_edge], features, spans)
-//                 })
-//                 .collect::<Vec<(_, _, _)>>(),
-//         );
-
-//         // Find the maximum values for features and edges, padding each tensor to the correct size
-//         // let max_nodes = features
-//         //     .iter()
-//         //     .map(|t| t.a.dims()[0].max(t.b.dims()[0]))
-//         //     .max()
-//         //     .expect("some max feature value");
-
-//         // let max_edges = edges
-//         //     .iter()
-//         //     .map(|t| t.dims()[0])
-//         //     .max()
-//         //     .expect("some max edges value");
-
-//         // let edges = edges
-//         //     .into_iter()
-//         //     .map(|edge| {
-//         //         if edge.dims()[0] < max_edges {
-//         //             let difference = max_edges - edge.dims()[0];
-//         //             let padding = Tensor::<B, 2, Int>::full([difference, 2], -1, &self.device);
-
-//         //             Tensor::cat(vec![edge, padding], 0)
-//         //         } else {
-//         //             edge
-//         //         }
-//         //         .transpose()
-//         //     })
-//         //     .collect();
-
-//         // fn normalize_to_max_nodes_if_needed<B: Backend>(
-//         //     feature: Tensor<B, 2>,
-//         //     max: usize,
-//         //     device: &B::Device,
-//         // ) -> Tensor<B, 2> {
-//         //     if feature.dims()[0] < max {
-//         //         let difference = max - feature.dims()[0];
-//         //         let padding = Tensor::<B, 2>::full([difference, MAX_FEATURES], 0.0, device);
-
-//         //         Tensor::cat(vec![feature, padding], 0)
-//         //     } else {
-//         //         feature
-//         //     }
-//         // }
-
-//         let mut offset = 0_i64;
-//         let mut output = Vec::with_capacity(edges.len());
-//         for edge_tensor in edges.into_iter().flatten() {
-//             let next_offset = edge_tensor.dims()[1] as i64;
-//             output.push(edge_tensor.add_scalar(offset));
-//             offset += next_offset;
-//         }
-
-//         let edges = Tensor::cat(output, 1);
-
-//         let features: Vec<_> = features
-//             .into_iter()
-//             .flat_map(|feature| [feature.a, feature.b])
-//             .collect();
-
-//         assert_eq!(features.len(), num_items * 2, "Feature data lost!");
-
-//         // Create the graph index array
-//         // Each graph node will have an associated item in this tensor such that for some node N_i,
-//         // graph[N_i] = graph index it came from
-//         // To get the pair index, do N_i // 2
-//         let graph_feature_indices = features
-//             .iter()
-//             .enumerate()
-//             .map(|(i, feature)| {
-//                 Tensor::<B, 1, Int>::full([feature.dims()[0]], i as u64, &self.device)
-//             })
-//             .collect::<Vec<_>>();
-
-//         let graph_feature_indices = Tensor::cat(graph_feature_indices, 0);
-
-//         assert!(
-//             graph_feature_indices
-//                 .clone()
-//                 .greater_elem(0)
-//                 .any()
-//                 .into_scalar(),
-//             "Graph feature indices all zero!"
-//         );
-
-//         AstBatch {
-//             edges,
-//             features: Tensor::cat(features, 0),
-//             spans: Tensor::stack(spans, 0),
-//             graph_feature_indices,
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub enum InvalidCharacterMapSpanPartDesignator {
@@ -678,16 +552,4 @@ pub enum DataError {
         character_index: usize,
         designator: InvalidCharacterMapSpanPartDesignator,
     },
-}
-
-/// Represents a batch of ASTs for training
-#[derive(Debug, Clone)]
-pub struct AstBatch<B: Backend> {
-    /// [E, 2]
-    pub edges: Tensor<B, 2, burn::tensor::Int>,
-    /// [N, F]
-    pub features: Tensor<B, 2>,
-    /// [batch_size, MAX_SPANS, 4]
-    pub spans: Tensor<B, 3>,
-    pub graph_feature_indices: Tensor<B, 1, Int>,
 }

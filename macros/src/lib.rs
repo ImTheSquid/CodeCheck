@@ -72,9 +72,8 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             let name_str = name.to_string();
 
             let parser_rule = name_str.split_once('_').unwrap().1.to_string();
-            let mut parser_rule_chars = parser_rule.chars().collect::<Vec<_>>();
-            parser_rule_chars[0] = parser_rule_chars[0].to_ascii_uppercase();
-            let pascal_case_parser_rule: String = parser_rule_chars.into_iter().collect();
+            use convert_case::{Case, Casing};
+            let pascal_case_parser_rule: String = parser_rule.to_case(Case::Pascal);
             let pascal_case_parser_rule: Ident = syn::parse_str(&pascal_case_parser_rule).unwrap();
 
             pascal_case_parser_rule
@@ -111,7 +110,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     let trait_name = &visitor_trait.ident;
     let trait_name: Ident = syn::parse_str(&format!("{trait_name}Compat")).unwrap();
     let res = quote! {
-        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr, ::strum::VariantNames)]
         pub enum #tree_enum {
             #(#generated_enum_cases),*
         }

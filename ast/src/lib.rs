@@ -92,6 +92,15 @@ impl Language {
         }
     }
 
+    pub fn id(&self) -> usize {
+        match self {
+            Language::C => 0,
+            Language::Cpp => 1,
+            Language::Java => 2,
+            Language::Python => 3,
+        }
+    }
+
     /// Returns leading and trailing padding for the language
     pub fn padding(&self) -> (usize, usize) {
         let mut leading_sum = 0;

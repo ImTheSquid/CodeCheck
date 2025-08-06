@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Bernoulli
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.nn.norm.batch_norm import BatchNorm
+from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
 
@@ -58,12 +58,18 @@ def find_closest_surviving_node(
 
             # Find neighbors
             # Neighbors for which `node` is a source
-            source_neighbors = pre_pool_edge_index[1, pre_pool_edge_index[0] == node]
+            source_neighbors = pre_pool_edge_index[
+                1, pre_pool_edge_index[0] == node
+            ]
             # Neighbors for which `node` is a target
-            target_neighbors = pre_pool_edge_index[0, pre_pool_edge_index[1] == node]
+            target_neighbors = pre_pool_edge_index[
+                0, pre_pool_edge_index[1] == node
+            ]
 
             # Do target neighbors first to work up the tree
-            for neighbor in torch.cat([target_neighbors, source_neighbors]).tolist():
+            for neighbor in torch.cat(
+                [target_neighbors, source_neighbors]
+            ).tolist():
                 if neighbor not in visited:
                     # print(f"NEIGHBOR {neighbor}")
                     queue.append(neighbor)
@@ -100,20 +106,30 @@ class Actor(nn.Module):
 
         for i in range(self.num_layers):
             self.gats.append(
-                GATv2Conv(dims[i], dims[i + 1], heads=num_heads[i], concat=False)
+                GATv2Conv(
+                    dims[i] * (num_heads[i - 1] if i > 0 else 1),
+                    dims[i + 1],
+                    heads=num_heads[i],
+                )
             )
-            self.norms.append(BatchNorm(dims[i + 1]))
+            self.norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
             # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
             self.policy_heads.append(
                 nn.Sequential(
+                    nn.Linear(dims[i + 1] * num_heads[i], dims[i + 1]),
+                    nn.GELU(),
                     nn.Linear(dims[i + 1], dims[i + 1] // 2),
-                    nn.ReLU(),
-                    nn.Linear(dims[i + 1] // 2, dims[i + 1] // 4),
-                    nn.ReLU(),
+                    nn.GELU(),
                     nn.Dropout(p=selection_dropout),
+                    nn.Linear(dims[i + 1] // 2, dims[i + 1] // 4),
+                    nn.GELU(),
                     nn.Linear(dims[i + 1] // 4, 1),
                 )
             )  # Node selection score
+
+        self.reducer = nn.Sequential(
+            nn.Linear(dims[-1] * num_heads[-1], dims[-1]), nn.GELU()
+        )
 
     def compute_depths(self, edge_index, batch):
         num_nodes = batch.size(0)
@@ -162,7 +178,9 @@ class Actor(nn.Module):
         probabilities: torch.Tensor,
     ) -> torch.Tensor:
         # Compute node degree (per node)
-        deg = degree(edge_index[0], x.size(0), dtype=x.dtype)  # size: [num_nodes]
+        deg = degree(
+            edge_index[0], x.size(0), dtype=x.dtype
+        )  # size: [num_nodes]
 
         # Optional: normalize per graph
         centrality_prior = torch.zeros_like(deg)
@@ -182,9 +200,9 @@ class Actor(nn.Module):
             )
             centrality_prior[mask] = gaussian
 
-        prior = self.beta * centrality_prior + (1 - self.beta) * self.compute_depths(
-            edge_index, batch
-        )
+        prior = self.beta * centrality_prior + (
+            1 - self.beta
+        ) * self.compute_depths(edge_index, batch)
 
         # Mix centrality bias with learnable policy
         return self.alpha * probabilities + (1 - self.alpha) * prior
@@ -224,7 +242,9 @@ class Actor(nn.Module):
         all_nodes = torch.arange(merge_map.shape[0], device=merge_map.device)
         not_yet_merged = merge_map == all_nodes
         removed_this_layer = ~torch.isin(all_nodes, perm)
-        removed_node_indices = torch.where(not_yet_merged & removed_this_layer)[0]
+        removed_node_indices = torch.where(not_yet_merged & removed_this_layer)[
+            0
+        ]
         # removed_node_indices = torch.where(~torch.isin(all_nodes, perm))[0]
         perm_set = set(perm.tolist())
         print(
@@ -285,12 +305,15 @@ class Actor(nn.Module):
         for node_index in removed_node_indices.tolist():
             removed_node_graph_id = batch[node_index]
             surviving_node = find_closest_surviving_node(node_index)
-            assert surviving_node in perm or surviving_node == -1, "BFS did not work"
+            assert surviving_node in perm or surviving_node == -1, (
+                "BFS did not work"
+            )
             new_merge_map[node_index] = surviving_node
 
             surviving_node_graph_id = perm_to_batch[surviving_node]
             assert (
-                surviving_node_graph_id == removed_node_graph_id or surviving_node == -1
+                surviving_node_graph_id == removed_node_graph_id
+                or surviving_node == -1
             ), (
                 f"CROSSOVER DETECTED: Node association {node_index} -> {surviving_node} crosses graph boundary {removed_node_graph_id.item()} -> {surviving_node_graph_id.item()}"
             )
@@ -333,6 +356,7 @@ class Actor(nn.Module):
         for i in range(self.num_layers):
             # 1) GAT + score
             x = self.gats[i](x, edge_index)
+            x = F.relu(x)
             x = self.norms[i](x)
             logits = self.policy_heads[i](x).squeeze(-1)
             probs = torch.sigmoid(logits)
@@ -384,7 +408,9 @@ class Actor(nn.Module):
             perm_set = set(perm.tolist())
             # 6) For each removed local node, find its BFS‐nearest surviving *local* node:
             for loc in removed_local.tolist():
-                rep_loc = find_closest_surviving_node(loc, pre_edge_index, perm_set)
+                rep_loc = find_closest_surviving_node(
+                    loc, pre_edge_index, perm_set
+                )
                 rep_glob = pre_global_map[rep_loc]
                 orig = pre_global_map[loc]
                 merge_map[orig] = rep_glob
@@ -397,6 +423,8 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
+        x = self.reducer(x)
+
         # Sanity check
         end_num_graphs = torch.unique(batch).shape[0]
         assert start_num_graphs == end_num_graphs, (
@@ -405,7 +433,9 @@ class Actor(nn.Module):
 
         # All graphs have now been processed. It should theoretically be impossible for any graph to have
         # nodes that failed to find a survivor.
-        assert not torch.any(merge_map == -1), "Some nodes failed to find a survivor!"
+        assert not torch.any(merge_map == -1), (
+            "Some nodes failed to find a survivor!"
+        )
 
         logp_total = torch.cat(logp_terms).sum()
 
