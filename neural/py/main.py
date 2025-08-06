@@ -34,6 +34,8 @@ DEVICE = torch.device(
     else "cpu"
 )
 
+DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
+
 
 BYTES_TO_GB = 1024**3
 
@@ -932,10 +934,10 @@ def train_embeddings(
         train_set,  # type: ignore
         batch_size=80,
         shuffle=True,
-        num_workers=10,
+        num_workers=DATA_WORKERS,
     )
-    val_data = DataLoader(val_set, batch_size=100, num_workers=10)  # type: ignore
-    test_data = DataLoader(test_set, batch_size=100, num_workers=10)  # type: ignore
+    val_data = DataLoader(val_set, batch_size=100, num_workers=DATA_WORKERS)  # type: ignore
+    test_data = DataLoader(test_set, batch_size=100, num_workers=DATA_WORKERS)  # type: ignore
 
     LANG_LOSS_SCALE = 2.0
     TRIPLET_LOSS_SCALE = 4.0
