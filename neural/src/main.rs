@@ -1,5 +1,5 @@
 use std::{
-    env::{self, args, args_os},
+    env::{self, args_os},
     ffi::CString,
     path::PathBuf,
     str::FromStr,
