@@ -2,11 +2,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use std::{
-    ffi::{CStr, CString},
-    io::Cursor,
-    path::PathBuf,
-};
+use std::{ffi::CString, io::Cursor, path::PathBuf};
 
 use mimalloc::MiMalloc;
 use pyo3::{

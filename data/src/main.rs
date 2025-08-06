@@ -208,10 +208,7 @@ async fn main() -> Result<()> {
         .iter()
         .any(|m| m.name == model_name.as_str())
     {
-        println!(
-            "Model \"{}\" not found locally, attempting to pull.",
-            model_name
-        );
+        println!("Model \"{model_name}\" not found locally, attempting to pull.",);
         ollama.pull_model(model_name.clone(), false).await?;
     }
 
