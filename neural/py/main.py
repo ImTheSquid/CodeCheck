@@ -1201,7 +1201,9 @@ def rust_train(
     match mode:
         case "embed-test":
             embedder = torch.load(
-                artifact_dir / "embeddings.pt", weights_only=False
+                artifact_dir / "embeddings.pt",
+                weights_only=False,
+                map_location=DEVICE,
             )
             with torch.no_grad():
                 test_embeddings(
@@ -1238,7 +1240,9 @@ def rust_train(
             if os.path.exists(artifact_dir / "embeddings.pt"):
                 print("Loading embeddings model into memory")
                 embedder = torch.load(
-                    artifact_dir / "embeddings.pt", weights_only=False
+                    artifact_dir / "embeddings.pt",
+                    weights_only=False,
+                    map_location=DEVICE,
                 )
 
             actor = Actor(
