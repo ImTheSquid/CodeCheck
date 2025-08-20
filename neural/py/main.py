@@ -1085,7 +1085,9 @@ def train_embeddings(
     torch.save(embedder.embedding_model, artifact_dir / "embeddings.pt")
 
 
-def test_embeddings(embedder: nn.Module, dataset: Dataset, artifact_dir: Path):
+def test_embeddings(
+    embedder: nn.Module, dataset: Dataset, artifact_dir: Path, perplexity: int
+):
     import datetime
 
     import matplotlib.pyplot as plt
@@ -1114,7 +1116,7 @@ def test_embeddings(embedder: nn.Module, dataset: Dataset, artifact_dir: Path):
 
         labels = np.array(["C", "C++", "Java", "Python"])[labels]
 
-        tsne = TSNE(n_components=3, perplexity=30)
+        tsne = TSNE(n_components=3, perplexity=perplexity)
         X_tsne = tsne.fit_transform(embeddings.cpu())
         df = pd.DataFrame(
             {
@@ -1210,6 +1212,7 @@ def rust_train(
                     embedder=embedder,
                     dataset=dataset,
                     artifact_dir=artifact_dir,
+                    perplexity=25,
                 )
         case "embed":
             print(
