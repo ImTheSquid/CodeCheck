@@ -43,6 +43,7 @@ mod python_files {
     pub const CRITIC: &CStr = c_str!(include_str!("../py/critic.py"));
     pub const GRAPHHAM: &CStr = c_str!(include_str!("../py/graphham.py"));
     pub const EMBEDDING: &CStr = c_str!(include_str!("../py/embedding.py"));
+    pub const UTILS: &CStr = c_str!(include_str!("../py/utils.py"));
 }
 
 #[allow(unused)]
@@ -123,6 +124,8 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         "Sanity check failed: PyTorch not found! Ensure a virtual environment is present with the necessary packages."
     );
 
+    PyModule::from_code(py, python_files::UTILS, c_str!("utils.py"), c_str!("utils"))
+        .expect("Import utils");
     PyModule::from_code(py, python_files::ACTOR, c_str!("actor.py"), c_str!("actor"))
         .expect("Import actor");
     PyModule::from_code(

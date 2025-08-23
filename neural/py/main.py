@@ -20,11 +20,12 @@ from torch.utils.data.dataset import Dataset
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
-from torch_geometric.utils import k_hop_subgraph, subgraph
+from torch_geometric.utils import subgraph
 
 from actor import Actor
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
+from utils import actor_critic_loss
 
 DEVICE = torch.device(
     "cuda"
@@ -122,205 +123,6 @@ def find_relevant_keys_for_clustering(
     return out
 
 
-def diou_loss_1d(a: NDArray, b: NDArray) -> NDArray:
-    EPSILON = 1e-6
-
-    if a.ndim == 1:
-        a = np.expand_dims(a, 0)
-    if b.ndim == 1:
-        b = np.expand_dims(b, 0)
-
-    assert a.ndim == 2 and b.ndim == 2 and a.shape[1] == b.shape[1] == 2, (
-        f"Bad data: a: {a.shape} b: {b.shape}"
-    )
-    a, b = np.broadcast_arrays(a, b)
-
-    a_center = np.mean(a, axis=1)
-    b_center = np.mean(b, axis=1)
-    dist_sq = (a_center - b_center) ** 2
-    farthest_end = np.max(
-        np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1
-    )
-    closest_start = np.min(
-        np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1
-    )
-    outer_distance_sq = (farthest_end - closest_start) ** 2
-
-    start = np.max(np.hstack([a[:, 0][:, None], b[:, 0][:, None]]), axis=1)
-    end = np.min(np.hstack([a[:, 1][:, None], b[:, 1][:, None]]), axis=1)
-    valid = start < end
-    intersection = np.hstack((start[:, None], end[:, None]))
-    intersection[~valid] = 0
-    intersection = np.diff(intersection, axis=1)
-    union = (np.diff(a, axis=1) + np.diff(b, axis=1)) - intersection
-    iou = intersection / (union + EPSILON)
-
-    return 1.0 - iou.squeeze(1) + dist_sq / (outer_distance_sq + EPSILON)
-
-
-def find_closest_mapping_index(line_mappings: NDArray, target: NDArray) -> int:
-    return np.argmin(diou_loss_1d(line_mappings, target)).astype(int)
-
-
-def diou_loss(
-    line_mappings: NDArray,
-    edge_index: NDArray,
-    batch: NDArray,
-    keys: NDArray,
-    key_batch_associations: NDArray,
-    k: int = 5,
-    decay_alpha: float = 0.5,
-    log_transform_diou: bool = True,
-):
-    """
-    Calculates DIoU loss for the closest node in the graph to each key (based on DIoU) and fans out `k` hops
-    with decay `decay_alpha`
-    """
-
-    assert line_mappings.shape[0] == batch.shape[0], (
-        f"line_mappings.shape[0] ({line_mappings.shape[0]}) != batch.shape[0] ({batch.shape[0]})"
-    )
-    num_nodes = line_mappings.shape[0]
-
-    # Shuffle keys to make it slightly more stochastic
-    np.random.shuffle(keys)
-    # Find the absolute best nodes (lowest DIoU loss) for each key
-    best_node_indices = []
-    for i, key in enumerate(keys):
-        mask = batch == key_batch_associations[i]
-        map_to_original = np.arange(batch.shape[0])[mask]
-        best_node_indices.append(
-            map_to_original[
-                find_closest_mapping_index(line_mappings[mask], key)
-            ]
-        )
-        # print(f'Best index for {key} is {best_node_indices[-1]} (with value {line_mappings[best_node_indices[-1]]}) from \n {line_mappings[mask]} w/loss\n {diou_loss_1d(line_mappings[mask], key)}')
-
-    # Do k hop subgraph for each key, assigning the DIoU to each node in the graph
-    edge_index: Tensor = torch.tensor(edge_index)
-    subset, edge_index, mapping, edge_mask = k_hop_subgraph(
-        best_node_indices,
-        num_hops=k,
-        edge_index=edge_index,
-        num_nodes=num_nodes,
-    )
-
-    # Always want to add DIoU loss since multiple spans can be close enough to eachother for them to overlap
-
-    # ChatGPT made this
-    def decay_fn(depth: int):
-        return decay_alpha**depth
-
-    # Initialize full loss vector (global node indices)
-    losses_full = torch.zeros(num_nodes, dtype=torch.float)
-
-    # Build adjacency list for full graph
-    adj = [[] for _ in range(num_nodes)]
-    for src, dst in edge_index.t().tolist():
-        adj[src].append(dst)
-        adj[dst].append(src)  # if undirected
-
-    # Propagate DIoU loss from each source node
-    for i, node_index in enumerate(best_node_indices):
-        diou_val = torch.tensor(
-            diou_loss_1d(line_mappings[node_index], keys[i])
-        )
-        if log_transform_diou:
-            diou_val = torch.log(diou_val + 1e-8)
-        # print(f'Loss for node {node_index} is {diou_val} using {line_mappings[node_index]} and {keys[i]}')
-
-        visited = set()
-        queue = deque()
-        queue.append((node_index, 0))  # (current_node, depth)
-
-        while queue:
-            current, depth = queue.popleft()
-            if current in visited or depth > k:
-                continue
-            visited.add(current)
-
-            losses_full[current] += diou_val.sum(dim=0) * decay_fn(depth)
-
-            if depth < k:
-                for neighbor in adj[current]:
-                    if neighbor not in visited:
-                        queue.append((neighbor, depth + 1))
-
-    return losses_full
-
-
-def create_line_number_mappings(
-    merge_map: NDArray, original_line_mappings: NDArray
-) -> NDArray:
-    """
-    Takes the `merge_map` of shape `[N]` generated by the model run and `original_line_mappings` of shape `[N, 2]`
-    Uses an iterative algorithm to determine merges for each item in the merge map.
-    The returned tensor contains the feature and it's start and end line numbers
-    """
-    assert merge_map.shape[0] == original_line_mappings.shape[0], (
-        "Invalid arrays!"
-    )
-    num_features = np.unique(merge_map).shape[0]
-    # assert num_features <= merge_map.shape[0], "Num features must be lte size of merge map"
-    line_mappings = np.zeros([num_features, 2], dtype=np.long)
-    # print(f'Original merge map size {merge_map.shape}')
-    # print(f'Made line mappings {line_mappings.shape}')
-    # The lookup key is the target merge, the values are all nodes that were merged into it
-    lookup = {}
-    for i, itm in enumerate(merge_map.tolist()):
-        if itm in lookup:
-            lookup[itm].append(i)
-        else:
-            lookup[itm] = [i]
-
-    for target, values in lookup.items():
-        min_num = 999999999
-        max_num = -1
-        for merge_src in values:
-            row = original_line_mappings[merge_src]
-            low = row[0]
-            high = row[1]
-            min_num = min(min_num, low)
-            max_num = max(max_num, high)
-
-        line_mappings[target] = np.array([min_num, max_num])
-
-    return line_mappings
-
-
-def recombine_per_graph_spans(
-    batch: NDArray,  # [N] graph‐ID per pooled node
-    recovered_per_graph: list[
-        NDArray
-    ],  # list of [n_g,2] arrays, one per graph in same order
-    selected_indices_for_batch,
-) -> NDArray:
-    """
-    Given:
-      - batch:           length‐N array, batch[i] = graph‐ID of node i
-      - recovered_per_graph[k]: array [n_k,2] for graph k,
-         in the same order as your `for (pid, graph) in selected_indices`
-    Returns:
-      - full_spans: np.ndarray of shape [N,2],
-         where full_spans[i] is the span for node i.
-    """
-    N = batch.shape[0]
-    full_spans = np.zeros((N, 2), dtype=recovered_per_graph[0].dtype)
-
-    # Suppose your graph‐loop was in this order:
-    #   for idx, (pid, graph) in enumerate(selected_indices_for_batch):
-    for idx, (_, graph) in enumerate(selected_indices_for_batch):
-        mask = batch == graph  # boolean mask of shape [N]
-        spans = recovered_per_graph[idx]  # shape [mask.sum(), 2]
-        # sanity check:
-        assert spans.shape[0] == mask.sum(), (
-            f"Spans don't match mask: ({spans.shape[0]} != {mask.sum()})"
-        )
-        full_spans[mask] = spans  # broadcast assign into those rows
-
-    return full_spans
-
-
 def mean_pool_same_lines(
     x: NDArray, batch: NDArray, lines: NDArray
 ) -> tuple[NDArray, NDArray, NDArray]:
@@ -342,60 +144,6 @@ def mean_pool_same_lines(
     batch_lines = np.vstack(batch_lines)
 
     return meaned, batch_lines[:, 2], batch_lines[:, :2]
-
-
-def calculate_line_spans(
-    merge_map: NDArray,
-    selected_indices_for_batch: list[tuple[int, int]],
-    selected_line_assignments_for_batch: NDArray,
-    batch: NDArray,
-    perm: NDArray,
-):
-    line_spans = []
-
-    for _persistent_id, graph in selected_indices_for_batch:
-        mask = batch == graph  # select survivors of that graph
-        local_pos = np.nonzero(mask)[
-            0
-        ]  # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
-
-        assert local_pos.size != 0, "Graphs should never be fully removed"
-
-        global_nodes = perm[
-            local_pos
-        ]  # now these are the true original indices
-
-        # pull out their merge_map entries in the global map:
-        merge_map_for_graph = merge_map[global_nodes]
-
-        # now you have numbers in the range 0..N₀–1, but only for this graph’s survivors
-        # if you need them 0..N_graph–1, remap:
-        uniques = np.unique(merge_map_for_graph)
-        remap = {orig: i for i, orig in enumerate(uniques)}
-        merge_map_for_graph = np.array([remap[v] for v in merge_map_for_graph])
-
-        # and likewise your line spans:
-        line_assignments_for_graph = selected_line_assignments_for_batch[
-            global_nodes
-        ]
-
-        recovered_assignments = create_line_number_mappings(
-            merge_map_for_graph, line_assignments_for_graph
-        )
-
-        # Build per-node spans:
-        node_spans = recovered_assignments[merge_map_for_graph]
-
-        # assert nodes[mask].shape[0] == node_spans.shape[0], (
-        #     f"Nodes for graph don't match assignments! {nodes[mask].shape[0]} != {recovered_assignments.shape[0]}"
-        # )
-        line_spans.append(node_spans)
-
-    # assert line_spans.shape[0] == nodes.shape[0], "Nodes don't match line assignments!"
-
-    return recombine_per_graph_spans(
-        batch, line_spans, selected_indices_for_batch
-    )
 
 
 def cluster_and_calculate_reward(
@@ -605,30 +353,28 @@ def train(
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
 
-            x = embedder(batch.x, batch.edge_index)
+            # x = embedder(batch.x, batch.edge_index)
 
-            (
-                a_x,
-                a_edge_index,
-                merge_map,
-                a_batch,
-                a_perm,
-                a_logp_sum,
-                a_logp_last,
-            ) = actor(x, batch.edge_index, batch.batch)
+            # (
+            #     a_x,
+            #     a_edge_index,
+            #     merge_map,
+            #     a_batch,
+            #     a_perm,
+            #     a_logp_sum,
+            #     a_logp_last,
+            #     transitions,
+            # ) = actor(x, batch.edge_index, batch.batch)
 
             # pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
 
-            line_spans = calculate_line_spans(
-                merge_map=merge_map.cpu().numpy(),
-                selected_indices_for_batch=persistent_to_batch_id_map,
-                batch=a_batch.cpu().numpy(),
-                perm=a_perm.cpu().numpy(),
-                selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
-            )
-            assert line_spans.shape[0] == a_batch.shape[0], (
-                f"line_spans.shape[0] ({line_spans.shape[0]}) != a_batch.shape[0] ({a_batch.shape[0]})"
-            )
+            # line_spans = calculate_line_spans(
+            #     merge_map=merge_map.cpu().numpy(),
+            #     selected_indices_for_batch=persistent_to_batch_id_map,
+            #     batch=a_batch.cpu().numpy(),
+            #     perm=a_perm.cpu().numpy(),
+            #     selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
+            # )
 
             # reward = cluster_and_calculate_reward(
             #     nodes=a_x.cpu().detach().numpy(),
@@ -660,28 +406,28 @@ def train(
                         )
 
             # TODO: Deduplicate keys_1d
-            diou_l = diou_loss(
-                line_mappings=line_spans,
-                edge_index=a_edge_index.cpu().numpy(),
-                batch=a_batch.cpu().numpy(),
-                keys=np.vstack(keys_1d),
-                key_batch_associations=np.vstack(key_batch).squeeze(1),
-                k=10,
-                decay_alpha=0.7,
-            )
-            diou_l = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
-            diou_l = diou_l.to(DEVICE)
+            # diou_l = diou_loss(
+            #     line_mappings=line_spans,
+            #     edge_index=a_edge_index.cpu().numpy(),
+            #     batch=a_batch.cpu().numpy(),
+            #     keys=np.vstack(keys_1d),
+            #     key_batch_associations=np.vstack(key_batch).squeeze(1),
+            #     k=10,
+            #     decay_alpha=0.7,
+            # )
+            # diou_l = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
+            # diou_l = diou_l.to(DEVICE)
 
-            together = torch.cat(
-                [a_x.detach(), a_logp_last.detach().unsqueeze(1)], dim=1
-            )
+            # together = torch.cat(
+            #     [a_x.detach(), a_logp_last.detach().unsqueeze(1)], dim=1
+            # )
 
-            pred_diou_l = critic(together, a_edge_index, a_batch)
+            # pred_diou_l = critic(together, a_edge_index, a_batch)
 
-            critic_loss = F.mse_loss(pred_diou_l.squeeze(1), diou_l)
-            critic_optim.zero_grad()
-            critic_loss.backward()
-            critic_optim.step()
+            # critic_loss = F.mse_loss(pred_diou_l.squeeze(1), diou_l)
+            # critic_optim.zero_grad()
+            # critic_loss.backward()
+            # critic_optim.step()
 
             # advantage = (reward - pred_reward).detach()
             # actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
@@ -695,14 +441,86 @@ def train(
             # critic_loss.backward()
             # critic_optim.step()
 
-            advantage = diou_l.detach() - pred_diou_l.detach().squeeze(1)
-            actor_loss = -(advantage * a_logp_sum).mean()
-            actor_optim.zero_grad()
-            actor_loss.backward()
-            actor_optim.step()
+            # advantage = diou_l.detach() - pred_diou_l.detach().squeeze(1)
+            # actor_loss = -(advantage * a_logp_sum).mean()
+            # actor_optim.zero_grad()
+            # actor_loss.backward()
+            # actor_optim.step()
 
-            total_actor_loss += actor_loss
-            total_critic_loss += critic_loss
+            # total_actor_loss += actor_loss
+            # total_critic_loss += critic_loss
+
+            # BEGIN NEW CODE
+
+            # ---- 1. Actor forward, get actions & logp ----
+            (
+                a_x,
+                a_edge_index,
+                merge_map,
+                a_batch,
+                a_perm,
+                a_logp_last,
+                transitions,
+            ) = actor(
+                embedder(batch.x, batch.edge_index),
+                batch.edge_index,
+                batch.batch,
+                key_batch,
+                keys_1d,
+                persistent_to_batch_id_map,
+                selected_spans,
+            )
+            # a_logp_sum: [N] – log‑prob of the chosen action for each node
+            # a_batch:    [N] – graph ID of each node
+            actor_loss, critic_loss = actor_critic_loss(
+                transitions,
+                gamma=0.99,
+                lam=0.95,
+                entropy_coef=0.01,
+            )
+
+            # ---- 2. Compute reward per graph ----
+            # line_spans = calculate_line_spans(
+            #     merge_map=merge_map.cpu().numpy(),
+            #     selected_indices_for_batch=persistent_to_batch_id_map,
+            #     batch=a_batch.cpu().numpy(),
+            #     perm=a_perm.cpu().numpy(),
+            #     selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
+            # )
+            # assert line_spans.shape[0] == a_batch.shape[0], (
+            #     f"line_spans.shape[0] ({line_spans.shape[0]}) != a_batch.shape[0] ({a_batch.shape[0]})"
+            # )
+            # # 2.1 compute DIoU loss (node‑wise)
+            # diou_l = diou_loss(
+            #     line_mappings=line_spans,  # build as in your original code
+            #     edge_index=a_edge_index.cpu().numpy(),
+            #     batch=a_batch.cpu().numpy(),
+            #     keys=np.vstack(keys_1d),
+            #     key_batch_associations=np.vstack(key_batch).squeeze(1),
+            #     k=10,
+            #     decay_alpha=0.7,
+            # ).to(DEVICE)
+
+            # reward_g = compute_reward(diou_l, a_batch)  # [G]
+
+            # # ---- 5. Compute actor & critic loss ----
+            # actor_loss, critic_loss = actor_critic_loss(transitions, batch)
+
+            # ---- 6. Optimisation step ----
+            total_loss = actor_loss + critic_loss
+            actor_optim.zero_grad()
+            critic_optim.zero_grad()
+
+            total_loss.backward()
+
+            actor_optim.step()
+            critic_optim.step()
+
+            total_actor_loss += actor_loss.item()
+            total_critic_loss += critic_loss.item()
+
+            # END NEW CODE
+
             print(
                 "*" * 10
                 + f"\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
@@ -800,8 +618,6 @@ def get_projections_and_targets_for_each_batch(proj, batch, cache: Cache):
             # Traverse
             preorder = preorder_traversal(subgraph_edge_index, roots[0])
             cache[batch_to_persistent_id_map[int(batch_id)]] = preorder
-
-        from collections import deque
 
         def window(seq, n=2):
             it = iter(seq)
@@ -1241,24 +1057,27 @@ def rust_train(
                 )
         case "train":
             if os.path.exists(artifact_dir / "embeddings.pt"):
-                print("Loading embeddings model into memory")
+                print("📡 Loading embeddings model into memory")
                 embedder = torch.load(
                     artifact_dir / "embeddings.pt",
                     weights_only=False,
                     map_location=DEVICE,
                 )
 
+            critic = MergeCritic(
+                in_dim=304 // 2 * 4, hidden_dim_generator=lambda d: d // 2
+            ).to(DEVICE)
             actor = Actor(
-                in_dim=12,
-                hidden_dims=[12, 12, 12, 10, 10],
-                num_heads=[4, 4, 4, 4, 4],
+                in_dim=304,
+                hidden_dims=[304 // 2] * 5 + [304],
+                num_heads=[4] * 5 + [1],
+                critic=critic,
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
                 alpha=0.5,
                 beta=0.7,
                 selection_dropout=0.2,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
-            critic = MergeCritic(in_dim=11, hidden_dim=10).to(DEVICE)
 
             train(
                 dataset,

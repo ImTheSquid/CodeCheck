@@ -1,12 +1,16 @@
 from collections import deque
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from numpy._typing import NDArray
 from torch.distributions import Bernoulli
 from torch_geometric.nn import GATv2Conv
 from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
+
+from utils import Transition, calculate_line_spans, compute_reward, diou_loss
 
 
 def find_closest_surviving_node(
@@ -53,7 +57,7 @@ class Actor(nn.Module):
         in_dim: int,
         hidden_dims: list[int],
         num_heads: list[int],
-        # pool_ratios: list[float],
+        critic: nn.Module,
         selection_dropout: float = 0.3,
         alpha: float = 0.5,
         beta: float = 0.5,
@@ -71,6 +75,7 @@ class Actor(nn.Module):
         self.policy_heads = nn.ModuleList()
         self.alpha = alpha
         self.beta = beta
+        self.critic = critic
 
         dims = [in_dim] + hidden_dims
 
@@ -83,6 +88,7 @@ class Actor(nn.Module):
                 )
             )
             self.norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
+
             # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
             self.policy_heads.append(
                 nn.Sequential(
@@ -182,6 +188,10 @@ class Actor(nn.Module):
         x: torch.Tensor,
         edge_index: torch.Tensor,
         batch: torch.Tensor,
+        key_batch: list[int],
+        keys_1d: list[NDArray],
+        persistent_to_batch_id_map: list[tuple[int, int]],
+        selected_spans: NDArray,
     ):
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
@@ -194,6 +204,8 @@ class Actor(nn.Module):
 
         logp_terms = []
         logp_last = None
+
+        transitions = []
 
         for i in range(self.num_layers):
             # 1) GAT + score
@@ -265,6 +277,36 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
+            predicted_reward = self.critic(x, edge_index, batch)
+
+            line_spans = calculate_line_spans(
+                merge_map=merge_map.cpu().numpy(),
+                selected_indices_for_batch=persistent_to_batch_id_map,
+                batch=batch.cpu().numpy(),
+                perm=perm.cpu().numpy(),
+                selected_line_assignments_for_batch=selected_spans,
+            )
+
+            diou_l = diou_loss(
+                line_mappings=line_spans,
+                edge_index=edge_index.cpu().numpy(),
+                batch=batch.cpu().numpy(),
+                keys=np.vstack(keys_1d),
+                key_batch_associations=np.vstack(key_batch).squeeze(1),
+                k=10,
+                decay_alpha=0.7,
+            ).to(x.device)
+
+            reward_g = compute_reward(diou_l, batch)  # [G]
+
+            transition = Transition(
+                logp=logp_last,
+                reward=reward_g,
+                value=predicted_reward,
+                batch=batch,
+            )
+            transitions.append(transition)
+
         x = self.reducer(x)
 
         # Sanity check
@@ -279,6 +321,12 @@ class Actor(nn.Module):
             "Some nodes failed to find a survivor!"
         )
 
-        logp_total = torch.cat(logp_terms).sum()
-
-        return x, edge_index, merge_map, batch, perm, logp_total, logp_last
+        return (
+            x,
+            edge_index,
+            merge_map,
+            batch,
+            perm,
+            logp_last,
+            transitions,
+        )
