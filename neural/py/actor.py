@@ -57,7 +57,6 @@ class Actor(nn.Module):
         in_dim: int,
         hidden_dims: list[int],
         num_heads: list[int],
-        critic: nn.Module,
         selection_dropout: float = 0.3,
         alpha: float = 0.5,
         beta: float = 0.5,
@@ -75,7 +74,6 @@ class Actor(nn.Module):
         self.policy_heads = nn.ModuleList()
         self.alpha = alpha
         self.beta = beta
-        self.critic = critic
 
         dims = [in_dim] + hidden_dims
 
@@ -106,6 +104,20 @@ class Actor(nn.Module):
         self.reducer = nn.Sequential(
             nn.Linear(dims[-1] * num_heads[-1], dims[-1]), nn.GELU()
         )
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for seq in self.policy_heads: # pyright: ignore
+            seq: nn.Sequential
+            for layer in seq:
+                if isinstance(layer, nn.Linear):
+                    nn.init.xavier_normal_(layer.weight)
+
+        for layer in self.reducer:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+
 
     def compute_depths(self, edge_index, batch):
         num_nodes = batch.size(0)
@@ -192,6 +204,7 @@ class Actor(nn.Module):
         keys_1d: list[NDArray],
         persistent_to_batch_id_map: list[tuple[int, int]],
         selected_spans: NDArray,
+        critic: nn.Module
     ):
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
@@ -277,7 +290,6 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
-            predicted_reward = self.critic(x, edge_index, batch)
 
             line_spans = calculate_line_spans(
                 merge_map=merge_map.cpu().numpy(),
@@ -298,10 +310,15 @@ class Actor(nn.Module):
             ).to(x.device)
 
             reward_g = compute_reward(diou_l, batch)  # [G]
+            r = reward_g
+            r = (r - r.mean()) / (r.std() + 1e-6)
+
+            predicted_reward = critic(x.detach(), edge_index, batch)
+            print(f'Actual reward: {reward_g} Actual predicted reward: {predicted_reward}')
 
             transition = Transition(
                 logp=logp_last,
-                reward=reward_g,
+                reward=r,
                 value=predicted_reward,
                 batch=batch,
             )

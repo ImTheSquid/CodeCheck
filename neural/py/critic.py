@@ -56,6 +56,12 @@ class MergeCritic(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim // 4, 1),
         )
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for layer in self.graph_value_head:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_normal_(layer.weight)
 
     def forward(self, x: Tensor, edge_index: Tensor, batch: Tensor) -> Tensor:
         """

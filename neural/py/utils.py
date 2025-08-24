@@ -59,7 +59,7 @@ def compute_returns_and_advantages(
     G = len(transitions[0].reward)  # number of graphs in the batch
 
     # Stack per‑layer values & rewards
-    V = torch.stack([t.value for t in transitions])  # [L, G]
+    V = torch.stack([t.value for t in transitions]).detach()  # [L, G]
     R = torch.stack([t.reward for t in transitions])  # [L, G]
 
     # If only the last reward is non‑zero, copy it to all layers
@@ -78,9 +78,14 @@ def compute_returns_and_advantages(
 
 
     advantages = returns - V
+    advantages = torch.clamp(advantages, -10.0, 10.0)
     assert returns.shape[1] == G, (
         f"returns.shape[1] ({returns.shape[1]}) != G ({G})"
     )
+    print('RET Mean/Std')
+    print(returns.mean().item(), returns.std().item())
+    print('Value Mean/Std')
+    print(V.mean().item(), V.std().item())
     return returns, advantages
 
 
@@ -117,7 +122,7 @@ def actor_critic_loss(
     # Critic loss (smooth L1 / Huber)
     V_all = torch.cat([t.value for t in transitions])  # [L, G]
     R_all = torch.cat([returns[t] for t in range(len(returns))])  # [L, G]
-    critic_loss = F.smooth_l1_loss(V_all, R_all)
+    critic_loss = F.mse_loss(V_all, R_all)
 
     # Optional entropy bonus
     entropy = -(logp_all * torch.exp(logp_all)).mean()

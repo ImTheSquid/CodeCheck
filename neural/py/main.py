@@ -315,7 +315,7 @@ def cluster_and_calculate_reward(
 def train(
     dataset: Dataset,
     embedder: nn.Module,
-    actor: nn.Module,
+    actor: Actor,
     critic: nn.Module,
     actor_optim: optim.Optimizer,
     critic_optim: optim.Optimizer,
@@ -469,6 +469,7 @@ def train(
                 keys_1d,
                 persistent_to_batch_id_map,
                 selected_spans,
+                critic=critic
             )
             # a_logp_sum: [N] – log‑prob of the chosen action for each node
             # a_batch:    [N] – graph ID of each node
@@ -507,13 +508,13 @@ def train(
             # actor_loss, critic_loss = actor_critic_loss(transitions, batch)
 
             # ---- 6. Optimisation step ----
-            total_loss = actor_loss + critic_loss
+
             actor_optim.zero_grad()
-            critic_optim.zero_grad()
-
-            total_loss.backward()
-
+            actor_loss.backward()
             actor_optim.step()
+
+            critic_optim.zero_grad()
+            critic_loss.backward()
             critic_optim.step()
 
             total_actor_loss += actor_loss.item()
@@ -1064,14 +1065,15 @@ def rust_train(
                     map_location=DEVICE,
                 )
 
+            NUM_ACTOR_LAYERS = 5
+
             critic = MergeCritic(
-                in_dim=304 // 2 * 4, hidden_dim_generator=lambda d: d // 2
+                in_dim=embedding_dim // 2 * 4, hidden_dim_generator=lambda d: d // 2
             ).to(DEVICE)
             actor = Actor(
-                in_dim=304,
-                hidden_dims=[304 // 2] * 5 + [304],
-                num_heads=[4] * 5 + [1],
-                critic=critic,
+                in_dim=embedding_dim,
+                hidden_dims=[embedding_dim // 2] * NUM_ACTOR_LAYERS + [embedding_dim],
+                num_heads=[4] * NUM_ACTOR_LAYERS + [1],
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
                 alpha=0.5,
                 beta=0.7,
@@ -1085,10 +1087,10 @@ def rust_train(
                 actor=actor,
                 critic=critic,
                 actor_optim=optim.Adam(
-                    actor.parameters(), lr=0.001, weight_decay=0.01
+                    actor.parameters(), lr=1e-4, weight_decay=1e-5
                 ),
                 critic_optim=optim.Adam(
-                    critic.parameters(), lr=0.0001, weight_decay=0.01
+                    critic.parameters(), lr=1e-4, weight_decay=1e-5
                 ),
                 episodes=NUM_EPISODES,
                 keys=keys,
