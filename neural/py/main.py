@@ -1,3 +1,5 @@
+import csv
+import datetime
 import gc
 import itertools
 import os
@@ -312,7 +314,9 @@ def cluster_and_calculate_reward(
     return f1
 
 
-def persistent_to_batch_id_map_and_keys(batch, keys) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
+def persistent_to_batch_id_map_and_keys(
+    batch, keys
+) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
     # Selected graph indices are actually different than the assignments given by PyTorch
     # Zip them together for processing later
     selected_batch_indices = list(range(torch.max(batch.batch) + 1))
@@ -334,9 +338,7 @@ def persistent_to_batch_id_map_and_keys(batch, keys) -> tuple[list[tuple[int, in
     for pid, gid in persistent_to_batch_id_map:
         for left, right in keys.keys():
             if pid == left or pid == right:
-                add_key_to_keys_and_batch(
-                    keys[(left, right)], gid, pid == left
-                )
+                add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
 
     return persistent_to_batch_id_map, keys_1d, key_batch
 
@@ -350,9 +352,10 @@ def train(
     critic_optim: optim.Optimizer,
     episodes: int,
     keys: dict[tuple[int, int], NDArray],
+    artifact_dir: Path,
     gamma=0.99,
     lam=0.95,
-    entropy_coef=0.01
+    entropy_coef=0.01,
 ):
     train_set, val_set, test_set = random_split(
         dataset,
@@ -362,6 +365,15 @@ def train(
     train_data = DataLoader(train_set, batch_size=25, shuffle=True)  # type: ignore
     val_data = DataLoader(val_set, batch_size=12)  # type: ignore
     test_data = DataLoader(test_set, batch_size=12)  # type: ignore
+
+    train_f = open(artifact_dir / "train_loss.csv", "w+")
+    val_f = open(artifact_dir / "val_loss.csv", "w+")
+
+    train_csv = csv.writer(train_f)
+    val_csv = csv.writer(val_f)
+
+    train_csv.writerow(["Actor", "Critic"])
+    val_csv.writerow(["Actor", "Critic"])
 
     for epoch in range(episodes):
         print(f"\n⏰ EPOCH {epoch}")
@@ -375,7 +387,9 @@ def train(
         for batch in train_data:
             print("\n\nNEXT BATCH ->")
 
-            persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
+            persistent_to_batch_id_map, keys_1d, key_batch = (
+                persistent_to_batch_id_map_and_keys(batch, keys)
+            )
 
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
@@ -388,7 +402,7 @@ def train(
                 keys_1d,
                 persistent_to_batch_id_map,
                 selected_spans,
-                critic=critic
+                critic=critic,
             )
             actor_loss, critic_loss = actor_critic_loss(
                 transitions,
@@ -408,6 +422,8 @@ def train(
             total_actor_loss += actor_loss.item()
             total_critic_loss += critic_loss.item()
 
+            train_csv.writerow([actor_loss.item(), critic_loss.item()])
+
             print(
                 "*" * 10
                 + f"\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
@@ -423,7 +439,9 @@ def train(
         # Val
         with torch.no_grad():
             for batch in val_data:
-                persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
+                persistent_to_batch_id_map, keys_1d, key_batch = (
+                    persistent_to_batch_id_map_and_keys(batch, keys)
+                )
 
                 selected_spans = batch.lines
                 batch = batch.to(DEVICE)
@@ -436,7 +454,7 @@ def train(
                     keys_1d,
                     persistent_to_batch_id_map,
                     selected_spans,
-                    critic=critic
+                    critic=critic,
                 )
                 actor_loss, critic_loss = actor_critic_loss(
                     transitions,
@@ -448,24 +466,31 @@ def train(
                 total_actor_loss += actor_loss.item()
                 total_critic_loss += critic_loss.item()
 
+                val_csv.writerow([actor_loss.item(), critic_loss.item()])
+
                 print(
                     "%" * 10
                     + f"\nValidation =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
                     + "%" * 10
                 )
 
-
         print(
             f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
         )
 
+    train_f.close()
+    val_f.close()
+
     # Test
     total_actor_loss = total_critic_loss = 0.0
+    test_actor_losses = test_critic_losses = []
     actor.eval()
     critic.eval()
     with torch.no_grad():
         for batch in test_data:
-            persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
+            persistent_to_batch_id_map, keys_1d, key_batch = (
+                persistent_to_batch_id_map_and_keys(batch, keys)
+            )
 
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
@@ -478,7 +503,7 @@ def train(
                 keys_1d,
                 persistent_to_batch_id_map,
                 selected_spans,
-                critic=critic
+                critic=critic,
             )
             actor_loss, critic_loss = actor_critic_loss(
                 transitions,
@@ -488,13 +513,21 @@ def train(
             )
 
             total_actor_loss += actor_loss.item()
+            test_actor_losses.append(actor_loss.item())
             total_critic_loss += critic_loss.item()
+            test_critic_losses.append(critic_loss.item())
 
             print(
                 "=" * 10
                 + f"\nTest =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
                 + "=" * 10
             )
+
+    with open(artifact_dir / "test_loss.csv", "w+") as f:
+        csv.writer(f).writerows(
+            [["Actor", "Critic"]]
+            + list(zip(test_actor_losses, test_critic_losses))
+        )
 
     print(
         f"~~\nTotal Test Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
@@ -863,8 +896,6 @@ def train_embeddings(
 def test_embeddings(
     embedder: nn.Module, dataset: Dataset, artifact_dir: Path, perplexity: int
 ):
-    import datetime
-
     import matplotlib.pyplot as plt
     import pandas as pd
     import plotly.express as px
@@ -1026,11 +1057,13 @@ def rust_train(
             NUM_ACTOR_LAYERS = 5
 
             critic = MergeCritic(
-                in_dim=embedding_dim // 2 * 4, hidden_dim_generator=lambda d: d // 2
+                in_dim=embedding_dim // 2 * 4,
+                hidden_dim_generator=lambda d: d // 2,
             ).to(DEVICE)
             actor = Actor(
                 in_dim=embedding_dim,
-                hidden_dims=[embedding_dim // 2] * NUM_ACTOR_LAYERS + [embedding_dim],
+                hidden_dims=[embedding_dim // 2] * NUM_ACTOR_LAYERS
+                + [embedding_dim],
                 num_heads=[4] * NUM_ACTOR_LAYERS + [1],
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
                 alpha=0.5,
@@ -1038,6 +1071,13 @@ def rust_train(
                 selection_dropout=0.2,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
+
+            artifact_suffix = (
+                datetime.datetime.now()
+                .replace(microsecond=0)
+                .isoformat()
+                .replace(":", "_")
+            )
 
             train(
                 dataset,
@@ -1052,5 +1092,6 @@ def rust_train(
                 ),
                 episodes=NUM_EPISODES,
                 keys=keys,
-                entropy_coef=0.05
+                artifact_dir=artifact_dir / artifact_suffix,
+                entropy_coef=0.05,
             )
