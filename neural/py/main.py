@@ -357,6 +357,8 @@ def train(
     lam=0.95,
     entropy_coef=0.01,
 ):
+    os.makedirs(artifact_dir)
+
     train_set, val_set, test_set = random_split(
         dataset,
         make_splits(len(dataset)),  # type: ignore
