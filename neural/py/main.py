@@ -312,6 +312,35 @@ def cluster_and_calculate_reward(
     return f1
 
 
+def persistent_to_batch_id_map_and_keys(batch, keys) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
+    # Selected graph indices are actually different than the assignments given by PyTorch
+    # Zip them together for processing later
+    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
+    persistent_to_batch_id_map = list(
+        zip(map(int, batch.key_index), selected_batch_indices)
+    )
+
+    keys_1d = []
+    key_batch = []
+
+    def add_key_to_keys_and_batch(val: NDArray, gid, target_left: bool):
+        nonlocal keys_1d, key_batch
+        if target_left:
+            keys_1d.append(val[:, [0, 2]])
+        else:
+            keys_1d.append(val[:, [1, 3]])
+        key_batch += [gid] * val.shape[0]
+
+    for pid, gid in persistent_to_batch_id_map:
+        for left, right in keys.keys():
+            if pid == left or pid == right:
+                add_key_to_keys_and_batch(
+                    keys[(left, right)], gid, pid == left
+                )
+
+    return persistent_to_batch_id_map, keys_1d, key_batch
+
+
 def train(
     dataset: Dataset,
     embedder: nn.Module,
@@ -321,6 +350,9 @@ def train(
     critic_optim: optim.Optimizer,
     episodes: int,
     keys: dict[tuple[int, int], NDArray],
+    gamma=0.99,
+    lam=0.95,
+    entropy_coef=0.01
 ):
     train_set, val_set, test_set = random_split(
         dataset,
@@ -337,131 +369,18 @@ def train(
         actor.train()
         critic.train()
 
-        total_actor_loss, total_critic_loss = 0.0, 0.0
+        total_actor_loss = total_critic_loss = 0.0
 
         # Train
         for batch in train_data:
             print("\n\nNEXT BATCH ->")
 
-            # Selected graph indices are actually different than the assignments given by PyTorch
-            # Zip them together for processing later
-            selected_batch_indices = list(range(torch.max(batch.batch) + 1))
-            persistent_to_batch_id_map = list(
-                zip(map(int, batch.key_index), selected_batch_indices)
-            )
+            persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
 
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
 
-            # x = embedder(batch.x, batch.edge_index)
-
-            # (
-            #     a_x,
-            #     a_edge_index,
-            #     merge_map,
-            #     a_batch,
-            #     a_perm,
-            #     a_logp_sum,
-            #     a_logp_last,
-            #     transitions,
-            # ) = actor(x, batch.edge_index, batch.batch)
-
-            # pred_reward = critic(batch.x, batch.edge_index, a_x, a_edge_index)
-
-            # line_spans = calculate_line_spans(
-            #     merge_map=merge_map.cpu().numpy(),
-            #     selected_indices_for_batch=persistent_to_batch_id_map,
-            #     batch=a_batch.cpu().numpy(),
-            #     perm=a_perm.cpu().numpy(),
-            #     selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
-            # )
-
-            # reward = cluster_and_calculate_reward(
-            #     nodes=a_x.cpu().detach().numpy(),
-            #     keys=keys,
-            #     selected_indices_for_batch=persistent_to_batch_id_map,
-            #     batch=a_batch.cpu().numpy(),
-            #     line_spans=line_spans
-            # )
-
-            # reward = torch.tensor(reward).to(DEVICE)
-
-            # Keys from this batch specifically along with their associations
-            keys_1d = []
-            key_batch = []
-
-            def add_key_to_keys_and_batch(val: NDArray, gid, target_left: bool):
-                nonlocal keys_1d, key_batch
-                if target_left:
-                    keys_1d.append(val[:, [0, 2]])
-                else:
-                    keys_1d.append(val[:, [1, 3]])
-                key_batch += [gid] * val.shape[0]
-
-            for pid, gid in persistent_to_batch_id_map:
-                for left, right in keys.keys():
-                    if pid == left or pid == right:
-                        add_key_to_keys_and_batch(
-                            keys[(left, right)], gid, pid == left
-                        )
-
-            # TODO: Deduplicate keys_1d
-            # diou_l = diou_loss(
-            #     line_mappings=line_spans,
-            #     edge_index=a_edge_index.cpu().numpy(),
-            #     batch=a_batch.cpu().numpy(),
-            #     keys=np.vstack(keys_1d),
-            #     key_batch_associations=np.vstack(key_batch).squeeze(1),
-            #     k=10,
-            #     decay_alpha=0.7,
-            # )
-            # diou_l = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
-            # diou_l = diou_l.to(DEVICE)
-
-            # together = torch.cat(
-            #     [a_x.detach(), a_logp_last.detach().unsqueeze(1)], dim=1
-            # )
-
-            # pred_diou_l = critic(together, a_edge_index, a_batch)
-
-            # critic_loss = F.mse_loss(pred_diou_l.squeeze(1), diou_l)
-            # critic_optim.zero_grad()
-            # critic_loss.backward()
-            # critic_optim.step()
-
-            # advantage = (reward - pred_reward).detach()
-            # actor_loss = -(advantage * a_logp_sum).mean() + embedding_loss
-
-            # actor_optim.zero_grad()
-            # actor_loss.backward()
-            # actor_optim.step()
-
-            # critic_loss = nn.HuberLoss()(pred_reward, reward)
-            # critic_optim.zero_grad()
-            # critic_loss.backward()
-            # critic_optim.step()
-
-            # advantage = diou_l.detach() - pred_diou_l.detach().squeeze(1)
-            # actor_loss = -(advantage * a_logp_sum).mean()
-            # actor_optim.zero_grad()
-            # actor_loss.backward()
-            # actor_optim.step()
-
-            # total_actor_loss += actor_loss
-            # total_critic_loss += critic_loss
-
-            # BEGIN NEW CODE
-
-            # ---- 1. Actor forward, get actions & logp ----
-            (
-                a_x,
-                a_edge_index,
-                merge_map,
-                a_batch,
-                a_perm,
-                a_logp_last,
-                transitions,
-            ) = actor(
+            transitions = actor(
                 embedder(batch.x, batch.edge_index),
                 batch.edge_index,
                 batch.batch,
@@ -471,43 +390,12 @@ def train(
                 selected_spans,
                 critic=critic
             )
-            # a_logp_sum: [N] – log‑prob of the chosen action for each node
-            # a_batch:    [N] – graph ID of each node
             actor_loss, critic_loss = actor_critic_loss(
                 transitions,
-                gamma=0.99,
-                lam=0.95,
-                entropy_coef=0.01,
+                gamma=gamma,
+                lam=lam,
+                entropy_coef=entropy_coef,
             )
-
-            # ---- 2. Compute reward per graph ----
-            # line_spans = calculate_line_spans(
-            #     merge_map=merge_map.cpu().numpy(),
-            #     selected_indices_for_batch=persistent_to_batch_id_map,
-            #     batch=a_batch.cpu().numpy(),
-            #     perm=a_perm.cpu().numpy(),
-            #     selected_line_assignments_for_batch=selected_spans.cpu().numpy(),
-            # )
-            # assert line_spans.shape[0] == a_batch.shape[0], (
-            #     f"line_spans.shape[0] ({line_spans.shape[0]}) != a_batch.shape[0] ({a_batch.shape[0]})"
-            # )
-            # # 2.1 compute DIoU loss (node‑wise)
-            # diou_l = diou_loss(
-            #     line_mappings=line_spans,  # build as in your original code
-            #     edge_index=a_edge_index.cpu().numpy(),
-            #     batch=a_batch.cpu().numpy(),
-            #     keys=np.vstack(keys_1d),
-            #     key_batch_associations=np.vstack(key_batch).squeeze(1),
-            #     k=10,
-            #     decay_alpha=0.7,
-            # ).to(DEVICE)
-
-            # reward_g = compute_reward(diou_l, a_batch)  # [G]
-
-            # # ---- 5. Compute actor & critic loss ----
-            # actor_loss, critic_loss = actor_critic_loss(transitions, batch)
-
-            # ---- 6. Optimisation step ----
 
             actor_optim.zero_grad()
             actor_loss.backward()
@@ -520,27 +408,97 @@ def train(
             total_actor_loss += actor_loss.item()
             total_critic_loss += critic_loss.item()
 
-            # END NEW CODE
-
             print(
                 "*" * 10
                 + f"\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
                 + "*" * 10
             )
 
+        print(
+            f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+        )
+
+        total_actor_loss = total_critic_loss = 0.0
+
         # Val
-        for batch in val_data:
-            pass
+        with torch.no_grad():
+            for batch in val_data:
+                persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
+
+                selected_spans = batch.lines
+                batch = batch.to(DEVICE)
+
+                transitions = actor(
+                    embedder(batch.x, batch.edge_index),
+                    batch.edge_index,
+                    batch.batch,
+                    key_batch,
+                    keys_1d,
+                    persistent_to_batch_id_map,
+                    selected_spans,
+                    critic=critic
+                )
+                actor_loss, critic_loss = actor_critic_loss(
+                    transitions,
+                    gamma=gamma,
+                    lam=lam,
+                    entropy_coef=entropy_coef,
+                )
+
+                total_actor_loss += actor_loss.item()
+                total_critic_loss += critic_loss.item()
+
+                print(
+                    "%" * 10
+                    + f"\nValidation =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
+                    + "%" * 10
+                )
+
 
         print(
-            f"~~\nTotal Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+            f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
         )
 
     # Test
+    total_actor_loss = total_critic_loss = 0.0
     actor.eval()
     critic.eval()
-    for batch in test_data:
-        pass
+    with torch.no_grad():
+        for batch in test_data:
+            persistent_to_batch_id_map, keys_1d, key_batch = persistent_to_batch_id_map_and_keys(batch, keys)
+
+            selected_spans = batch.lines
+            batch = batch.to(DEVICE)
+
+            transitions = actor(
+                embedder(batch.x, batch.edge_index),
+                batch.edge_index,
+                batch.batch,
+                key_batch,
+                keys_1d,
+                persistent_to_batch_id_map,
+                selected_spans,
+                critic=critic
+            )
+            actor_loss, critic_loss = actor_critic_loss(
+                transitions,
+                gamma=gamma,
+                lam=lam,
+                entropy_coef=entropy_coef,
+            )
+
+            total_actor_loss += actor_loss.item()
+            total_critic_loss += critic_loss.item()
+
+            print(
+                "=" * 10
+                + f"\nTest =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
+                + "=" * 10
+            )
+
+    print(
+        f"~~\nTotal Test Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+    )
 
     print("Training complete")
 
@@ -1094,4 +1052,5 @@ def rust_train(
                 ),
                 episodes=NUM_EPISODES,
                 keys=keys,
+                entropy_coef=0.05
             )

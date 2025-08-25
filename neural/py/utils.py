@@ -124,7 +124,7 @@ def actor_critic_loss(
     R_all = torch.cat([returns[t] for t in range(len(returns))])  # [L, G]
     critic_loss = F.mse_loss(V_all, R_all)
 
-    # Optional entropy bonus
+    # Entropy bonus
     entropy = -(logp_all * torch.exp(logp_all)).mean()
     actor_loss -= entropy_coef * entropy
 
