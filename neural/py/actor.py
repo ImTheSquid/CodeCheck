@@ -108,7 +108,7 @@ class Actor(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        for seq in self.policy_heads: # pyright: ignore
+        for seq in self.policy_heads:  # pyright: ignore
             seq: nn.Sequential
             for layer in seq:
                 if isinstance(layer, nn.Linear):
@@ -117,7 +117,6 @@ class Actor(nn.Module):
         for layer in self.reducer:
             if isinstance(layer, nn.Linear):
                 nn.init.xavier_uniform_(layer.weight)
-
 
     def compute_depths(self, edge_index, batch):
         num_nodes = batch.size(0)
@@ -204,7 +203,7 @@ class Actor(nn.Module):
         keys_1d: list[NDArray],
         persistent_to_batch_id_map: list[tuple[int, int]],
         selected_spans: NDArray,
-        critic: nn.Module
+        critic: nn.Module,
     ):
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
@@ -313,7 +312,6 @@ class Actor(nn.Module):
             r = (r - r.mean()) / (r.std() + 1e-6)
 
             predicted_reward = critic(x.detach(), edge_index, batch)
-            print(f'Actual reward: {reward_g} Actual predicted reward: {predicted_reward}')
 
             transition = Transition(
                 logp=logp_last,

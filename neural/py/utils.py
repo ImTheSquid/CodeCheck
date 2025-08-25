@@ -75,17 +75,11 @@ def compute_returns_and_advantages(
         gae = delta + gamma * lam * gae
         returns[t] = gae + V[t]
 
-
-
     advantages = returns - V
     advantages = torch.clamp(advantages, -10.0, 10.0)
     assert returns.shape[1] == G, (
         f"returns.shape[1] ({returns.shape[1]}) != G ({G})"
     )
-    print('RET Mean/Std')
-    print(returns.mean().item(), returns.std().item())
-    print('Value Mean/Std')
-    print(V.mean().item(), V.std().item())
     return returns, advantages
 
 
@@ -108,7 +102,7 @@ def actor_critic_loss(
 
     # Concatenate per‑layer node data
     logp_all = torch.cat([t.logp for t in transitions])  # [∑N_i]
-    batch_all = torch.cat([t.batch for t in transitions])  # [∑N_i]
+    # batch_all = torch.cat([t.batch for t in transitions])  # [∑N_i]
 
     # Broadcast advantage to nodes
     # adv_per_node = advantages[batch_all]  # [∑N_i]
@@ -117,7 +111,9 @@ def actor_critic_loss(
     # Policy loss (PG)
     actor_loss = 0.0
     for i, transition in enumerate(transitions):
-        actor_loss += -(advantages[i][transition.batch] * transition.logp).mean()
+        actor_loss += -(
+            advantages[i][transition.batch] * transition.logp
+        ).mean()
 
     # Critic loss (smooth L1 / Huber)
     V_all = torch.cat([t.value for t in transitions])  # [L, G]
