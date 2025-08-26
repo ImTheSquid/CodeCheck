@@ -332,6 +332,9 @@ class Actor(nn.Module):
 
             predicted_reward = critic(x.detach(), edge_index, batch)
 
+            assert r.shape[0] == predicted_reward.shape[0], (
+                f"Reward/value mismatch ({r.shape[0]} != {predicted_reward.shape[0]})"
+            )
             transition = Transition(
                 logp=logp_last,
                 reward=r,
