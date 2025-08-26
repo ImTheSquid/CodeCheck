@@ -115,7 +115,7 @@ def compute_returns_and_advantages(
         advantages = (advantages - mean) / std
 
     advantages = torch.clamp(advantages, -10.0, 10.0)
-    return returns, advantages
+    return returns, advantages, R, V, mask
 
 
 def actor_critic_loss(
@@ -129,7 +129,7 @@ def actor_critic_loss(
     returns    : [G]
     advantages : [G]
     """
-    returns, advantages = compute_returns_and_advantages(
+    returns, advantages, R, V, mask = compute_returns_and_advantages(
         transitions,
         gamma,
         lam,
@@ -145,8 +145,14 @@ def actor_critic_loss(
         entropy_terms.append(transition.entropy)
 
     # Critic loss (smooth L1 / Huber)
-    V_all = torch.cat([t.value for t in transitions])  # [L, G]
+    flat_mask = mask.reshape(-1)
+    # R_all = R.reshape([-1])[flat_mask]
+    V_all = V.reshape([-1])
+    # V_all = torch.cat([t.value for t in transitions])  # [L, G]
     R_all = torch.cat([returns[t] for t in range(len(returns))])  # [L, G]
+    assert V_all.shape == R_all.shape, (
+        f"Shapes mismatch: V_all: {V_all.shape} R_all: {R_all.shape}"
+    )
     critic_loss = F.mse_loss(V_all, R_all)
 
     # Entropy bonus
