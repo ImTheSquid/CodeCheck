@@ -20,14 +20,14 @@ class Transition(NamedTuple):
 
 def compute_reward(
     diou_l: Tensor,
-    missing: list[int],
+    total_keys: int,
+    remaining_keys: int,
     batch: Tensor,
-    num_graphs: int,
     size_penalty: float = 0.01,
-    missing_graph_penalty: float = 1.0,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
+    missing_ratio: float - the number of keys minus the number of missing keys
     batch:  [N] – graph ID for each node
     Returns: [G] – reward per graph
     """
@@ -38,8 +38,8 @@ def compute_reward(
     node_reward = -diou_norm
 
     # Graph‑wise mean reward
-    # G = batch.max().item() + 1
-    reward_per_graph = torch.zeros(num_graphs).to(diou_l.device)
+    G = batch.max().item() + 1
+    reward_per_graph = torch.zeros(int(G)).to(diou_l.device)
     reward_per_graph = torch_scatter.scatter_mean(
         node_reward, batch, dim=0, out=reward_per_graph
     )
@@ -49,8 +49,9 @@ def compute_reward(
     reward_per_graph -= size_penalty * num_nodes.float()
 
     # Missing graph penalty
-    for event in missing:
-        reward_per_graph[event] -= missing_graph_penalty
+    reward_per_graph *= total_keys - remaining_keys
+    # for event in missing:
+    # reward_per_graph[event] -= missing_graph_penalty
 
     return reward_per_graph
 

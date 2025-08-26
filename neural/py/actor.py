@@ -206,7 +206,6 @@ class Actor(nn.Module):
         selected_spans: NDArray,
         critic: nn.Module,
     ):
-        G = batch.max().item() + 1
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
         global_map = torch.arange(N0, device=x.device)  # local→global map
@@ -309,11 +308,12 @@ class Actor(nn.Module):
                 selected_line_assignments_for_batch=selected_spans,
             )
 
+            keys_stack = np.vstack(keys_1d)
             diou_l, missing = diou_loss(
                 line_mappings=line_spans,
                 edge_index=edge_index.cpu().numpy(),
                 batch=batch.cpu().numpy(),
-                keys=np.vstack(keys_1d),
+                keys=keys_stack,
                 key_batch_associations=np.vstack(key_batch).squeeze(1),
                 k=10,
                 decay_alpha=0.7,
@@ -322,7 +322,10 @@ class Actor(nn.Module):
             diou_l = diou_l.to(x.device)
 
             reward_g = compute_reward(
-                diou_l, missing, batch, num_graphs=G
+                diou_l,
+                total_keys=keys_stack.shape[0],
+                remaining_keys=keys_stack.shape[0] - len(missing),
+                batch=batch,
             )  # [G]
             r = reward_g
             r = (r - r.mean()) / (r.std() + 1e-6)
