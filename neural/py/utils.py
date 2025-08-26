@@ -73,12 +73,14 @@ def compute_returns_and_advantages(
     # Pad rewards/values to [L, max_G], and keep a mask
     R = torch.zeros(L, max_G, device=transitions[0].reward.device)
     V = torch.zeros(L, max_G, device=transitions[0].reward.device)
+    V_critic = torch.zeros(L, max_G, device=transitions[0].reward.device)
     mask = torch.zeros(L, max_G, dtype=torch.bool, device=R.device)
 
     for i, t in enumerate(transitions):
         g = t.reward.shape[0]
         R[i, :g] = t.reward
         V[i, :g] = t.value.detach()
+        V_critic[i, :g] = t.value
         mask[i, :g] = True
 
     if reward_last_only:
@@ -115,7 +117,7 @@ def compute_returns_and_advantages(
         advantages = (advantages - mean) / std
 
     advantages = torch.clamp(advantages, -10.0, 10.0)
-    return returns, advantages, R, V, mask
+    return returns, advantages, R, V_critic, mask
 
 
 def actor_critic_loss(
