@@ -206,6 +206,7 @@ class Actor(nn.Module):
         selected_spans: NDArray,
         critic: nn.Module,
     ):
+        G = batch.max().item() + 1
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
         global_map = torch.arange(N0, device=x.device)  # local→global map
@@ -320,7 +321,9 @@ class Actor(nn.Module):
 
             diou_l = diou_l.to(x.device)
 
-            reward_g = compute_reward(diou_l, missing, batch)  # [G]
+            reward_g = compute_reward(
+                diou_l, missing, batch, num_graphs=G
+            )  # [G]
             r = reward_g
             r = (r - r.mean()) / (r.std() + 1e-6)
 

@@ -22,6 +22,7 @@ def compute_reward(
     diou_l: Tensor,
     missing: list[int],
     batch: Tensor,
+    num_graphs: int,
     size_penalty: float = 0.01,
     missing_graph_penalty: float = 1.0,
 ) -> Tensor:
@@ -37,8 +38,8 @@ def compute_reward(
     node_reward = -diou_norm
 
     # Graph‑wise mean reward
-    G = batch.max().item() + 1
-    reward_per_graph = torch.zeros(int(G)).to(diou_l.device)
+    # G = batch.max().item() + 1
+    reward_per_graph = torch.zeros(num_graphs).to(diou_l.device)
     reward_per_graph = torch_scatter.scatter_mean(
         node_reward, batch, dim=0, out=reward_per_graph
     )
@@ -118,7 +119,7 @@ def actor_critic_loss(
     )
 
     # Concatenate per‑layer node data
-    logp_all = torch.cat([t.logp for t in transitions])  # [∑N_i]
+    # logp_all = torch.cat([t.logp for t in transitions])  # [∑N_i]
     # batch_all = torch.cat([t.batch for t in transitions])  # [∑N_i]
 
     # Broadcast advantage to nodes
