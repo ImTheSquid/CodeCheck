@@ -187,12 +187,13 @@ class Actor(nn.Module):
             )
             centrality_prior[mask] = gaussian
 
-        prior = self.beta * centrality_prior + (
-            1 - self.beta
-        ) * self.compute_depths(edge_index, batch)
+        # prior = self.beta * centrality_prior + (
+        #     1 - self.beta
+        # ) * self.compute_depths(edge_index, batch)
 
         # Mix centrality bias with learnable policy
-        return self.alpha * probabilities + (1 - self.alpha) * prior
+        # return self.alpha * probabilities + (1 - self.alpha) * prior
+        return probabilities
 
     def forward(
         self,
@@ -224,21 +225,36 @@ class Actor(nn.Module):
             x = self.gats[i](x, edge_index)
             x = F.relu(x)
             x = self.norms[i](x)
-            logits = self.policy_heads[i](x).squeeze(-1)
-            probs = torch.sigmoid(logits)
-            probs = self.bias_nodes_per_degree(x, edge_index, batch, probs)
-            dist = Bernoulli(probs)
-            actions = dist.sample()
+            policy_logits = self.policy_heads[i](x).squeeze(-1)
+            prior_prob = self.bias_nodes_per_degree(
+                x, edge_index, batch, torch.sigmoid(policy_logits)
+            ).clamp(1e-6, 1.0 - 1e-6)
+            prior_logits = torch.logit(prior_prob, eps=1e-6)
+            mixed_logits = (
+                self.alpha * policy_logits + (1.0 - self.alpha) * prior_logits
+            )
+            dist = Bernoulli(logits=mixed_logits)
+            actions = dist.sample()  # 0/1 per node
+            logp = dist.log_prob(actions)  # [N], can be negative
+            entropy_per_node = dist.entropy()  # [N]
+
             for g in batch.unique():
                 mask = batch == g
                 mask_indices = mask.nonzero(as_tuple=True)[0]
                 if mask_indices.numel() == 0:
                     continue  # just in case
                 if actions[mask_indices].sum() == 0:
-                    top_idx = probs[mask_indices].argmax()
+                    # fallback: keep your argmax choice
+                    top_idx = (mixed_logits[mask_indices]).argmax()
                     actions[mask_indices[top_idx]] = 1.0
+                    # also adjust logp and entropy to match the forced-action slot
+                    logp[mask_indices[top_idx]] = dist.log_prob(
+                        actions[mask_indices[top_idx]]
+                    )
+                    entropy_per_node[mask_indices[top_idx]] = dist.entropy()[
+                        mask_indices[top_idx]
+                    ]
 
-            logp = dist.log_prob(actions)
             logp_last = logp
             logp_terms.append(logp)
 
@@ -318,6 +334,7 @@ class Actor(nn.Module):
                 reward=r,
                 value=predicted_reward,
                 batch=batch,
+                entropy=entropy_per_node,
             )
             transitions.append(transition)
 

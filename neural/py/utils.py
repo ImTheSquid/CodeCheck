@@ -15,6 +15,7 @@ class Transition(NamedTuple):
     reward: torch.Tensor  # [G]
     value: torch.Tensor  # [G]
     batch: torch.Tensor
+    entropy: torch.Tensor
 
 
 def compute_reward(
@@ -45,41 +46,49 @@ def compute_reward(
     return reward_per_graph
 
 
+"""assistant-wrote: corrected returns/advantages with per-layer standardization"""
+
+
 def compute_returns_and_advantages(
     transitions,
     gamma: float = 0.99,
     lam: float = 0.95,
     reward_last_only: bool = False,
+    standardize_adv: bool = True,
 ):
-    """
-    transitions : list[Transition] – ordered from first to last layer
-    returns    : torch.Tensor  [G]  (discounted return per graph)
-    advantages : torch.Tensor  [G]  (G - V)
-    """
-    G = len(transitions[0].reward)  # number of graphs in the batch
-
-    # Stack per‑layer values & rewards
-    V = torch.stack([t.value for t in transitions]).detach()  # [L, G]
+    # transitions: list[Transition], length L
+    # Each Transition has: reward: [G], value: [G]
+    V = torch.stack([t.value.detach() for t in transitions])  # [L, G]
     R = torch.stack([t.reward for t in transitions])  # [L, G]
 
-    # If only the last reward is non‑zero, copy it to all layers
     if reward_last_only:
         R = R.clone()
-        R[:-1] = R[-1].unsqueeze(0)  # broadcast
+        R[:-1] = R[-1].unsqueeze(0)
 
-    # Compute discounted returns with GAE (lambda)
+    L, G = R.shape
     returns = torch.zeros_like(R)
-    gae = 0.0
-    for t in reversed(range(len(R))):
-        delta = R[t] + gamma * (V[t + 1] if t + 1 < len(V) else 0) - V[t]
+    gae = torch.zeros(G, device=R.device)
+
+    for t in reversed(range(L)):
+        v_t = V[t]
+        v_tp1 = (
+            V[t + 1] if t + 1 < L else torch.zeros_like(v_t)
+        )  # terminal at last layer
+        delta = R[t] + gamma * v_tp1 - v_t
         gae = delta + gamma * lam * gae
-        returns[t] = gae + V[t]
+        returns[t] = gae + v_t
 
     advantages = returns - V
+
+    # Optional: standardize per layer (reduces variance)
+    if standardize_adv:
+        eps = 1e-8
+        mean = advantages.mean(dim=1, keepdim=True)
+        std = advantages.std(dim=1, unbiased=False, keepdim=True).clamp(min=eps)
+        advantages = (advantages - mean) / std
+
+    # Safety clamp
     advantages = torch.clamp(advantages, -10.0, 10.0)
-    assert returns.shape[1] == G, (
-        f"returns.shape[1] ({returns.shape[1]}) != G ({G})"
-    )
     return returns, advantages
 
 
@@ -110,10 +119,12 @@ def actor_critic_loss(
 
     # Policy loss (PG)
     actor_loss = 0.0
+    entropy_terms = []
     for i, transition in enumerate(transitions):
         actor_loss += -(
             advantages[i][transition.batch] * transition.logp
         ).mean()
+        entropy_terms.append(transition.entropy)
 
     # Critic loss (smooth L1 / Huber)
     V_all = torch.cat([t.value for t in transitions])  # [L, G]
@@ -121,7 +132,11 @@ def actor_critic_loss(
     critic_loss = F.mse_loss(V_all, R_all)
 
     # Entropy bonus
-    entropy = -(logp_all * torch.exp(logp_all)).mean()
+    entropy = (
+        torch.cat(entropy_terms, dim=0).mean()
+        if entropy_terms
+        else torch.tensor(0.0, device=transitions[0].logp.device)
+    )
     actor_loss -= entropy_coef * entropy
 
     return actor_loss, critic_loss
