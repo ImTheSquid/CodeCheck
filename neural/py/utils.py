@@ -19,7 +19,11 @@ class Transition(NamedTuple):
 
 
 def compute_reward(
-    diou_l: Tensor, batch: Tensor, size_penalty: float = 0.01
+    diou_l: Tensor,
+    missing: list[int],
+    batch: Tensor,
+    size_penalty: float = 0.01,
+    missing_graph_penalty: float = 1.0,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -42,6 +46,10 @@ def compute_reward(
     # Size penalty – encourage fewer nodes
     num_nodes = torch_scatter.scatter_sum(torch.ones_like(diou_l), batch, dim=0)
     reward_per_graph -= size_penalty * num_nodes.float()
+
+    # Missing graph penalty
+    for event in missing:
+        reward_per_graph[event] -= missing_graph_penalty
 
     return reward_per_graph
 
@@ -191,7 +199,7 @@ def diou_loss(
     k: int = 5,
     decay_alpha: float = 0.5,
     log_transform_diou: bool = True,
-):
+) -> tuple[Tensor, list[int]]:
     """
     Calculates DIoU loss for the closest node in the graph to each key (based on DIoU) and fans out `k` hops
     with decay `decay_alpha`
@@ -206,8 +214,12 @@ def diou_loss(
     np.random.shuffle(keys)
     # Find the absolute best nodes (lowest DIoU loss) for each key
     best_node_indices = []
+    missing_entry_events = []
     for i, key in enumerate(keys):
         mask = batch == key_batch_associations[i]
+        if len(line_mappings[mask]) == 0:
+            missing_entry_events += [key_batch_associations[i]] * key.shape[0]
+            continue
         map_to_original = np.arange(batch.shape[0])[mask]
         best_node_indices.append(
             map_to_original[
@@ -266,7 +278,7 @@ def diou_loss(
                     if neighbor not in visited:
                         queue.append((neighbor, depth + 1))
 
-    return losses_full
+    return losses_full, missing_entry_events
 
 
 def create_line_number_mappings(
@@ -329,14 +341,21 @@ def recombine_per_graph_spans(
 
     # Suppose your graph‐loop was in this order:
     #   for idx, (pid, graph) in enumerate(selected_indices_for_batch):
-    for idx, (_, graph) in enumerate(selected_indices_for_batch):
+    idx = 0
+    for _, graph in selected_indices_for_batch:
         mask = batch == graph  # boolean mask of shape [N]
+
+        if mask.sum() == 0:
+            # Graph was removed entirely, skip!
+            continue
+
         spans = recovered_per_graph[idx]  # shape [mask.sum(), 2]
         # sanity check:
         assert spans.shape[0] == mask.sum(), (
             f"Spans don't match mask: ({spans.shape[0]} != {mask.sum()})"
         )
         full_spans[mask] = spans  # broadcast assign into those rows
+        idx += 1
 
     return full_spans
 
@@ -354,24 +373,20 @@ def calculate_line_spans(
         mask = batch == graph  # select survivors of that graph
         local_pos = np.nonzero(mask)[
             0
-        ]  # e.g. [ 0, 3, 5, 9, ... ]  length N_graph
+        ]  # indices of surviving nodes in this graph
 
-        assert local_pos.size != 0, "Graphs should never be fully removed"
+        if local_pos.size == 0:
+            # Graph was completely removed, skip it
+            continue
 
-        global_nodes = perm[
-            local_pos
-        ]  # now these are the true original indices
-
-        # pull out their merge_map entries in the global map:
+        global_nodes = perm[local_pos]  # true original indices
         merge_map_for_graph = merge_map[global_nodes]
 
-        # now you have numbers in the range 0..N₀–1, but only for this graph’s survivors
-        # if you need them 0..N_graph–1, remap:
+        # Remap to 0..N_graph-1 for survivors
         uniques = np.unique(merge_map_for_graph)
         remap = {orig: i for i, orig in enumerate(uniques)}
         merge_map_for_graph = np.array([remap[v] for v in merge_map_for_graph])
 
-        # and likewise your line spans:
         line_assignments_for_graph = selected_line_assignments_for_batch[
             global_nodes
         ]
@@ -380,22 +395,16 @@ def calculate_line_spans(
             merge_map_for_graph, line_assignments_for_graph
         )
 
-        # Build per-node spans:
         node_spans = recovered_assignments[merge_map_for_graph]
-
-        # assert nodes[mask].shape[0] == node_spans.shape[0], (
-        #     f"Nodes for graph don't match assignments! {nodes[mask].shape[0]} != {recovered_assignments.shape[0]}"
-        # )
         line_spans.append(node_spans)
 
-    # assert line_spans.shape[0] == nodes.shape[0], "Nodes don't match line assignments!"
-
+    # recombine into full-length array; skips graphs that were removed
     recombined = recombine_per_graph_spans(
         batch, line_spans, selected_indices_for_batch
     )
 
     assert recombined.shape[0] == batch.shape[0], (
-        f"line_spans.shape[0] ({recombined.shape[0]}) != a_batch.shape[0] ({batch.shape[0]})"
+        f"line_spans.shape[0] ({recombined.shape[0]}) != batch.shape[0] ({batch.shape[0]})"
     )
 
     return recombined

@@ -212,8 +212,8 @@ class Actor(nn.Module):
         perm = 0
 
         # Sanity check
-        b_start = torch.unique(torch.clone(batch))
-        start_num_graphs = b_start.shape[0]
+        # b_start = torch.unique(torch.clone(batch))
+        # start_num_graphs = b_start.shape[0]
 
         logp_terms = []
         logp_last = None
@@ -238,22 +238,24 @@ class Actor(nn.Module):
             logp = dist.log_prob(actions)  # [N], can be negative
             entropy_per_node = dist.entropy()  # [N]
 
-            for g in batch.unique():
-                mask = batch == g
-                mask_indices = mask.nonzero(as_tuple=True)[0]
-                if mask_indices.numel() == 0:
-                    continue  # just in case
-                if actions[mask_indices].sum() == 0:
-                    # fallback: keep your argmax choice
-                    top_idx = (mixed_logits[mask_indices]).argmax()
-                    actions[mask_indices[top_idx]] = 1.0
-                    # also adjust logp and entropy to match the forced-action slot
-                    logp[mask_indices[top_idx]] = dist.log_prob(
-                        actions[mask_indices[top_idx]]
-                    )
-                    entropy_per_node[mask_indices[top_idx]] = dist.entropy()[
-                        mask_indices[top_idx]
-                    ]
+            # Ensure at least one node re
+            # DISABLED: Removing graphs is probably fine
+            # for g in batch.unique():
+            #     print(f"Batch {g} test")
+            #     mask = batch == g
+            #     mask_indices = mask.nonzero(as_tuple=True)[0]
+            #     if mask_indices.numel() == 0:
+            #         continue  # just in case
+            #     if actions[mask_indices].sum() == 0:
+            #         print("ALL ZERO")
+            #         # fallback: keep your argmax choice
+            #         top_idx = (mixed_logits[mask_indices]).argmax()
+            #         actions[mask_indices[top_idx]] = 1.0
+            #         # also adjust logp and entropy to match the forced-action slot
+            #         idx = mask_indices[top_idx].item()
+            #         actions[idx] = 1.0
+            #         logp[idx] = dist.log_prob(actions)[idx]
+            #         entropy_per_node[idx] = dist.entropy()[idx]
 
             logp_last = logp
             logp_terms.append(logp)
@@ -265,13 +267,6 @@ class Actor(nn.Module):
             pre_edge_index = edge_index.clone().detach()
             # pre_batch      = batch
             pre_global_map = global_map.clone().detach()
-
-            # 3) Pool (returns new x, new edge_index, new batch, perm, _)
-            # x, edge_index, _, batch, perm, _ = self.pools[i](
-            #     x, edge_index,
-            #     batch=batch,
-            #     attn=scores
-            # )
 
             edge_index, _ = subgraph(
                 perm, edge_index, relabel_nodes=True, num_nodes=x.size(0)
@@ -313,7 +308,7 @@ class Actor(nn.Module):
                 selected_line_assignments_for_batch=selected_spans,
             )
 
-            diou_l = diou_loss(
+            diou_l, missing = diou_loss(
                 line_mappings=line_spans,
                 edge_index=edge_index.cpu().numpy(),
                 batch=batch.cpu().numpy(),
@@ -321,9 +316,11 @@ class Actor(nn.Module):
                 key_batch_associations=np.vstack(key_batch).squeeze(1),
                 k=10,
                 decay_alpha=0.7,
-            ).to(x.device)
+            )
 
-            reward_g = compute_reward(diou_l, batch)  # [G]
+            diou_l = diou_l.to(x.device)
+
+            reward_g = compute_reward(diou_l, missing, batch)  # [G]
             r = reward_g
             r = (r - r.mean()) / (r.std() + 1e-6)
 
@@ -341,10 +338,10 @@ class Actor(nn.Module):
         x = self.reducer(x)
 
         # Sanity check
-        end_num_graphs = torch.unique(batch).shape[0]
-        assert start_num_graphs == end_num_graphs, (
-            f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {b_start[~torch.isin(b_start, torch.unique(batch))]}"
-        )
+        # end_num_graphs = torch.unique(batch).shape[0]
+        # assert start_num_graphs == end_num_graphs, (
+        #     f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {b_start[~torch.isin(b_start, torch.unique(batch))]}"
+        # )
 
         # All graphs have now been processed. It should theoretically be impossible for any graph to have
         # nodes that failed to find a survivor.

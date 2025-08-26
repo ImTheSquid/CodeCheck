@@ -1068,8 +1068,8 @@ def rust_train(
                 + [embedding_dim],
                 num_heads=[4] * NUM_ACTOR_LAYERS + [1],
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
-                alpha=0.5,
-                beta=0.7,
+                alpha=0.9,
+                beta=0.1,
                 selection_dropout=0.2,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
@@ -1087,10 +1087,10 @@ def rust_train(
                 actor=actor,
                 critic=critic,
                 actor_optim=optim.Adam(
-                    actor.parameters(), lr=1e-4, weight_decay=1e-5
+                    actor.parameters(), lr=1e-5, weight_decay=1e-5
                 ),
                 critic_optim=optim.Adam(
-                    critic.parameters(), lr=1e-4, weight_decay=1e-5
+                    critic.parameters(), lr=1e-5, weight_decay=1e-5
                 ),
                 episodes=NUM_EPISODES,
                 keys=keys,
