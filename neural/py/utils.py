@@ -66,38 +66,54 @@ def compute_returns_and_advantages(
     reward_last_only: bool = False,
     standardize_adv: bool = True,
 ):
-    # transitions: list[Transition], length L
-    # Each Transition has: reward: [G], value: [G]
-    V = torch.stack([t.value.detach() for t in transitions])  # [L, G]
-    R = torch.stack([t.reward for t in transitions])  # [L, G]
+    # Figure out the maximum number of graphs across all transitions
+    max_G = max(t.reward.shape[0] for t in transitions)
+    L = len(transitions)
+
+    # Pad rewards/values to [L, max_G], and keep a mask
+    R = torch.zeros(L, max_G, device=transitions[0].reward.device)
+    V = torch.zeros(L, max_G, device=transitions[0].reward.device)
+    mask = torch.zeros(L, max_G, dtype=torch.bool, device=R.device)
+
+    for i, t in enumerate(transitions):
+        g = t.reward.shape[0]
+        R[i, :g] = t.reward
+        V[i, :g] = t.value.detach()
+        mask[i, :g] = True
 
     if reward_last_only:
-        R = R.clone()
         R[:-1] = R[-1].unsqueeze(0)
 
-    L, G = R.shape
     returns = torch.zeros_like(R)
-    gae = torch.zeros(G, device=R.device)
+    gae = torch.zeros(max_G, device=R.device)
 
+    # Compute GAE backwards in time
     for t in reversed(range(L)):
         v_t = V[t]
-        v_tp1 = (
-            V[t + 1] if t + 1 < L else torch.zeros_like(v_t)
-        )  # terminal at last layer
+        v_tp1 = V[t + 1] if t + 1 < L else torch.zeros_like(v_t)
         delta = R[t] + gamma * v_tp1 - v_t
         gae = delta + gamma * lam * gae
         returns[t] = gae + v_t
 
     advantages = returns - V
 
-    # Optional: standardize per layer (reduces variance)
+    # Mask out invalid graphs
+    returns = returns * mask
+    advantages = advantages * mask
+
     if standardize_adv:
         eps = 1e-8
-        mean = advantages.mean(dim=1, keepdim=True)
-        std = advantages.std(dim=1, unbiased=False, keepdim=True).clamp(min=eps)
+        # avoid dividing by zero for masked-out entries
+        mean = (
+            advantages.sum(dim=1, keepdim=True)
+            / mask.sum(dim=1, keepdim=True).clamp(min=1)
+        ).detach()
+        var = ((advantages - mean) ** 2 * mask).sum(
+            dim=1, keepdim=True
+        ) / mask.sum(dim=1, keepdim=True).clamp(min=1)
+        std = var.sqrt().clamp(min=eps)
         advantages = (advantages - mean) / std
 
-    # Safety clamp
     advantages = torch.clamp(advantages, -10.0, 10.0)
     return returns, advantages
 
@@ -118,14 +134,6 @@ def actor_critic_loss(
         gamma,
         lam,
     )
-
-    # Concatenate per‑layer node data
-    # logp_all = torch.cat([t.logp for t in transitions])  # [∑N_i]
-    # batch_all = torch.cat([t.batch for t in transitions])  # [∑N_i]
-
-    # Broadcast advantage to nodes
-    # adv_per_node = advantages[batch_all]  # [∑N_i]
-    # print(f'Adv: {advantages.shape}, BA: {batch_all.shape}, ApN: {adv_per_node.shape}, LpA: {logp_all.shape}')
 
     # Policy loss (PG)
     actor_loss = 0.0
