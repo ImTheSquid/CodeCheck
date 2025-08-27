@@ -101,7 +101,8 @@ class GraphDataset(Dataset):
         return self.get(lookup)
 
 
-NUM_EPISODES = 25
+NUM_EPISODES = 10
+NUM_EMBEDDING_EPISODES = 50
 
 
 def make_splits(dataset_sz: int) -> tuple[int, int, int]:
@@ -375,13 +376,16 @@ def train(
     val_csv = csv.writer(val_f)
 
     ROWS = [
-        "Actor",
-        "Critic",
+        "Actor Loss",
+        "Critic Loss",
         "Mean Reward",
+        "Reward Standard Deviation",
         "Mean Value",
+        "Value Standard Deviation",
         "Mean Absolute Reward",
         "Mean Absolute Value",
         "Mean Entropy",
+        "Entropy Standard Deviation",
         "Mean Absolute Entropy",
     ]
     train_csv.writerow(ROWS)
@@ -393,10 +397,13 @@ def train(
                 metrics.actor_loss.item(),
                 metrics.critic_loss.item(),
                 metrics.reward.mean().item(),
+                metrics.reward.std().item(),
                 metrics.value.mean().item(),
+                metrics.value.std().item(),
                 metrics.reward.abs().mean().item(),
                 metrics.value.abs().mean().item(),
                 metrics.entropy.mean().item(),
+                metrics.entropy.std().item(),
                 metrics.entropy.abs().mean().item(),
             ]
         )
@@ -1079,7 +1086,7 @@ def rust_train(
             with Cache() as traversal_cache:
                 train_embeddings(
                     dataset,
-                    num_episodes=50,
+                    num_episodes=NUM_EMBEDDING_EPISODES,
                     embedder=embedder,
                     optimizer=optim.Adam(
                         embedder.parameters(), lr=0.0005, weight_decay=0.01
