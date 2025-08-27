@@ -374,8 +374,16 @@ def train(
     train_csv = csv.writer(train_f)
     val_csv = csv.writer(val_f)
 
-    train_csv.writerow(["Actor", "Critic", "Reward", "Value"])
-    val_csv.writerow(["Actor", "Critic", "Reward", "Value"])
+    ROWS = [
+        "Actor",
+        "Critic",
+        "Mean Reward",
+        "Mean Value",
+        "Mean Absolute Reward",
+        "Mean Absolute Value",
+    ]
+    train_csv.writerow(ROWS)
+    val_csv.writerow(ROWS)
 
     def write_metrics(csv, metrics: Metrics):
         csv.writerow(
@@ -384,6 +392,8 @@ def train(
                 metrics.critic_loss.item(),
                 metrics.reward.mean().item(),
                 metrics.value.mean().item(),
+                metrics.reward.abs().mean().item(),
+                metrics.value.abs().mean().item(),
             ]
         )
 
