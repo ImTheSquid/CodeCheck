@@ -381,6 +381,8 @@ def train(
         "Mean Value",
         "Mean Absolute Reward",
         "Mean Absolute Value",
+        "Mean Entropy",
+        "Mean Absolute Entropy",
     ]
     train_csv.writerow(ROWS)
     val_csv.writerow(ROWS)
@@ -394,6 +396,8 @@ def train(
                 metrics.value.mean().item(),
                 metrics.reward.abs().mean().item(),
                 metrics.value.abs().mean().item(),
+                metrics.entropy.mean().item(),
+                metrics.entropy.abs().mean().item(),
             ]
         )
 

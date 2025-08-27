@@ -127,6 +127,7 @@ class Metrics:
     critic_loss: Tensor
     reward: Tensor
     value: Tensor
+    entropy: Tensor
 
 
 def actor_critic_loss(
@@ -177,6 +178,7 @@ def actor_critic_loss(
         critic_loss=critic_loss,
         value=V_all,
         reward=R_all,
+        entropy=entropy,
     )
 
 
