@@ -432,6 +432,9 @@ def train(
                 + "*" * 10
             )
 
+            del batch
+            cleanup()
+
         print(
             f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
         )
@@ -475,6 +478,9 @@ def train(
                     + f"\nValidation =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
                     + "%" * 10
                 )
+
+                del batch
+                cleanup()
 
         print(
             f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
@@ -524,6 +530,9 @@ def train(
                 + f"\nTest =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
                 + "=" * 10
             )
+
+            del batch
+            cleanup()
 
     with open(artifact_dir / "test_loss.csv", "w+") as f:
         csv.writer(f).writerows(
