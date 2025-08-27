@@ -27,7 +27,7 @@ from torch_geometric.utils import subgraph
 from actor import Actor
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
-from utils import actor_critic_loss
+from utils import Metrics, actor_critic_loss
 
 DEVICE = torch.device(
     "cuda"
@@ -374,8 +374,18 @@ def train(
     train_csv = csv.writer(train_f)
     val_csv = csv.writer(val_f)
 
-    train_csv.writerow(["Actor", "Critic"])
-    val_csv.writerow(["Actor", "Critic"])
+    train_csv.writerow(["Actor", "Critic", "Reward", "Value"])
+    val_csv.writerow(["Actor", "Critic", "Reward", "Value"])
+
+    def write_metrics(csv, metrics: Metrics):
+        csv.writerow(
+            [
+                metrics.actor_loss.item(),
+                metrics.critic_loss.item(),
+                metrics.reward.mean().item(),
+                metrics.value.mean().item(),
+            ]
+        )
 
     for epoch in range(episodes):
         print(f"\n⏰ EPOCH {epoch}")
@@ -406,12 +416,15 @@ def train(
                 selected_spans,
                 critic=critic,
             )
-            actor_loss, critic_loss = actor_critic_loss(
+            metrics = actor_critic_loss(
                 transitions,
                 gamma=gamma,
                 lam=lam,
                 entropy_coef=entropy_coef,
             )
+
+            actor_loss = metrics.actor_loss
+            critic_loss = metrics.critic_loss
 
             actor_optim.zero_grad()
             actor_loss.backward()
@@ -424,7 +437,7 @@ def train(
             total_actor_loss += actor_loss.item()
             total_critic_loss += critic_loss.item()
 
-            train_csv.writerow([actor_loss.item(), critic_loss.item()])
+            write_metrics(train_csv, metrics)
 
             print(
                 "*" * 10
@@ -461,17 +474,20 @@ def train(
                     selected_spans,
                     critic=critic,
                 )
-                actor_loss, critic_loss = actor_critic_loss(
+                metrics = actor_critic_loss(
                     transitions,
                     gamma=gamma,
                     lam=lam,
                     entropy_coef=entropy_coef,
                 )
 
+                actor_loss = metrics.actor_loss
+                critic_loss = metrics.critic_loss
+
                 total_actor_loss += actor_loss.item()
                 total_critic_loss += critic_loss.item()
 
-                val_csv.writerow([actor_loss.item(), critic_loss.item()])
+                write_metrics(train_csv, metrics)
 
                 print(
                     "%" * 10
@@ -513,12 +529,15 @@ def train(
                 selected_spans,
                 critic=critic,
             )
-            actor_loss, critic_loss = actor_critic_loss(
+            metrics = actor_critic_loss(
                 transitions,
                 gamma=gamma,
                 lam=lam,
                 entropy_coef=entropy_coef,
             )
+
+            actor_loss = metrics.actor_loss
+            critic_loss = metrics.critic_loss
 
             total_actor_loss += actor_loss.item()
             test_actor_losses.append(actor_loss.item())
@@ -1099,10 +1118,10 @@ def rust_train(
                     actor.parameters(), lr=1e-5, weight_decay=1e-5
                 ),
                 critic_optim=optim.Adam(
-                    critic.parameters(), lr=1e-5, weight_decay=1e-5
+                    critic.parameters(), lr=1e-5 * 2, weight_decay=1e-5
                 ),
                 episodes=NUM_EPISODES,
                 keys=keys,
                 artifact_dir=artifact_dir / artifact_suffix,
-                entropy_coef=0.05,
+                entropy_coef=0.01,
             )

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import NamedTuple
 
 import numpy as np
@@ -120,12 +121,20 @@ def compute_returns_and_advantages(
     return returns, advantages, R, V_critic, mask
 
 
+@dataclass
+class Metrics:
+    actor_loss: Tensor
+    critic_loss: Tensor
+    reward: Tensor
+    value: Tensor
+
+
 def actor_critic_loss(
     transitions: list[Transition],
     gamma: float = 0.99,
     lam: float = 0.95,
     entropy_coef: float = 0.01,
-):
+) -> Metrics:
     """
     transitions : list[Transition] – all layers
     returns    : [G]
@@ -147,8 +156,6 @@ def actor_critic_loss(
         entropy_terms.append(transition.entropy)
 
     # Critic loss (smooth L1 / Huber)
-    flat_mask = mask.reshape(-1)
-    # R_all = R.reshape([-1])[flat_mask]
     V_all = V.reshape([-1])
     # V_all = torch.cat([t.value for t in transitions])  # [L, G]
     R_all = torch.cat([returns[t] for t in range(len(returns))])  # [L, G]
@@ -165,7 +172,12 @@ def actor_critic_loss(
     )
     actor_loss -= entropy_coef * entropy
 
-    return actor_loss, critic_loss
+    return Metrics(
+        actor_loss=actor_loss,
+        critic_loss=critic_loss,
+        value=V_all,
+        reward=R_all,
+    )
 
 
 def diou_loss_1d(a: NDArray, b: NDArray) -> NDArray:
