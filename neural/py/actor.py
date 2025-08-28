@@ -370,6 +370,7 @@ class Actor(nn.Module):
                 size_penalty=self.model_config.reward.graph_size_penalty,
                 missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
                 removed_graph_reward=self.model_config.reward.removed_graph_reward,
+                correct_range_reward=self.model_config.reward.correct_range_reward,
             )  # [G]
             self.running_reward_norm.update(reward_g)
             r = self.running_reward_norm.normalize(reward_g)

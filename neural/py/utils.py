@@ -27,6 +27,7 @@ class RewardConfig:
     missing_graph_penalty: float = 1.0
     graph_size_penalty: float = 0.1
     removed_graph_reward: float = 0.5
+    correct_range_reward: float = 1.1
 
 
 @dataclass
@@ -128,6 +129,7 @@ def compute_reward(
     size_penalty: float = 0.01,
     missing_graph_penalty: float = 1.0,
     removed_graph_reward: float = 1.0,
+    correct_range_reward: float = 1.0,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -144,7 +146,7 @@ def compute_reward(
     # # Node‑wise reward = -DIoU (because lower DIoU means more accurate)
     # node_reward = -diou_norm
 
-    node_reward = diou_to_reward(diou=diou_l, mode="log")
+    node_reward = diou_to_reward(diou=diou_l, mode="log") * correct_range_reward
 
     # Graph‑wise mean reward
     G = batch.max().item() + 1
