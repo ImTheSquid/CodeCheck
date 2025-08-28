@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Optional
 
 import numpy as np
 import torch
@@ -39,11 +39,11 @@ class ModelConfig:
 
 
 class Transition(NamedTuple):
-    logp: torch.Tensor  # [N]
+    logp: Optional[torch.Tensor]  # [N]
     reward: torch.Tensor  # [G]
     value: torch.Tensor  # [G]
-    batch: torch.Tensor
-    entropy: torch.Tensor
+    batch: Optional[torch.Tensor]
+    entropy: Optional[torch.Tensor]
 
 
 class RunningNorm:
@@ -122,6 +122,9 @@ def compute_reward(
     batch:  [N] – graph ID for each node
     Returns: [G] – reward per graph
     """
+    missing_count = total_keys - remaining_keys
+    if len(batch) == 0 and total_keys > 0:
+        return torch.full((1,), -missing_count, device=diou_l.device)
     # # Normalise DIoU so that lower = better
     # diou_norm = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
 
@@ -210,7 +213,7 @@ def compute_returns_and_advantages(
         advantages = (advantages - mean) / std
 
     advantages = torch.clamp(advantages, -10.0, 10.0)
-    return returns, advantages, R, V_critic, mask
+    return returns, advantages, V_critic, mask
 
 
 @dataclass
@@ -233,7 +236,7 @@ def actor_critic_loss(
     returns    : [G]
     advantages : [G]
     """
-    returns, advantages, R, V, mask = compute_returns_and_advantages(
+    returns, advantages, V, mask = compute_returns_and_advantages(
         transitions,
         gamma,
         lam,
@@ -243,15 +246,17 @@ def actor_critic_loss(
     actor_loss = 0.0
     entropy_terms = []
     for i, transition in enumerate(transitions):
+        if transition.logp is None:
+            continue
         actor_loss += -(
             advantages[i][transition.batch] * transition.logp
         ).mean()
         entropy_terms.append(transition.entropy)
 
     # Critic loss (smooth L1 / Huber)
-    V_all = V.reshape([-1])
+    V_all = V.reshape([-1])[mask]
     # V_all = torch.cat([t.value for t in transitions])  # [L, G]
-    R_all = torch.cat([returns[t] for t in range(len(returns))])  # [L, G]
+    R_all = torch.cat([returns[t] for t in range(len(returns))])[mask]  # [L, G]
     assert V_all.shape == R_all.shape, (
         f"Shapes mismatch: V_all: {V_all.shape} R_all: {R_all.shape}"
     )
@@ -261,7 +266,7 @@ def actor_critic_loss(
     entropy = (
         torch.cat(entropy_terms, dim=0).mean()
         if entropy_terms
-        else torch.tensor(0.0, device=transitions[0].logp.device)
+        else torch.tensor(0.0, device=transitions[0].reward.device)
     )
     actor_loss -= entropy_coef * entropy
 

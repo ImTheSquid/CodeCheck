@@ -312,6 +312,28 @@ class Actor(nn.Module):
 
             print(f"Graphs remaining: {torch.unique(batch)}")
 
+            key_batch_associations = np.vstack(key_batch).squeeze(1)
+            keys_stack = np.vstack(keys_1d)
+
+            if len(batch) == 0:
+                # Terminal state
+                # All graphs removed
+                # All keys are automatically assumed missing
+                if len(key_batch_associations) > 0:
+                    terminal_reward = -1.0
+                else:
+                    terminal_reward = 10.0
+                transitions.append(
+                    Transition(
+                        logp=None,
+                        reward=torch.tensor([terminal_reward], device=x.device),
+                        value=torch.tensor([0.0], device=x.device),
+                        batch=None,
+                        entropy=None,
+                    )
+                )
+                break
+
             line_spans = calculate_line_spans(
                 merge_map=merge_map.cpu().numpy(),
                 selected_indices_for_batch=persistent_to_batch_id_map,
@@ -320,13 +342,12 @@ class Actor(nn.Module):
                 selected_line_assignments_for_batch=selected_spans,
             )
 
-            keys_stack = np.vstack(keys_1d)
             diou_l, missing = diou_loss(
                 line_mappings=line_spans,
                 edge_index=edge_index.cpu().numpy(),
                 batch=batch.cpu().numpy(),
                 keys=keys_stack,
-                key_batch_associations=np.vstack(key_batch).squeeze(1),
+                key_batch_associations=key_batch_associations,
                 k=10,
                 decay_alpha=0.7,
             )
@@ -373,13 +394,4 @@ class Actor(nn.Module):
             "Some nodes failed to find a survivor!"
         )
 
-        # return (
-        #     x,
-        #     edge_index,
-        #     merge_map,
-        #     batch,
-        #     perm,
-        #     logp_last,
-        #     transitions,
-        # )
         return transitions
