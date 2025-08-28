@@ -23,11 +23,20 @@ class ActorConfig:
 
 
 @dataclass
+class RewardConfig:
+    missing_graph_penalty: float = 1.0
+    graph_size_penalty: float = 0.2
+
+
+@dataclass
 class ModelConfig:
     num_episodes: int = 10
 
     # Actor
     actor: ActorConfig = field(default_factory=ActorConfig)
+
+    # Reward
+    reward: RewardConfig = field(default_factory=RewardConfig)
 
     # Actor optimizer
     actor_lr: float = 1e-5
@@ -115,6 +124,7 @@ def compute_reward(
     remaining_keys: int,
     batch: Tensor,
     size_penalty: float = 0.01,
+    missing_graph_penalty: float = 1.0,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -145,7 +155,7 @@ def compute_reward(
     reward_per_graph -= size_penalty * num_nodes.float()
 
     # Missing graph penalty
-    reward_per_graph *= remaining_keys / total_keys
+    reward_per_graph -= missing_graph_penalty * missing_count
     # for event in missing:
     # reward_per_graph[event] -= missing_graph_penalty
 

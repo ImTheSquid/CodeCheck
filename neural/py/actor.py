@@ -11,6 +11,7 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
 from utils import (
+    ModelConfig,
     RunningNorm,
     Transition,
     calculate_line_spans,
@@ -63,10 +64,10 @@ class Actor(nn.Module):
         in_dim: int,
         hidden_dims: list[int],
         num_heads: list[int],
+        config: ModelConfig,
         selection_dropout: float = 0.3,
         alpha: float = 0.5,
         beta: float = 0.5,
-        size_penalty: float = 0.5,
     ):
         """
         alpha: The weight between the policy and degree prior for handling node biases within the AST
@@ -81,7 +82,7 @@ class Actor(nn.Module):
         self.policy_heads = nn.ModuleList()
         self.alpha = alpha
         self.beta = beta
-        self.size_penalty = size_penalty
+        self.model_config = config
 
         self.running_reward_norm = RunningNorm()
 
@@ -359,7 +360,8 @@ class Actor(nn.Module):
                 total_keys=keys_stack.shape[0],
                 remaining_keys=keys_stack.shape[0] - len(missing),
                 batch=batch,
-                size_penalty=self.size_penalty,
+                size_penalty=self.model_config.reward.graph_size_penalty,
+                missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
             )  # [G]
             self.running_reward_norm.update(reward_g)
             r = self.running_reward_norm.normalize(reward_g)
