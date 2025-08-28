@@ -222,6 +222,10 @@ class Actor(nn.Module):
         global_map = torch.arange(N0, device=x.device)  # local→global map
         perm = 0
 
+        no_key_graph_indices = torch.unique(
+            torch.from_numpy(np.setdiff1d(np.array(key_batch), batch.numpy()))
+        ).to(x.device)
+
         # Sanity check
         # b_start = torch.unique(torch.clone(batch))
         # start_num_graphs = b_start.shape[0]
@@ -360,8 +364,10 @@ class Actor(nn.Module):
                 total_keys=keys_stack.shape[0],
                 remaining_keys=keys_stack.shape[0] - len(missing),
                 batch=batch,
+                no_key_graph_indices=no_key_graph_indices,
                 size_penalty=self.model_config.reward.graph_size_penalty,
                 missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
+                removed_graph_reward=self.model_config.reward.removed_graph_reward,
             )  # [G]
             self.running_reward_norm.update(reward_g)
             r = self.running_reward_norm.normalize(reward_g)

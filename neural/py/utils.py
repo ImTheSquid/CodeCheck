@@ -25,7 +25,8 @@ class ActorConfig:
 @dataclass
 class RewardConfig:
     missing_graph_penalty: float = 1.0
-    graph_size_penalty: float = 0.2
+    graph_size_penalty: float = 0.1
+    removed_graph_reward: float = 0.5
 
 
 @dataclass
@@ -123,8 +124,10 @@ def compute_reward(
     total_keys: int,
     remaining_keys: int,
     batch: Tensor,
+    no_key_graph_indices: Tensor,
     size_penalty: float = 0.01,
     missing_graph_penalty: float = 1.0,
+    removed_graph_reward: float = 1.0,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -158,6 +161,14 @@ def compute_reward(
     reward_per_graph -= missing_graph_penalty * missing_count
     # for event in missing:
     # reward_per_graph[event] -= missing_graph_penalty
+
+    # Removed graph reward: If a graph with no keys was removed, that's good! Give a reward
+    # Find all unique members of key batches and actual batches
+    # For each item in the no key tensor, if it ISN'T present in the batch then add a reward
+    correct_removals = len(no_key_graph_indices) - torch.sum(
+        torch.isin(no_key_graph_indices, batch)
+    )
+    reward_per_graph += correct_removals * removed_graph_reward
 
     return reward_per_graph
 
