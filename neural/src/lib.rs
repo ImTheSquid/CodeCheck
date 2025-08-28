@@ -170,6 +170,7 @@ pub fn train(
     dataset: TmpDirDataset,
     mode: &str,
     artifact_dir: &str,
+    config_dir: &str,
     top_k: usize,
     device: Option<String>,
 ) -> PyResult<()> {
@@ -184,6 +185,7 @@ pub fn train(
     let kwargs = PyDict::new(py);
     kwargs.set_item("dataset", dataset)?;
     kwargs.set_item("artifact_dir", artifact_dir)?;
+    kwargs.set_item("config_dir", config_dir)?;
     kwargs.set_item("mode", mode)?;
     kwargs.set_item("ast_embeddings", numpy::PyArray2::from_array(py, &emb))?;
     kwargs.set_item("top_k", top_k)?;

@@ -13,9 +13,6 @@ use pyo3::Python;
 struct Arguments {
     #[command(flatten)]
     lt: LaunchType,
-    // /// Where to store the training configuration.
-    // /// config_dir/config.json will be overwritten!
-    // config_dir: Option<PathBuf>,
     /// The datasets to include in training.
     /// Must all have a `dataset.json` file in the root!
     datasets: Vec<PathBuf>,
@@ -42,14 +39,24 @@ enum Mode {
 }
 
 #[derive(Debug, Args)]
-#[group(required = true, multiple = false)]
+#[group(required = true, args = ["artifact_dir", "py", "config_dir"])]
 struct LaunchType {
-    /// Where to store training artifacts.
-    /// Will be deleted and recreated if already exists!
-    #[arg(short = 'a')]
-    artifact_dir: Option<PathBuf>,
+    #[command(flatten)]
+    dirs: Directories,
+
     #[arg(short = 'c')]
     py: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct Directories {
+    /// Where to store the training configuration.
+    #[arg(short = 'o', requires = "artifact_dir")]
+    config_dir: Option<PathBuf>,
+    /// Where to store training artifacts.
+    /// Will be deleted and recreated if already exists!
+    #[arg(short = 'a', requires = "config_dir")]
+    artifact_dir: Option<PathBuf>,
 }
 
 fn main() {
@@ -94,6 +101,8 @@ fn main() {
             env::set_var("CODECHECK_VENV", venv);
         }
 
+        let dirs = args.lt.dirs;
+
         Python::with_gil(|py| {
             neural::initialize_python(py, args.venv);
             neural::add_rust_data(py).expect("add rd");
@@ -106,11 +115,8 @@ fn main() {
                     Mode::EmbedTest => "embed-test",
                     Mode::Train => "train",
                 },
-                &args
-                    .lt
-                    .artifact_dir
-                    .expect("artifact dir")
-                    .to_string_lossy(),
+                &dirs.artifact_dir.unwrap().to_string_lossy(),
+                &dirs.config_dir.unwrap().to_string_lossy(),
                 args.top_k,
                 args.device,
             ) {

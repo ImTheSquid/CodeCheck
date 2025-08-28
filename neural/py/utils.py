@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
 
 import numpy as np
@@ -9,6 +9,33 @@ from numpy.typing import NDArray
 from progress import deque
 from torch import Tensor
 from torch_geometric.utils import k_hop_subgraph
+
+
+@dataclass
+class ActorConfig:
+    alpha: float = 0.9
+    beta: float = 0.1
+    selection_dropout: float = 0.2
+    num_layers: int = 4
+
+    entropy_start: float = 0.02
+    entropy_end: float = 0.001
+
+
+@dataclass
+class ModelConfig:
+    num_episodes: int = 10
+
+    # Actor
+    actor: ActorConfig = field(default_factory=ActorConfig)
+
+    # Actor optimizer
+    actor_lr: float = 1e-5
+    actor_wd: float = 1e-5
+
+    # Critic optimizer
+    critic_lr: float = 2e-5
+    critic_wd: float = 1e-5
 
 
 class Transition(NamedTuple):

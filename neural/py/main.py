@@ -13,6 +13,7 @@ import torch
 import torch.nn.functional as F
 from diskcache import Cache
 from numpy.typing import NDArray
+from omegaconf import OmegaConf
 from progress.bar import Bar
 from sklearn.cluster import HDBSCAN
 from tabulate import tabulate
@@ -27,7 +28,7 @@ from torch_geometric.utils import subgraph
 from actor import Actor
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
-from utils import Metrics, actor_critic_loss, lerp
+from utils import Metrics, ModelConfig, actor_critic_loss, lerp
 
 DEVICE = torch.device(
     "cuda"
@@ -556,7 +557,7 @@ def train(
                 transitions,
                 gamma=gamma,
                 lam=lam,
-                entropy_coef=entropy_coefs,
+                entropy_coef=entropy_coefs[1],
             )
 
             actor_loss = metrics.actor_loss
@@ -587,10 +588,6 @@ def train(
     )
 
     print("Training complete")
-
-
-def evaluate(dataset: Dataset, actor: Actor, embedder: nn.Module):
-    pass
 
 
 def find_root_nodes(edge_index: Tensor, node_indices: Tensor) -> list[int]:
@@ -1031,6 +1028,7 @@ def test_embeddings(
 def rust_train(
     dataset,
     artifact_dir: str,
+    config_dir: str,
     ast_embeddings: NDArray,
     mode: Literal["train", "embed", "embed-test"] = "train",
     top_k: int = 3,
@@ -1045,6 +1043,7 @@ def rust_train(
         f"✅ Python initialization successful. Beginning training on device {DEVICE}..."
     )
     artifact_dir: Path = Path(artifact_dir)
+    config_dir: Path = Path(config_dir)
     # print(f"KEYS\n\n{keys}\n\n")
     # dataset = generate_dataset(edges, features, feature_spans, languages)
     languages = dataset.languages
@@ -1111,7 +1110,11 @@ def rust_train(
                     map_location=DEVICE,
                 )
 
-            NUM_ACTOR_LAYERS = 5
+            schema = OmegaConf.structured(ModelConfig)
+
+            if os.path.exists(config_dir / "config.yml"):
+                cfg = OmegaConf.load(config_dir / "config.yml")
+                OmegaConf.merge(cfg, schema)
 
             critic = MergeCritic(
                 in_dim=embedding_dim // 2 * 4,
@@ -1119,13 +1122,13 @@ def rust_train(
             ).to(DEVICE)
             actor = Actor(
                 in_dim=embedding_dim,
-                hidden_dims=[embedding_dim // 2] * NUM_ACTOR_LAYERS
+                hidden_dims=[embedding_dim // 2] * schema.actor.num_layers
                 + [embedding_dim],
-                num_heads=[4] * NUM_ACTOR_LAYERS + [1],
+                num_heads=[4] * schema.actor.num_layers + [1],
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
-                alpha=0.9,
-                beta=0.1,
-                selection_dropout=0.2,
+                alpha=schema.actor.alpha,
+                beta=schema.actor.beta,
+                selection_dropout=schema.actor.selection_dropout,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
 
@@ -1142,13 +1145,20 @@ def rust_train(
                 actor=actor,
                 critic=critic,
                 actor_optim=optim.Adam(
-                    actor.parameters(), lr=1e-5, weight_decay=1e-5
+                    actor.parameters(),
+                    lr=schema.actor_lr,
+                    weight_decay=schema.actor_wd,
                 ),
                 critic_optim=optim.Adam(
-                    critic.parameters(), lr=1e-5 * 2, weight_decay=1e-5
+                    critic.parameters(),
+                    lr=schema.critic_lr,
+                    weight_decay=schema.critic_wd,
                 ),
-                episodes=NUM_EPISODES,
+                episodes=schema.num_episodes,
                 keys=keys,
                 artifact_dir=artifact_dir / artifact_suffix,
-                entropy_coefs=(0.02, 0.001),
+                entropy_coefs=(
+                    schema.actor.entropy_start,
+                    schema.actor.entropy_end,
+                ),
             )
