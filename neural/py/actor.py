@@ -317,7 +317,7 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
-            print(f"Graphs remaining: {torch.unique(batch)}")
+            print(f"Graphs remaining: {torch.unique(batch).cpu().tolist()}")
 
             key_batch_associations = np.vstack(key_batch).squeeze(1)
             keys_stack = np.vstack(keys_1d)
