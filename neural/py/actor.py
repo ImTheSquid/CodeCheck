@@ -310,6 +310,8 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
+            print(f"Graphs remaining: {torch.unique(batch)}")
+
             line_spans = calculate_line_spans(
                 merge_map=merge_map.cpu().numpy(),
                 selected_indices_for_batch=persistent_to_batch_id_map,
