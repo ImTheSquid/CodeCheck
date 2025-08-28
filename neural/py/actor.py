@@ -10,7 +10,13 @@ from torch_geometric.nn import GATv2Conv
 from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
-from utils import Transition, calculate_line_spans, compute_reward, diou_loss
+from utils import (
+    RunningNorm,
+    Transition,
+    calculate_line_spans,
+    compute_reward,
+    diou_loss,
+)
 
 
 def find_closest_surviving_node(
@@ -60,6 +66,7 @@ class Actor(nn.Module):
         selection_dropout: float = 0.3,
         alpha: float = 0.5,
         beta: float = 0.5,
+        size_penalty: float = 0.5,
     ):
         """
         alpha: The weight between the policy and degree prior for handling node biases within the AST
@@ -74,6 +81,9 @@ class Actor(nn.Module):
         self.policy_heads = nn.ModuleList()
         self.alpha = alpha
         self.beta = beta
+        self.size_penalty = size_penalty
+
+        self.running_reward_norm = RunningNorm()
 
         dims = [in_dim] + hidden_dims
 
@@ -326,9 +336,12 @@ class Actor(nn.Module):
                 total_keys=keys_stack.shape[0],
                 remaining_keys=keys_stack.shape[0] - len(missing),
                 batch=batch,
+                size_penalty=self.size_penalty,
             )  # [G]
-            r = reward_g
-            r = (r - r.mean()) / (r.std() + 1e-6)
+            self.running_reward_norm.update(reward_g)
+            r = self.running_reward_norm.normalize(reward_g)
+            # r = reward_g
+            # r = (r - r.mean()) / (r.std() + 1e-6)
 
             predicted_reward = critic(x.detach(), edge_index, batch)
 
