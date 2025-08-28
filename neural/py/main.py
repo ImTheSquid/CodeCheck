@@ -1114,7 +1114,7 @@ def rust_train(
 
             if os.path.exists(config_dir / "config.yml"):
                 cfg = OmegaConf.load(config_dir / "config.yml")
-                OmegaConf.merge(cfg, schema)
+                schema = OmegaConf.merge(cfg, schema)
 
             critic = MergeCritic(
                 in_dim=embedding_dim // 2 * 4,
