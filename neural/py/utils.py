@@ -19,6 +19,16 @@ class Transition(NamedTuple):
     entropy: torch.Tensor
 
 
+def lerp(a: float, b: float, t: float) -> float:
+    """Linear interpolate on the scale given by a to b, using t as the point on that scale.
+    Examples
+    --------
+        50 == lerp(0, 100, 0.5)
+        4.2 == lerp(1, 5, 0.8)
+    """
+    return (1 - t) * a + t * b
+
+
 def compute_reward(
     diou_l: Tensor,
     total_keys: int,
@@ -213,9 +223,20 @@ def diou_loss_1d(a: NDArray, b: NDArray) -> NDArray:
     intersection[~valid] = 0
     intersection = np.diff(intersection, axis=1)
     union = (np.diff(a, axis=1) + np.diff(b, axis=1)) - intersection
-    iou = intersection / (union + EPSILON)
+    iou_old = intersection / (union + EPSILON)
 
-    return 1.0 - iou.squeeze(1) + dist_sq / (outer_distance_sq + EPSILON)
+    # Cleaner impl from ChatGPT
+    inter_len = np.clip(end - start, 0, None)
+    a_len = a[:, 1] - a[:, 0]
+    b_len = b[:, 1] - b[:, 0]
+    union = a_len + b_len - inter_len
+    iou = inter_len / (union + EPSILON)
+
+    assert np.all(np.equal(iou, iou_old.squeeze(1))), (
+        f"DIOU doesnt match old {iou_old.squeeze(1)} != new {iou}"
+    )
+
+    return 1.0 - iou + dist_sq / (outer_distance_sq + EPSILON)
 
 
 def find_closest_mapping_index(line_mappings: NDArray, target: NDArray) -> int:

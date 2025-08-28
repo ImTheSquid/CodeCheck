@@ -27,7 +27,7 @@ from torch_geometric.utils import subgraph
 from actor import Actor
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
-from utils import Metrics, actor_critic_loss
+from utils import Metrics, actor_critic_loss, lerp
 
 DEVICE = torch.device(
     "cuda"
@@ -356,7 +356,7 @@ def train(
     artifact_dir: Path,
     gamma=0.99,
     lam=0.95,
-    entropy_coef=0.01,
+    entropy_coefs: tuple[float, float] = (0.01, 0.001),
 ):
     os.makedirs(artifact_dir)
 
@@ -414,6 +414,8 @@ def train(
         actor.train()
         critic.train()
 
+        entropy = lerp(entropy_coefs[0], entropy_coefs[1], epoch / episodes)
+
         total_actor_loss = total_critic_loss = 0.0
 
         # Train
@@ -441,7 +443,7 @@ def train(
                 transitions,
                 gamma=gamma,
                 lam=lam,
-                entropy_coef=entropy_coef,
+                entropy_coef=entropy,
             )
 
             actor_loss = metrics.actor_loss
@@ -499,7 +501,7 @@ def train(
                     transitions,
                     gamma=gamma,
                     lam=lam,
-                    entropy_coef=entropy_coef,
+                    entropy_coef=entropy,
                 )
 
                 actor_loss = metrics.actor_loss
@@ -554,7 +556,7 @@ def train(
                 transitions,
                 gamma=gamma,
                 lam=lam,
-                entropy_coef=entropy_coef,
+                entropy_coef=entropy_coefs,
             )
 
             actor_loss = metrics.actor_loss
@@ -1144,5 +1146,5 @@ def rust_train(
                 episodes=NUM_EPISODES,
                 keys=keys,
                 artifact_dir=artifact_dir / artifact_suffix,
-                entropy_coef=0.01,
+                entropy_coefs=(0.02, 0.001),
             )
