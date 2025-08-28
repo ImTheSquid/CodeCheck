@@ -589,6 +589,10 @@ def train(
     print("Training complete")
 
 
+def evaluate(dataset: Dataset, actor: Actor, embedder: nn.Module):
+    pass
+
+
 def find_root_nodes(edge_index: Tensor, node_indices: Tensor) -> list[int]:
     """
     Finds root nodes in a given graph using node indices.

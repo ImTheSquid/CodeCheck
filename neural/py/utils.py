@@ -336,6 +336,12 @@ def diou_loss(
         )
         # print(f'Best index for {key} is {best_node_indices[-1]} (with value {line_mappings[best_node_indices[-1]]}) from \n {line_mappings[mask]} w/loss\n {diou_loss_1d(line_mappings[mask], key)}')
 
+    # Initialize full loss vector (global node indices)
+    losses_full = torch.zeros(num_nodes, dtype=torch.float)
+
+    if len(best_node_indices) == 0:
+        return losses_full, missing_entry_events
+
     # Do k hop subgraph for each key, assigning the DIoU to each node in the graph
     edge_index: Tensor = torch.tensor(edge_index)
     subset, edge_index, mapping, edge_mask = k_hop_subgraph(
@@ -350,9 +356,6 @@ def diou_loss(
     # ChatGPT made this
     def decay_fn(depth: int):
         return decay_alpha**depth
-
-    # Initialize full loss vector (global node indices)
-    losses_full = torch.zeros(num_nodes, dtype=torch.float)
 
     # Build adjacency list for full graph
     adj = [[] for _ in range(num_nodes)]
