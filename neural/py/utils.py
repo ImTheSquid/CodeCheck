@@ -60,7 +60,7 @@ def compute_reward(
     reward_per_graph -= size_penalty * num_nodes.float()
 
     # Missing graph penalty
-    reward_per_graph *= total_keys - remaining_keys
+    reward_per_graph *= remaining_keys / total_keys
     # for event in missing:
     # reward_per_graph[event] -= missing_graph_penalty
 
