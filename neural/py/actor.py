@@ -380,7 +380,8 @@ class Actor(nn.Module):
             )
             transitions.append(transition)
 
-        x = self.reducer(x)
+        if len(batch) > 0:
+            x = self.reducer(x)
 
         # Sanity check
         # end_num_graphs = torch.unique(batch).shape[0]
