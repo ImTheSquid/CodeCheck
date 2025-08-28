@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import numpy as np
 import torch
@@ -52,7 +52,7 @@ class RunningNorm:
 # --- reward shaping helper ---
 def diou_to_reward(
     diou: torch.Tensor,
-    mode: str = "exp",
+    mode: Literal["exp", "log", "lin"] = "exp",
     k: float = 4.0,
     pivot: float = 0.5,
     sharp: float = 6.0,
@@ -101,7 +101,7 @@ def compute_reward(
     # # Node‑wise reward = -DIoU (because lower DIoU means more accurate)
     # node_reward = -diou_norm
 
-    node_reward = diou_to_reward(diou=diou_l)
+    node_reward = diou_to_reward(diou=diou_l, mode="log")
 
     # Graph‑wise mean reward
     G = batch.max().item() + 1
