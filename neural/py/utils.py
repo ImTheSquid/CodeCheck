@@ -241,6 +241,7 @@ def actor_critic_loss(
         gamma,
         lam,
     )
+    mask = mask.reshape([-1])
 
     # Policy loss (PG)
     actor_loss = 0.0
