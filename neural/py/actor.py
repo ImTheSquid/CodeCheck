@@ -223,8 +223,10 @@ class Actor(nn.Module):
         perm = 0
 
         no_key_graph_indices = torch.unique(
-            torch.from_numpy(np.setdiff1d(np.array(key_batch), batch.numpy()))
-        ).to(x.device)
+            torch.from_numpy(
+                np.setdiff1d(np.array(key_batch), batch.cpu().numpy())
+            )
+        ).to(batch.device)
 
         # Sanity check
         # b_start = torch.unique(torch.clone(batch))
