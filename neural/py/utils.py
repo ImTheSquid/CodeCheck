@@ -475,7 +475,7 @@ def recombine_per_graph_spans(
          where full_spans[i] is the span for node i.
     """
     N = batch.shape[0]
-    full_spans = np.zeros((N, 2), dtype=recovered_per_graph[0].dtype)
+    full_spans = np.zeros((N, 2), dtype=int)
 
     # Suppose your graph‐loop was in this order:
     #   for idx, (pid, graph) in enumerate(selected_indices_for_batch):
