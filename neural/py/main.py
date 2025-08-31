@@ -5,7 +5,7 @@ import itertools
 import os
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 
 import numpy as np
 import psutil
@@ -355,6 +355,7 @@ def train(
     episodes: int,
     keys: dict[tuple[int, int], NDArray],
     artifact_dir: Path,
+    config: ModelConfig,
     gamma=0.99,
     lam=0.95,
     entropy_coefs: tuple[float, float] = (0.01, 0.001),
@@ -445,6 +446,7 @@ def train(
                 gamma=gamma,
                 lam=lam,
                 entropy_coef=entropy,
+                critic_loss_fn=config.critic_loss_fn,
             )
 
             actor_loss = metrics.actor_loss
@@ -503,6 +505,7 @@ def train(
                     gamma=gamma,
                     lam=lam,
                     entropy_coef=entropy,
+                    critic_loss_fn=config.critic_loss_fn,
                 )
 
                 actor_loss = metrics.actor_loss
@@ -558,6 +561,7 @@ def train(
                 gamma=gamma,
                 lam=lam,
                 entropy_coef=entropy_coefs[1],
+                critic_loss_fn=config.critic_loss_fn,
             )
 
             actor_loss = metrics.actor_loss
@@ -1116,6 +1120,8 @@ def rust_train(
                 cfg = OmegaConf.load(config_dir / "config.yml")
                 schema = OmegaConf.merge(cfg, schema)
 
+            schema = cast(ModelConfig, schema)
+
             critic = MergeCritic(
                 in_dim=embedding_dim // 2 * 4,
                 hidden_dim_generator=lambda d: d // 2,
@@ -1158,6 +1164,7 @@ def rust_train(
                 episodes=schema.num_episodes,
                 keys=keys,
                 artifact_dir=artifact_dir / artifact_suffix,
+                config=schema,
                 entropy_coefs=(
                     schema.actor.entropy_start,
                     schema.actor.entropy_end,

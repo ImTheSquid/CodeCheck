@@ -56,6 +56,8 @@ class ModelConfig:
     critic_lr: float = 2e-5
     critic_wd: float = 1e-5
 
+    critic_loss_fn: Literal["mse", "huber"] = "huber"
+
 
 class Transition(NamedTuple):
     logp: Optional[torch.Tensor]  # [N]
@@ -261,6 +263,7 @@ def actor_critic_loss(
     gamma: float = 0.99,
     lam: float = 0.95,
     entropy_coef: float = 0.01,
+    critic_loss_fn: Literal["mse", "huber"] = "huber",
 ) -> Metrics:
     """
     transitions : list[Transition] – all layers
@@ -292,7 +295,14 @@ def actor_critic_loss(
     assert V_all.shape == R_all.shape, (
         f"Shapes mismatch: V_all: {V_all.shape} R_all: {R_all.shape}"
     )
-    critic_loss = F.mse_loss(V_all, R_all)
+
+    match critic_loss_fn:
+        case "huber":
+            critic_loss = F.smooth_l1_loss(V_all, R_all)
+        case "mse":
+            critic_loss = F.mse_loss(V_all, R_all)
+        case _:
+            raise ValueError(f"Unknown critic loss function: {critic_loss_fn}")
 
     # Entropy bonus
     entropy = (
