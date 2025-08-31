@@ -56,7 +56,7 @@ class ModelConfig:
     critic_lr: float = 2e-5
     critic_wd: float = 1e-5
 
-    critic_loss_fn: Literal["mse", "huber"] = "huber"
+    critic_loss_fn: str = "huber"
 
 
 class Transition(NamedTuple):

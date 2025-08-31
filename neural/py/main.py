@@ -1120,6 +1120,9 @@ def rust_train(
                 cfg = OmegaConf.load(config_dir / "config.yml")
                 schema = OmegaConf.merge(cfg, schema)
 
+            with open(artifact_dir / "config.yml", mode="w+") as f:
+                OmegaConf.save(schema, f)
+
             schema = cast(ModelConfig, schema)
 
             critic = MergeCritic(
