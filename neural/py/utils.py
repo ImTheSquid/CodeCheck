@@ -31,6 +31,12 @@ class RewardConfig:
 
 
 @dataclass
+class GaeConfig:
+    gamma: float = 0.99
+    lam: float = 0.95
+
+
+@dataclass
 class ModelConfig:
     num_episodes: int = 10
 
@@ -39,6 +45,8 @@ class ModelConfig:
 
     # Reward
     reward: RewardConfig = field(default_factory=RewardConfig)
+
+    gae: GaeConfig = field(default_factory=GaeConfig)
 
     # Actor optimizer
     actor_lr: float = 1e-5

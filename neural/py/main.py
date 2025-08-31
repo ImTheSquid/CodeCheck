@@ -1162,4 +1162,6 @@ def rust_train(
                     schema.actor.entropy_start,
                     schema.actor.entropy_end,
                 ),
+                gamma=schema.gae.gamma,
+                lam=schema.gae.lam,
             )

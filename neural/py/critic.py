@@ -91,16 +91,3 @@ class MergeCritic(nn.Module):
         values = self.graph_value_head(graph_mean).squeeze(-1)
 
         return values
-
-
-class EmbeddingCritic(nn.Module):
-    """
-    How well does each representative vector fit with any other representative vector?
-
-    Want to do something similar to triplet loss here if possible.
-    This will always operate on multiple graphs.
-    If two vectors from different graphs are plagiarized, try to bring them closer together.
-    If there are other plagiarism cases in the other graph, distance the vector from those
-    """
-
-    pass
