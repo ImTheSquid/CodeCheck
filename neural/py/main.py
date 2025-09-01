@@ -991,7 +991,7 @@ def rust_train(
 
             if os.path.exists(config_dir / "config.yml"):
                 cfg = OmegaConf.load(config_dir / "config.yml")
-                schema = OmegaConf.merge(cfg, schema)
+                schema = OmegaConf.merge(schema, cfg)
 
             artifact_suffix = (
                 datetime.datetime.now()
