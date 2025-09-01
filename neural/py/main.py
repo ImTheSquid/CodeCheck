@@ -1116,7 +1116,14 @@ def rust_train(
 
             schema = OmegaConf.structured(ModelConfig)
 
-            if os.path.exists(config_dir / "config.yml"):
+            artifact_suffix = (
+                datetime.datetime.now()
+                .replace(microsecond=0)
+                .isoformat()
+                .replace(":", "_")
+            )
+
+            if os.path.exists(config_dir / artifact_suffix / "config.yml"):
                 cfg = OmegaConf.load(config_dir / "config.yml")
                 schema = OmegaConf.merge(cfg, schema)
 
@@ -1141,13 +1148,6 @@ def rust_train(
                 selection_dropout=schema.actor.selection_dropout,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
-
-            artifact_suffix = (
-                datetime.datetime.now()
-                .replace(microsecond=0)
-                .isoformat()
-                .replace(":", "_")
-            )
 
             train(
                 dataset,
