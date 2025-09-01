@@ -367,8 +367,6 @@ def train(
     lam=0.95,
     entropy_coefs: tuple[float, float] = (0.01, 0.001),
 ):
-    os.makedirs(artifact_dir)
-
     train_set, val_set, test_set = random_split(
         dataset,
         make_splits(len(dataset)),  # type: ignore
@@ -1001,6 +999,8 @@ def rust_train(
                 .isoformat()
                 .replace(":", "_")
             )
+
+            os.makedirs(artifact_dir / artifact_suffix)
 
             with open(
                 artifact_dir / artifact_suffix / "config.yml", mode="w+"
