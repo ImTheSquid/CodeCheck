@@ -374,9 +374,13 @@ def train(
         make_splits(len(dataset)),  # type: ignore
     )
 
-    train_data = DataLoader(train_set, batch_size=25, shuffle=True)  # type: ignore
-    val_data = DataLoader(val_set, batch_size=12)  # type: ignore
-    test_data = DataLoader(test_set, batch_size=12)  # type: ignore
+    train_data = DataLoader(
+        train_set,  # type: ignore
+        batch_size=config.batch_sizes.train,
+        shuffle=True,
+    )
+    val_data = DataLoader(val_set, batch_size=config.batch_sizes.val)  # type: ignore
+    test_data = DataLoader(test_set, batch_size=config.batch_sizes.test)  # type: ignore
 
     train_f = open(artifact_dir / "train_loss.csv", "w+")
     val_f = open(artifact_dir / "val_loss.csv", "w+")

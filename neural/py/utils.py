@@ -39,6 +39,13 @@ class GaeConfig:
 
 
 @dataclass
+class BatchSizes:
+    train: int = 25
+    val: int = 25
+    test: int = 25
+
+
+@dataclass
 class ModelConfig:
     num_episodes: int = 10
 
@@ -62,6 +69,8 @@ class ModelConfig:
 
     embedding_loss_margin: float = 1.0
     embedding_loss_top_k: int = 50
+
+    batch_sizes: BatchSizes = field(default_factory=BatchSizes)
 
 
 class Transition(NamedTuple):
