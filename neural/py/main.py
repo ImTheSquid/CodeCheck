@@ -490,7 +490,7 @@ def train(
                 + "*" * 10
             )
 
-            del batch
+            del batch, actor_loss, critic_loss, aux_emb_loss
             cleanup()
 
         print(
@@ -555,7 +555,7 @@ def train(
                     + "%" * 10
                 )
 
-                del batch
+                del batch, actor_loss, critic_loss, aux_emb_loss
                 cleanup()
 
         print(
@@ -623,7 +623,7 @@ def train(
                 + "=" * 10
             )
 
-            del batch
+            del batch, actor_loss, critic_loss, aux_emb_loss
             cleanup()
 
     with open(artifact_dir / "test_loss.csv", "w+") as f:
