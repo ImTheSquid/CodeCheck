@@ -991,6 +991,10 @@ def rust_train(
 
             schema = OmegaConf.structured(ModelConfig)
 
+            if os.path.exists(config_dir / "config.yml"):
+                cfg = OmegaConf.load(config_dir / "config.yml")
+                schema = OmegaConf.merge(cfg, schema)
+
             artifact_suffix = (
                 datetime.datetime.now()
                 .replace(microsecond=0)
@@ -998,11 +1002,9 @@ def rust_train(
                 .replace(":", "_")
             )
 
-            if os.path.exists(config_dir / artifact_suffix / "config.yml"):
-                cfg = OmegaConf.load(config_dir / "config.yml")
-                schema = OmegaConf.merge(cfg, schema)
-
-            with open(artifact_dir / "config.yml", mode="w+") as f:
+            with open(
+                artifact_dir / artifact_suffix / "config.yml", mode="w+"
+            ) as f:
                 OmegaConf.save(schema, f)
 
             schema = cast(ModelConfig, schema)
