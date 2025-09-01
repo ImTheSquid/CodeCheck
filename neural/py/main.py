@@ -3,7 +3,6 @@ import datetime
 import gc
 import itertools
 import os
-from collections import defaultdict, deque
 from pathlib import Path
 from typing import Literal, Optional, cast
 
@@ -23,12 +22,20 @@ from torch.utils.data.dataset import Dataset
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
-from torch_geometric.utils import subgraph
 
 from actor import Actor
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
-from utils import Metrics, ModelConfig, actor_critic_loss, lerp
+from utils import (
+    AverageAccumulator,
+    Metrics,
+    ModelConfig,
+    actor_critic_loss,
+    auxiliary_embedding_loss_helper,
+    get_projections_and_targets_for_each_batch,
+    lerp,
+    mine_triplets_from_aux_embeddings,
+)
 
 DEVICE = torch.device(
     "cuda"
@@ -431,8 +438,10 @@ def train(
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
 
+            embs = embedder(batch.x, batch.edge_index)
+
             transitions = actor(
-                embedder(batch.x, batch.edge_index),
+                embs,
                 batch.edge_index,
                 batch.batch,
                 key_batch,
@@ -449,7 +458,17 @@ def train(
                 critic_loss_fn=config.critic_loss_fn,
             )
 
+            aux_emb_loss = auxiliary_embedding_loss_helper(
+                embs,
+                batch=batch,
+                persistent_to_batch_id_map=persistent_to_batch_id_map,
+                keys=keys,
+                config=config,
+            )
+
             actor_loss = metrics.actor_loss
+            if aux_emb_loss is not None:
+                actor_loss += aux_emb_loss
             critic_loss = metrics.critic_loss
 
             actor_optim.zero_grad()
@@ -490,8 +509,10 @@ def train(
                 selected_spans = batch.lines
                 batch = batch.to(DEVICE)
 
+                embs = embedder(batch.x, batch.edge_index)
+
                 transitions = actor(
-                    embedder(batch.x, batch.edge_index),
+                    embs,
                     batch.edge_index,
                     batch.batch,
                     key_batch,
@@ -500,6 +521,7 @@ def train(
                     selected_spans,
                     critic=critic,
                 )
+
                 metrics = actor_critic_loss(
                     transitions,
                     gamma=gamma,
@@ -508,7 +530,18 @@ def train(
                     critic_loss_fn=config.critic_loss_fn,
                 )
 
+                aux_emb_loss = auxiliary_embedding_loss_helper(
+                    embs,
+                    batch=batch,
+                    persistent_to_batch_id_map=persistent_to_batch_id_map,
+                    keys=keys,
+                    config=config,
+                )
+
                 actor_loss = metrics.actor_loss
+                if aux_emb_loss is not None:
+                    actor_loss += aux_emb_loss
+                critic_loss = metrics.critic_loss
                 critic_loss = metrics.critic_loss
 
                 total_actor_loss += actor_loss.item()
@@ -546,8 +579,10 @@ def train(
             selected_spans = batch.lines
             batch = batch.to(DEVICE)
 
+            embs = embedder(batch.x, batch.edge_index)
+
             transitions = actor(
-                embedder(batch.x, batch.edge_index),
+                embs,
                 batch.edge_index,
                 batch.batch,
                 key_batch,
@@ -564,7 +599,17 @@ def train(
                 critic_loss_fn=config.critic_loss_fn,
             )
 
+            aux_emb_loss = auxiliary_embedding_loss_helper(
+                embs,
+                batch=batch,
+                persistent_to_batch_id_map=persistent_to_batch_id_map,
+                keys=keys,
+                config=config,
+            )
+
             actor_loss = metrics.actor_loss
+            if aux_emb_loss is not None:
+                actor_loss += aux_emb_loss
             critic_loss = metrics.critic_loss
 
             total_actor_loss += actor_loss.item()
@@ -592,186 +637,6 @@ def train(
     )
 
     print("Training complete")
-
-
-def find_root_nodes(edge_index: Tensor, node_indices: Tensor) -> list[int]:
-    """
-    Finds root nodes in a given graph using node indices.
-    A root node is one with no incoming edges.
-    """
-    incoming = defaultdict(int)
-    for src, dst in edge_index.t().tolist():
-        if dst in node_indices:
-            incoming[dst] += 1
-
-    return [
-        int(node.item())
-        for node in node_indices
-        if incoming[int(node.item())] == 0
-    ]
-
-
-def preorder_traversal(edge_index: Tensor, root: int) -> list[int]:
-    """
-    Performs a preorder traversal (node → children) of a tree rooted at `root`.
-    `edge_index` is expected to be a 2 x E tensor of directed edges.
-    """
-    tree = defaultdict(list)
-    for src, dst in edge_index.t().tolist():
-        tree[src].append(dst)
-
-    visited = set()
-    order = []
-
-    def dfs(node):
-        if node in visited:
-            return
-        visited.add(node)
-        order.append(node)
-        for child in tree[node]:
-            dfs(child)
-
-    dfs(root)
-    return order
-
-
-def get_projections_and_targets_for_each_batch(proj, batch, cache: Cache):
-    tgt = torch.argmax(batch.x, dim=1)
-
-    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
-    persistent_to_batch_id_map = list(
-        zip(map(int, batch.key_index), selected_batch_indices)
-    )
-
-    batch_to_persistent_id_map = {
-        bid: pid for pid, bid in persistent_to_batch_id_map
-    }
-
-    for batch_id in torch.unique(batch.batch):
-        if batch_to_persistent_id_map[int(batch_id)] in cache:
-            preorder = cache[batch_to_persistent_id_map[int(batch_id)]]
-        else:
-            subgraph_mask = batch.batch == batch_id
-            node_indices = subgraph_mask.nonzero(as_tuple=True)[0]
-            subgraph_edge_index, _ = subgraph(
-                edge_index=batch.edge_index,
-                subset=node_indices,
-                relabel_nodes=True,
-            )
-
-            # Find root node(s)
-            roots = find_root_nodes(
-                subgraph_edge_index, torch.arange(node_indices.shape[0])
-            )
-            assert len(roots) == 1, "AST should have exactly one root"
-
-            # Traverse
-            preorder = preorder_traversal(subgraph_edge_index, roots[0])
-            cache[batch_to_persistent_id_map[int(batch_id)]] = preorder
-
-        def window(seq, n=2):
-            it = iter(seq)
-            win = deque((next(it, None) for _ in range(n)), maxlen=n)
-            yield win
-            append = win.append
-            for e in it:
-                append(e)
-                yield win
-
-        projs = []
-        tgts = []
-        for a, b in window(preorder):
-            projs.append(proj[a])
-            tgts.append(tgt[b])
-
-        projs = torch.stack(projs)
-        tgts = torch.stack(tgts)
-        yield projs, tgts
-
-
-def mine_triplets(
-    x: torch.Tensor,
-    embeddings: torch.Tensor,
-    top_k: int = 3,
-    distance_metric: str = "cosine",
-) -> torch.Tensor:
-    """
-    Args:
-        x: (N, D) one-hot node type matrix.
-        embeddings: (D, E) embedding lookup for node types.
-        top_k: number of types to mine for positives and negatives.
-        distance_metric: 'cosine' or 'euclidean'.
-
-    Returns:
-        triplets: (T, 3) LongTensor with anchor, positive, and negative indices.
-    """
-    node_types = x.argmax(dim=1)  # (N,)
-    N, D = x.shape
-
-    # === 1. Compute (D, D) distance matrix between types ===
-    if distance_metric == "cosine":
-        type_embs = torch.nn.functional.normalize(embeddings, dim=1)
-        dist_type_type = 1 - type_embs @ type_embs.T
-    elif distance_metric == "euclidean":
-        diff = embeddings[:, None, :] - embeddings[None, :, :]
-        dist_type_type = torch.norm(diff, dim=2)
-    else:
-        raise ValueError("Unsupported distance metric")
-
-    # Exclude self-types using NaN (so they don't appear in topk either way)
-    dist_type_type.fill_diagonal_(float("nan"))
-
-    # === 2. Precompute type -> indices map ===
-    type_to_indices = [[] for _ in range(D)]
-    for idx, t in enumerate(node_types.tolist()):
-        type_to_indices[t].append(idx)
-
-    # === 3. Mine triplets ===
-    triplets = []
-
-    for i in range(N):
-        anchor_type = node_types[i]
-        dists = dist_type_type[anchor_type]  # (D,)
-
-        if dists.isnan().all():
-            continue  # no other types to compare to
-
-        # Top-k closest and farthest *types* (excluding self via NaN)
-        _, closest_types = torch.topk(dists, top_k, largest=False)
-        _, farthest_types = torch.topk(dists, top_k, largest=True)
-
-        for pt in closest_types.tolist():
-            pos_candidates = type_to_indices[pt]
-            if not pos_candidates:
-                continue
-            pos_idx = pos_candidates[torch.randint(len(pos_candidates), (1,))]
-
-            for nt in farthest_types.tolist():
-                neg_candidates = type_to_indices[nt]
-                if not neg_candidates:
-                    continue
-                neg_idx = neg_candidates[
-                    torch.randint(len(neg_candidates), (1,))
-                ]
-                triplets.append((i, pos_idx, neg_idx))
-
-    assert len(triplets) > 0, "Triples array empty, probably bad"
-
-    return torch.tensor(triplets, dtype=torch.long)
-
-
-class AverageAccumulator:
-    def __init__(self, init: float | Tensor = 0.0) -> None:
-        self.sum = init
-        self.num = 0
-
-    def __iadd__(self, o):
-        self.sum += o
-        self.num += 1
-        return self
-
-    def mean(self) -> float | Tensor:
-        return self.sum / max(self.num, 1)
 
 
 def train_embeddings(
@@ -818,7 +683,9 @@ def train_embeddings(
 
             batch = batch.to(DEVICE)
 
-            triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+            triplets = mine_triplets_from_aux_embeddings(
+                batch.x, ast_embeddings, top_k=top_k
+            )
 
             proj, lang = embedder(batch.x, batch.edge_index)
 
@@ -868,7 +735,9 @@ def train_embeddings(
         for batch in val_data:
             with torch.no_grad():
                 batch = batch.to(DEVICE)
-                triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+                triplets = mine_triplets_from_aux_embeddings(
+                    batch.x, ast_embeddings, top_k=top_k
+                )
 
                 proj, lang = embedder(batch.x, batch.edge_index)
 
@@ -911,7 +780,9 @@ def train_embeddings(
     for batch in test_data:
         batch = batch.to(DEVICE)
         with torch.no_grad():
-            triplets = mine_triplets(batch.x, ast_embeddings, top_k=top_k)
+            triplets = mine_triplets_from_aux_embeddings(
+                batch.x, ast_embeddings, top_k=top_k
+            )
             proj, lang = embedder(batch.x, batch.edge_index)
             lang = global_mean_pool(lang, batch.batch)
 

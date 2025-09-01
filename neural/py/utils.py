@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple, Optional
 
@@ -5,10 +6,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch_scatter
+from diskcache import Cache
 from numpy.typing import NDArray
 from progress import deque
 from torch import Tensor
-from torch_geometric.utils import k_hop_subgraph
+from torch_geometric.utils import k_hop_subgraph, subgraph
 
 
 @dataclass
@@ -57,6 +59,9 @@ class ModelConfig:
     critic_wd: float = 1e-5
 
     critic_loss_fn: str = "huber"
+
+    embedding_loss_margin: float = 1.0
+    embedding_loss_top_k: int = 50
 
 
 class Transition(NamedTuple):
@@ -185,9 +190,6 @@ def compute_reward(
     return reward_per_graph
 
 
-"""assistant-wrote: corrected returns/advantages with per-layer standardization"""
-
-
 def compute_returns_and_advantages(
     transitions,
     gamma: float = 0.99,
@@ -195,6 +197,7 @@ def compute_returns_and_advantages(
     reward_last_only: bool = False,
     standardize_adv: bool = True,
 ):
+    """assistant-wrote: corrected returns/advantages with per-layer standardization"""
     # Figure out the maximum number of graphs across all transitions
     max_G = max(t.reward.shape[0] for t in transitions)
     L = len(transitions)
@@ -258,12 +261,96 @@ class Metrics:
     entropy: Tensor
 
 
+def auxiliary_embedding_loss(
+    embs: Tensor,
+    batch: Tensor,
+    positives: list[tuple[int, int]],
+    top_k: int,
+    margin: float,
+):
+    """
+    embs: (N, D)
+    batch: (N,)
+    positives: list[(A, B)] List of graph pairs that are plagiarized, normalized to batch numbering
+
+    Calculates the embedding loss to aid in clustering
+    """
+
+    G = int(batch.max()) + 1
+    positives_tensor = torch.zeros((G, G), dtype=torch.int, device=embs.device)
+    for a, b in positives:
+        positives_tensor[a, b] = 1
+        positives_tensor[b, a] = 1
+
+    positives_tensor.fill_diagonal_(2)
+
+    # Mine triplets
+    anchors = poss = negs = []
+    for i in range(embs.shape[0]):
+        batch_association = batch[i]
+
+        pos = torch.argwhere(positives_tensor[batch_association] == 1)
+        pos_batch_mask = torch.isin(batch, pos.flatten())
+        pos_embs = embs[pos_batch_mask]
+        pos_node_indices = torch.randperm(pos_embs.shape[0])[:top_k]
+        chosen_pos_embs = pos_embs[pos_node_indices]
+
+        neg = torch.argwhere(positives_tensor[batch_association] == 0)
+        neg_batch_mask = torch.isin(batch, neg.flatten())
+        neg_embs = embs[neg_batch_mask]
+        neg_node_indices = torch.randperm(neg_embs.shape[0])[:top_k]
+        chosen_neg_embs = neg_embs[neg_node_indices]
+
+        for pos in chosen_pos_embs:
+            for neg in chosen_neg_embs:
+                anchors.append(embs[i])
+                poss.append(pos)
+                negs.append(neg)
+
+    if not anchors:
+        return None
+
+    a, p, n = torch.stack(anchors), torch.stack(poss), torch.stack(negs)
+
+    return F.triplet_margin_loss(a, p, n, margin=margin)
+
+
+def auxiliary_embedding_loss_helper(
+    embs: Tensor,
+    batch,
+    persistent_to_batch_id_map: list[tuple[int, int]],
+    keys: dict[tuple[int, int], NDArray],
+    config: ModelConfig,
+):
+    pers_to_batch = dict(persistent_to_batch_id_map)
+
+    positives = list(
+        map(
+            lambda k: (pers_to_batch[k[0]], pers_to_batch[k[1]]),
+            filter(
+                lambda k: k[0] in pers_to_batch and k[1] in pers_to_batch,
+                keys.keys(),
+            ),
+        )
+    )
+
+    aux_emb_loss = auxiliary_embedding_loss(
+        embs,
+        batch.batch,
+        positives=positives,
+        top_k=config.embedding_loss_top_k,
+        margin=config.embedding_loss_margin,
+    )
+
+    return aux_emb_loss
+
+
 def actor_critic_loss(
     transitions: list[Transition],
     gamma: float = 0.99,
     lam: float = 0.95,
     entropy_coef: float = 0.01,
-    critic_loss_fn: Literal["mse", "huber"] = "huber",
+    critic_loss_fn: str = "huber",
 ) -> Metrics:
     """
     transitions : list[Transition] – all layers
@@ -593,3 +680,183 @@ def calculate_line_spans(
     )
 
     return recombined
+
+
+def find_root_nodes(edge_index: Tensor, node_indices: Tensor) -> list[int]:
+    """
+    Finds root nodes in a given graph using node indices.
+    A root node is one with no incoming edges.
+    """
+    incoming = defaultdict(int)
+    for src, dst in edge_index.t().tolist():
+        if dst in node_indices:
+            incoming[dst] += 1
+
+    return [
+        int(node.item())
+        for node in node_indices
+        if incoming[int(node.item())] == 0
+    ]
+
+
+def preorder_traversal(edge_index: Tensor, root: int) -> list[int]:
+    """
+    Performs a preorder traversal (node → children) of a tree rooted at `root`.
+    `edge_index` is expected to be a 2 x E tensor of directed edges.
+    """
+    tree = defaultdict(list)
+    for src, dst in edge_index.t().tolist():
+        tree[src].append(dst)
+
+    visited = set()
+    order = []
+
+    def dfs(node):
+        if node in visited:
+            return
+        visited.add(node)
+        order.append(node)
+        for child in tree[node]:
+            dfs(child)
+
+    dfs(root)
+    return order
+
+
+def get_projections_and_targets_for_each_batch(proj, batch, cache: Cache):
+    tgt = torch.argmax(batch.x, dim=1)
+
+    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
+    persistent_to_batch_id_map = list(
+        zip(map(int, batch.key_index), selected_batch_indices)
+    )
+
+    batch_to_persistent_id_map = {
+        bid: pid for pid, bid in persistent_to_batch_id_map
+    }
+
+    for batch_id in torch.unique(batch.batch):
+        if batch_to_persistent_id_map[int(batch_id)] in cache:
+            preorder = cache[batch_to_persistent_id_map[int(batch_id)]]
+        else:
+            subgraph_mask = batch.batch == batch_id
+            node_indices = subgraph_mask.nonzero(as_tuple=True)[0]
+            subgraph_edge_index, _ = subgraph(
+                edge_index=batch.edge_index,
+                subset=node_indices,
+                relabel_nodes=True,
+            )
+
+            # Find root node(s)
+            roots = find_root_nodes(
+                subgraph_edge_index, torch.arange(node_indices.shape[0])
+            )
+            assert len(roots) == 1, "AST should have exactly one root"
+
+            # Traverse
+            preorder = preorder_traversal(subgraph_edge_index, roots[0])
+            cache[batch_to_persistent_id_map[int(batch_id)]] = preorder
+
+        def window(seq, n=2):
+            it = iter(seq)
+            win = deque((next(it, None) for _ in range(n)), maxlen=n)
+            yield win
+            append = win.append
+            for e in it:
+                append(e)
+                yield win
+
+        projs = []
+        tgts = []
+        for a, b in window(preorder):
+            projs.append(proj[a])
+            tgts.append(tgt[b])
+
+        projs = torch.stack(projs)
+        tgts = torch.stack(tgts)
+        yield projs, tgts
+
+
+def mine_triplets_from_aux_embeddings(
+    x: torch.Tensor,
+    embeddings: torch.Tensor,
+    top_k: int = 3,
+    distance_metric: str = "cosine",
+) -> torch.Tensor:
+    """
+    Args:
+        x: (N, D) one-hot node type matrix.
+        embeddings: (D, E) embedding lookup for node types.
+        top_k: number of types to mine for positives and negatives.
+        distance_metric: 'cosine' or 'euclidean'.
+
+    Returns:
+        triplets: (T, 3) LongTensor with anchor, positive, and negative indices.
+    """
+    node_types = x.argmax(dim=1)  # (N,)
+    N, D = x.shape
+
+    # === 1. Compute (D, D) distance matrix between types ===
+    if distance_metric == "cosine":
+        type_embs = torch.nn.functional.normalize(embeddings, dim=1)
+        dist_type_type = 1 - type_embs @ type_embs.T
+    elif distance_metric == "euclidean":
+        diff = embeddings[:, None, :] - embeddings[None, :, :]
+        dist_type_type = torch.norm(diff, dim=2)
+    else:
+        raise ValueError("Unsupported distance metric")
+
+    # Exclude self-types using NaN (so they don't appear in topk either way)
+    dist_type_type.fill_diagonal_(float("nan"))
+
+    # === 2. Precompute type -> indices map ===
+    type_to_indices = [[] for _ in range(D)]
+    for idx, t in enumerate(node_types.tolist()):
+        type_to_indices[t].append(idx)
+
+    # === 3. Mine triplets ===
+    triplets = []
+
+    for i in range(N):
+        anchor_type = node_types[i]
+        dists = dist_type_type[anchor_type]  # (D,)
+
+        if dists.isnan().all():
+            continue  # no other types to compare to
+
+        # Top-k closest and farthest *types* (excluding self via NaN)
+        _, closest_types = torch.topk(dists, top_k, largest=False)
+        _, farthest_types = torch.topk(dists, top_k, largest=True)
+
+        for pt in closest_types.tolist():
+            pos_candidates = type_to_indices[pt]
+            if not pos_candidates:
+                continue
+            pos_idx = pos_candidates[torch.randint(len(pos_candidates), (1,))]
+
+            for nt in farthest_types.tolist():
+                neg_candidates = type_to_indices[nt]
+                if not neg_candidates:
+                    continue
+                neg_idx = neg_candidates[
+                    torch.randint(len(neg_candidates), (1,))
+                ]
+                triplets.append((i, pos_idx, neg_idx))
+
+    assert len(triplets) > 0, "Triples array empty, probably bad"
+
+    return torch.tensor(triplets, dtype=torch.long)
+
+
+class AverageAccumulator:
+    def __init__(self, init: float | Tensor = 0.0) -> None:
+        self.sum = init
+        self.num = 0
+
+    def __iadd__(self, o):
+        self.sum += o
+        self.num += 1
+        return self
+
+    def mean(self) -> float | Tensor:
+        return self.sum / max(self.num, 1)
