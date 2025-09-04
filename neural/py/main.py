@@ -3,6 +3,7 @@ import datetime
 import gc
 import itertools
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Literal, Optional, cast
 
@@ -23,7 +24,7 @@ from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
 
-from actor import Actor
+from actor import Actor, LearningData
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
 from utils import (
@@ -34,7 +35,9 @@ from utils import (
     auxiliary_embedding_loss_helper,
     get_projections_and_targets_for_each_batch,
     lerp,
+    make_persistent_to_batch_id_map,
     mine_triplets_from_aux_embeddings,
+    persistent_to_batch_id_map_and_keys,
 )
 
 DEVICE = torch.device(
@@ -323,33 +326,54 @@ def cluster_and_calculate_reward(
     return f1
 
 
-def persistent_to_batch_id_map_and_keys(
-    batch, keys
-) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
-    # Selected graph indices are actually different than the assignments given by PyTorch
-    # Zip them together for processing later
-    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
-    persistent_to_batch_id_map = list(
-        zip(map(int, batch.key_index), selected_batch_indices)
+def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
+    embedder.eval()
+    actor.eval()
+
+    eval_data = DataLoader(
+        dataset,  # pyright: ignore
+        batch_size=25,
+        shuffle=False,
     )
 
-    keys_1d = []
-    key_batch = []
+    xs = []
+    spanss = []
+    persistent_idss = []
+    with torch.no_grad():
+        for batch in eval_data:
+            persistent_to_batch_id_map = make_persistent_to_batch_id_map(batch)
+            batch_to_persistent = torch.tensor(list(map(int, batch.key_index)))
 
-    def add_key_to_keys_and_batch(val: NDArray, gid, target_left: bool):
-        nonlocal keys_1d, key_batch
-        if target_left:
-            keys_1d.append(val[:, [0, 2]])
-        else:
-            keys_1d.append(val[:, [1, 3]])
-        key_batch += [gid] * val.shape[0]
+            batch = batch.to(DEVICE)
+            batch_to_persistent = batch_to_persistent.to(DEVICE)
 
-    for pid, gid in persistent_to_batch_id_map:
-        for left, right in keys.keys():
-            if pid == left or pid == right:
-                add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
+            embs = embedder(batch.x, batch.edge_index)
 
-    return persistent_to_batch_id_map, keys_1d, key_batch
+            x, line_spans, batch_idxs = actor(
+                embs,
+                batch.edge_index,
+                batch.batch,
+                persistent_to_batch_id_map,
+                batch.lines,
+            )
+            persistent_ids = batch_to_persistent[batch_idxs].cpu().numpy()
+            xs.append(x)
+            spanss.append(line_spans)
+            persistent_idss.append(persistent_ids)
+
+    x = torch.cat(xs, dim=0)
+    spans = np.concat(spanss, axis=0)
+    persistent_ids = np.concatenate(persistent_idss, axis=0)
+
+    hdbscan = HDBSCAN(cluster_selection_method="leaf")
+    hdbscan.fit(x.cpu().numpy())
+
+    detections = defaultdict(list)
+    for i, label in enumerate(hdbscan.labels_):
+        row = spans[i]
+        detections[label].append((persistent_ids[i], row[0], row[1]))
+
+    return detections
 
 
 def train(
@@ -442,15 +466,19 @@ def train(
 
             embs = embedder(batch.x, batch.edge_index)
 
+            learning_data = LearningData(
+                critic=critic,
+                keys_1d=keys_1d,
+                key_batch=key_batch,
+            )
+
             transitions = actor(
                 embs,
                 batch.edge_index,
                 batch.batch,
-                key_batch,
-                keys_1d,
                 persistent_to_batch_id_map,
                 selected_spans,
-                critic=critic,
+                learning_data=learning_data,
             )
             metrics = actor_critic_loss(
                 transitions,
@@ -513,15 +541,17 @@ def train(
 
                 embs = embedder(batch.x, batch.edge_index)
 
+                learning_data = LearningData(
+                    critic=critic, key_batch=key_batch, keys_1d=keys_1d
+                )
+
                 transitions = actor(
                     embs,
                     batch.edge_index,
                     batch.batch,
-                    key_batch,
-                    keys_1d,
                     persistent_to_batch_id_map,
                     selected_spans,
-                    critic=critic,
+                    learning_data=learning_data,
                 )
 
                 metrics = actor_critic_loss(
@@ -570,8 +600,6 @@ def train(
     # Test
     total_actor_loss = total_critic_loss = 0.0
     test_actor_losses = test_critic_losses = []
-    actor.eval()
-    critic.eval()
     with torch.no_grad():
         for batch in test_data:
             persistent_to_batch_id_map, keys_1d, key_batch = (
@@ -583,15 +611,17 @@ def train(
 
             embs = embedder(batch.x, batch.edge_index)
 
+            learning_data = LearningData(
+                critic=critic, keys_1d=keys_1d, key_batch=key_batch
+            )
+
             transitions = actor(
                 embs,
                 batch.edge_index,
                 batch.batch,
-                key_batch,
-                keys_1d,
                 persistent_to_batch_id_map,
                 selected_spans,
-                critic=critic,
+                learning_data=learning_data,
             )
             metrics = actor_critic_loss(
                 transitions,
@@ -639,6 +669,8 @@ def train(
     )
 
     print("Training complete")
+    torch.save(embedder.state_dict(), artifact_dir / "embedder_tuned.pt")
+    torch.save(actor.state_dict(), artifact_dir / "actor.pt")
 
 
 def train_embeddings(
@@ -907,7 +939,7 @@ def rust_train(
     artifact_dir: str,
     config_dir: str,
     ast_embeddings: NDArray,
-    mode: Literal["train", "embed", "embed-test"] = "train",
+    mode: Literal["train", "embed", "embed-test", "eval"] = "train",
     top_k: int = 3,
     device: Optional[str] = None,
 ):
@@ -1052,3 +1084,24 @@ def rust_train(
                 gamma=schema.gae.gamma,
                 lam=schema.gae.lam,
             )
+        case "eval":
+            if not (
+                os.path.exists(artifact_dir / "embeddings_tuned.pt")
+                and os.path.exists(artifact_dir / "actor.pt")
+            ):
+                raise FileNotFoundError(
+                    "Actor or tuned embedding weights not found in artifact dir!"
+                )
+
+            embedder = torch.load(
+                artifact_dir / "embeddings_tuned.pt",
+                weights_only=False,
+                map_location=DEVICE,
+            )
+            actor = torch.load(
+                artifact_dir / "actor.pt",
+                weights_only=False,
+                map_location=DEVICE,
+            )
+
+            return eval(actor, embedder, dataset)

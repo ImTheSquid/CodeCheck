@@ -1,4 +1,6 @@
 from collections import deque
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
@@ -56,6 +58,13 @@ def find_closest_surviving_node(
                     queue.append(neighbor)
 
     return -1
+
+
+@dataclass
+class LearningData:
+    critic: nn.Module
+    keys_1d: list[torch.Tensor]
+    key_batch: list[int]
 
 
 class Actor(nn.Module):
@@ -211,22 +220,29 @@ class Actor(nn.Module):
         x: torch.Tensor,
         edge_index: torch.Tensor,
         batch: torch.Tensor,
-        key_batch: list[int],
-        keys_1d: list[NDArray],
         persistent_to_batch_id_map: list[tuple[int, int]],
-        selected_spans: NDArray,
-        critic: nn.Module,
-    ):
+        feature_spans: NDArray,
+        learning_data: Optional[LearningData],
+    ) -> list[Transition] | tuple[torch.Tensor, NDArray]:
+        if learning_data is None == self.training:
+            raise AssertionError("Learning data is None when training")
+
         N0 = x.size(0)
         merge_map = torch.arange(N0, device=x.device)  # global merge_map
         global_map = torch.arange(N0, device=x.device)  # local→global map
         perm = 0
 
-        no_key_graph_indices = torch.unique(
-            torch.from_numpy(
-                np.setdiff1d(np.array(key_batch), batch.cpu().numpy())
-            )
-        ).to(batch.device)
+        no_key_graph_indices = (
+            torch.unique(
+                torch.from_numpy(
+                    np.setdiff1d(
+                        np.array(learning_data.key_batch), batch.cpu().numpy()
+                    )
+                )
+            ).to(batch.device)
+            if learning_data is not None
+            else None
+        )
 
         # Sanity check
         # b_start = torch.unique(torch.clone(batch))
@@ -254,25 +270,6 @@ class Actor(nn.Module):
             actions = dist.sample()  # 0/1 per node
             logp = dist.log_prob(actions)  # [N], can be negative
             entropy_per_node = dist.entropy()  # [N]
-
-            # Ensure at least one node re
-            # DISABLED: Removing graphs is probably fine
-            # for g in batch.unique():
-            #     print(f"Batch {g} test")
-            #     mask = batch == g
-            #     mask_indices = mask.nonzero(as_tuple=True)[0]
-            #     if mask_indices.numel() == 0:
-            #         continue  # just in case
-            #     if actions[mask_indices].sum() == 0:
-            #         print("ALL ZERO")
-            #         # fallback: keep your argmax choice
-            #         top_idx = (mixed_logits[mask_indices]).argmax()
-            #         actions[mask_indices[top_idx]] = 1.0
-            #         # also adjust logp and entropy to match the forced-action slot
-            #         idx = mask_indices[top_idx].item()
-            #         actions[idx] = 1.0
-            #         logp[idx] = dist.log_prob(actions)[idx]
-            #         entropy_per_node[idx] = dist.entropy()[idx]
 
             logp_last = logp
             logp_terms.append(logp)
@@ -319,77 +316,100 @@ class Actor(nn.Module):
 
             print(f"Graphs remaining: {torch.unique(batch).cpu().tolist()}")
 
-            key_batch_associations = np.vstack(key_batch).squeeze(1)
-            keys_stack = np.vstack(keys_1d)
+            key_batch_associations = keys_stack = None
+            if learning_data is not None:
+                key_batch_associations = np.vstack(
+                    learning_data.key_batch
+                ).squeeze(1)
+                keys_stack = np.vstack(learning_data.keys_1d)
 
-            if len(batch) == 0:
-                # Terminal state
-                # All graphs removed
-                # All keys are automatically assumed missing
-                if len(key_batch_associations) > 0:
-                    terminal_reward = -1.0
-                else:
-                    terminal_reward = 10.0
-                transitions.append(
-                    Transition(
-                        logp=None,
-                        reward=torch.tensor([terminal_reward], device=x.device),
-                        value=torch.tensor([0.0], device=x.device),
-                        batch=None,
-                        entropy=None,
+                if len(batch) == 0:
+                    # Terminal state
+                    # All graphs removed
+                    # All keys are automatically assumed missing
+                    if len(key_batch_associations) > 0:
+                        terminal_reward = -1.0
+                    else:
+                        terminal_reward = 10.0
+                    transitions.append(
+                        Transition(
+                            logp=None,
+                            reward=torch.tensor(
+                                [terminal_reward], device=x.device
+                            ),
+                            value=torch.tensor([0.0], device=x.device),
+                            batch=None,
+                            entropy=None,
+                        )
                     )
-                )
-                break
+                    break
 
             line_spans = calculate_line_spans(
                 merge_map=merge_map.cpu().numpy(),
                 selected_indices_for_batch=persistent_to_batch_id_map,
                 batch=batch.cpu().numpy(),
                 perm=perm.cpu().numpy(),
-                selected_line_assignments_for_batch=selected_spans,
+                selected_line_assignments_for_batch=feature_spans,
             )
 
-            diou_l, missing = diou_loss(
-                line_mappings=line_spans,
-                edge_index=edge_index.cpu().numpy(),
-                batch=batch.cpu().numpy(),
-                keys=keys_stack,
-                key_batch_associations=key_batch_associations,
-                k=10,
-                decay_alpha=0.7,
-            )
+            if (
+                keys_stack is not None
+                and key_batch_associations is not None
+                and learning_data is not None
+                and no_key_graph_indices is not None
+            ):
+                diou_l, missing = diou_loss(
+                    line_mappings=line_spans,
+                    edge_index=edge_index.cpu().numpy(),
+                    batch=batch.cpu().numpy(),
+                    keys=keys_stack,
+                    key_batch_associations=key_batch_associations,
+                    k=10,
+                    decay_alpha=0.7,
+                )
 
-            diou_l = diou_l.to(x.device)
+                diou_l = diou_l.to(x.device)
 
-            reward_g = compute_reward(
-                diou_l,
-                total_keys=keys_stack.shape[0],
-                remaining_keys=keys_stack.shape[0] - len(missing),
-                batch=batch,
-                no_key_graph_indices=no_key_graph_indices,
-                size_penalty=self.model_config.reward.graph_size_penalty,
-                missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
-                removed_graph_reward=self.model_config.reward.removed_graph_reward,
-                correct_range_reward=self.model_config.reward.correct_range_reward,
-            )  # [G]
-            self.running_reward_norm.update(reward_g)
-            r = self.running_reward_norm.normalize(reward_g)
-            # r = reward_g
-            # r = (r - r.mean()) / (r.std() + 1e-6)
+                reward_g = compute_reward(
+                    diou_l,
+                    total_keys=keys_stack.shape[0],
+                    remaining_keys=keys_stack.shape[0] - len(missing),
+                    batch=batch,
+                    no_key_graph_indices=no_key_graph_indices,
+                    size_penalty=self.model_config.reward.graph_size_penalty,
+                    missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
+                    removed_graph_reward=self.model_config.reward.removed_graph_reward,
+                    correct_range_reward=self.model_config.reward.correct_range_reward,
+                )  # [G]
+                self.running_reward_norm.update(reward_g)
+                r = self.running_reward_norm.normalize(reward_g)
+                # r = reward_g
+                # r = (r - r.mean()) / (r.std() + 1e-6)
 
-            predicted_reward = critic(x.detach(), edge_index, batch)
+                predicted_reward = learning_data.critic(
+                    x.detach(), edge_index, batch
+                )
 
-            assert r.shape == predicted_reward.shape, (
-                f"Reward/value mismatch ({r.shape} != {predicted_reward.shape})"
-            )
-            transition = Transition(
-                logp=logp_last,
-                reward=r,
-                value=predicted_reward,
-                batch=batch,
-                entropy=entropy_per_node,
-            )
-            transitions.append(transition)
+                assert r.shape == predicted_reward.shape, (
+                    f"Reward/value mismatch ({r.shape} != {predicted_reward.shape})"
+                )
+                transition = Transition(
+                    logp=logp_last,
+                    reward=r,
+                    value=predicted_reward,
+                    batch=batch,
+                    entropy=entropy_per_node,
+                )
+                transitions.append(transition)
+            elif i == self.num_layers - 1:
+                assert len(transitions) == 0, (
+                    "Transitions added in evaluation run"
+                )
+
+                if len(batch) > 0:
+                    x = self.reducer(x)
+
+                return x, line_spans
 
         if len(batch) > 0:
             x = self.reducer(x)

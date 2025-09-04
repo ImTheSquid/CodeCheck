@@ -2,14 +2,14 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use std::{ffi::CString, io::Cursor, path::PathBuf};
+use std::{collections::HashMap, ffi::CString, io::Cursor, path::PathBuf, range::Range};
 
 use mimalloc::MiMalloc;
 use pyo3::{
     ffi::c_str,
     intern,
     prelude::*,
-    types::{PyDict, PyList},
+    types::{PyDict, PyDictMethods, PyList},
 };
 use util::Mark;
 
@@ -163,6 +163,57 @@ pub struct KeyData {
     pub a: usize,
     pub b: usize,
     pub marks: Vec<Mark>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EvaluationResult {
+    pub id: usize,
+    pub range: Range<usize>,
+}
+
+pub fn eval(
+    py: Python<'_>,
+    dataset: TmpDirDataset,
+    artifact_dir: &str,
+    config_dir: &str,
+    device: Option<String>,
+) -> PyResult<HashMap<isize, Vec<EvaluationResult>>> {
+    let codecheck = py.import("codecheck")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dataset", dataset)?;
+    kwargs.set_item("artifact_dir", artifact_dir)?;
+    kwargs.set_item("config_dir", config_dir)?;
+    kwargs.set_item("mode", "eval")?;
+    kwargs.set_item("ast_embeddings", None::<usize>)?;
+    kwargs.set_item("top_k", None::<usize>)?;
+    kwargs.set_item("device", device)?;
+
+    let res = codecheck
+        .getattr(intern!(py, "rust_train"))
+        .expect("codecheck module to contain rust entry point")
+        .call((), Some(&kwargs))?;
+
+    let res = res.downcast_into::<PyDict>()?;
+
+    let res = res
+        .iter()
+        .map(|(k, v)| {
+            let k: isize = k.extract()?;
+            let v: Vec<(usize, usize, usize)> = v.downcast_into::<PyList>()?.extract()?;
+            let v = v
+                .into_iter()
+                .map(|(id, start, end)| EvaluationResult {
+                    id,
+                    range: std::range::Range { start, end },
+                })
+                .collect();
+
+            Ok::<(isize, Vec<EvaluationResult>), PyErr>((k, v))
+        })
+        .collect::<Result<HashMap<isize, Vec<EvaluationResult>>, PyErr>>()?;
+
+    Ok(res)
 }
 
 pub fn train(

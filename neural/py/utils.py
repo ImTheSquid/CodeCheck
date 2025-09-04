@@ -73,6 +73,11 @@ class ModelConfig:
     batch_sizes: BatchSizes = field(default_factory=BatchSizes)
 
 
+@dataclass
+class EvalConfig:
+    actor: ActorConfig = field(default_factory=ActorConfig)
+
+
 class Transition(NamedTuple):
     logp: Optional[torch.Tensor]  # [N]
     reward: torch.Tensor  # [G]
@@ -869,3 +874,38 @@ class AverageAccumulator:
 
     def mean(self) -> float | Tensor:
         return self.sum / max(self.num, 1)
+
+
+def make_persistent_to_batch_id_map(batch):
+    # Selected graph indices are actually different than the assignments given by PyTorch
+    # Zip them together for processing later
+    selected_batch_indices = list(range(torch.max(batch.batch) + 1))
+    persistent_to_batch_id_map = list(
+        zip(map(int, batch.key_index), selected_batch_indices)
+    )
+
+    return persistent_to_batch_id_map
+
+
+def persistent_to_batch_id_map_and_keys(
+    batch, keys
+) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
+    persistent_to_batch_id_map = make_persistent_to_batch_id_map(batch)
+
+    keys_1d = []
+    key_batch = []
+
+    def add_key_to_keys_and_batch(val: NDArray, gid, target_left: bool):
+        nonlocal keys_1d, key_batch
+        if target_left:
+            keys_1d.append(val[:, [0, 2]])
+        else:
+            keys_1d.append(val[:, [1, 3]])
+        key_batch += [gid] * val.shape[0]
+
+    for pid, gid in persistent_to_batch_id_map:
+        for left, right in keys.keys():
+            if pid == left or pid == right:
+                add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
+
+    return persistent_to_batch_id_map, keys_1d, key_batch

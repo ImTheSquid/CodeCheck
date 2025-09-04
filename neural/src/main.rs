@@ -1,3 +1,5 @@
+#![feature(new_range_api)]
+
 use std::{
     env::{self, args_os},
     ffi::CString,
@@ -36,6 +38,18 @@ enum Mode {
     Train,
     Embed,
     EmbedTest,
+    Eval,
+}
+
+impl Mode {
+    fn py_id(&self) -> &str {
+        match self {
+            Mode::Train => "train",
+            Mode::Embed => "embed",
+            Mode::EmbedTest => "embed-test",
+            Mode::Eval => "eval",
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -107,21 +121,48 @@ fn main() {
             neural::initialize_python(py, args.venv);
             neural::add_rust_data(py).expect("add rd");
 
-            if let Err(e) = neural::train(
-                py,
-                dataset,
-                match args.mode {
-                    Mode::Embed => "embed",
-                    Mode::EmbedTest => "embed-test",
-                    Mode::Train => "train",
-                },
-                &dirs.artifact_dir.unwrap().to_string_lossy(),
-                &dirs.config_dir.unwrap().to_string_lossy(),
-                args.top_k,
-                args.device,
-            ) {
-                e.print(py);
-                std::process::exit(1);
+            match args.mode {
+                Mode::Embed | Mode::EmbedTest | Mode::Train => {
+                    if let Err(e) = neural::train(
+                        py,
+                        dataset,
+                        args.mode.py_id(),
+                        &dirs.artifact_dir.unwrap().to_string_lossy(),
+                        &dirs.config_dir.unwrap().to_string_lossy(),
+                        args.top_k,
+                        args.device,
+                    ) {
+                        e.print(py);
+                        std::process::exit(1);
+                    }
+                }
+                Mode::Eval => {
+                    match neural::eval(
+                        py,
+                        dataset,
+                        &dirs.artifact_dir.unwrap().to_string_lossy(),
+                        &dirs.config_dir.unwrap().to_string_lossy(),
+                        args.device,
+                    ) {
+                        Ok(res) => {
+                            for (k, v) in res {
+                                if k == -1 {
+                                    println!("The following items have no cluster:");
+                                } else {
+                                    println!("The following items are grouped as PLAGIARIZED:");
+                                }
+
+                                for er in v {
+                                    println!("{}: {}..{}", er.id, er.range.start, er.range.end);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            e.print(py);
+                            std::process::exit(1);
+                        }
+                    }
+                }
             }
         });
     }
