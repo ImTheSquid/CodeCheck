@@ -331,9 +331,10 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
     actor.eval()
 
     eval_data = DataLoader(
-        dataset,  # pyright: ignore
+        dataset,  # type: ignore
         batch_size=25,
         shuffle=False,
+        num_workers=DATA_WORKERS,
     )
 
     xs = []
@@ -400,9 +401,18 @@ def train(
         train_set,  # type: ignore
         batch_size=config.batch_sizes.train,
         shuffle=True,
+        num_workers=DATA_WORKERS,
     )
-    val_data = DataLoader(val_set, batch_size=config.batch_sizes.val)  # type: ignore
-    test_data = DataLoader(test_set, batch_size=config.batch_sizes.test)  # type: ignore
+    val_data = DataLoader(
+        val_set,  # type: ignore
+        batch_size=config.batch_sizes.val,
+        num_workers=DATA_WORKERS,
+    )
+    test_data = DataLoader(
+        test_set,  # type: ignore
+        batch_size=config.batch_sizes.test,
+        num_workers=DATA_WORKERS,
+    )
 
     train_f = open(artifact_dir / "train_loss.csv", "w+")
     val_f = open(artifact_dir / "val_loss.csv", "w+")
@@ -875,7 +885,12 @@ def test_embeddings(
 
     os.makedirs(artifact_dir / plot_dir)
 
-    data = DataLoader(dataset, batch_size=50, shuffle=True)  # type: ignore
+    data = DataLoader(
+        dataset,  # type: ignore
+        batch_size=50,
+        shuffle=True,
+        num_workers=DATA_WORKERS,
+    )
     for i, batch in enumerate(data):
         batch = batch.to(DEVICE)
         print(f"Batch {i}")
