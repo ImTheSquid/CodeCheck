@@ -1,5 +1,6 @@
 from collections import deque
 from dataclasses import dataclass
+from multiprocessing import Pool
 from typing import Optional
 
 import numpy as np
@@ -13,6 +14,7 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
 from utils import (
+    DATA_WORKERS,
     ModelConfig,
     RunningNorm,
     Transition,
@@ -298,13 +300,18 @@ class Actor(nn.Module):
 
             perm_set = set(perm.tolist())
             # 6) For each removed local node, find its BFS‐nearest surviving *local* node:
-            for loc in removed_local.tolist():
-                rep_loc = find_closest_surviving_node(
-                    loc, pre_edge_index, perm_set
+            with Pool(DATA_WORKERS) as pool:
+                rep_locs = pool.starmap(
+                    find_closest_surviving_node,
+                    map(
+                        lambda loc: (loc, pre_edge_index.cpu(), perm_set),
+                        removed_local.tolist(),
+                    ),
                 )
-                rep_glob = pre_global_map[rep_loc]
-                orig = pre_global_map[loc]
-                merge_map[orig] = rep_glob
+                for rep_loc, loc in zip(rep_locs, removed_local.tolist()):
+                    rep_glob = pre_global_map[rep_loc]
+                    orig = pre_global_map[loc]
+                    merge_map[orig] = rep_glob
 
             # 7) Ensure survivors map to self
             merge_map[surv_global] = surv_global

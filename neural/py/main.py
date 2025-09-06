@@ -28,6 +28,7 @@ from actor import Actor, LearningData
 from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
 from utils import (
+    DATA_WORKERS,
     AverageAccumulator,
     Metrics,
     ModelConfig,
@@ -47,8 +48,6 @@ DEVICE = torch.device(
     if torch.backends.mps.is_available()
     else "cpu"
 )
-
-DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
 
 
 BYTES_TO_GB = 1024**3

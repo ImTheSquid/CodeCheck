@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple, Optional
@@ -11,6 +12,8 @@ from numpy.typing import NDArray
 from progress import deque
 from torch import Tensor
 from torch_geometric.utils import k_hop_subgraph, subgraph
+
+DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
 
 
 @dataclass
