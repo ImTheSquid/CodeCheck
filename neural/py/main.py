@@ -326,9 +326,7 @@ def cluster_and_calculate_reward(
     return f1
 
 
-def eval(
-    actor: Actor, embedder: nn.Module, dataset: Dataset, closest_node_pool: Pool
-):
+def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
     embedder.eval()
     actor.eval()
 
@@ -343,27 +341,32 @@ def eval(
     spanss = []
     persistent_idss = []
     with torch.no_grad():
-        for batch in eval_data:
-            persistent_to_batch_id_map = make_persistent_to_batch_id_map(batch)
-            batch_to_persistent = torch.tensor(list(map(int, batch.key_index)))
+        with Pool(DATA_WORKERS) as closest_node_pool:
+            for batch in eval_data:
+                persistent_to_batch_id_map = make_persistent_to_batch_id_map(
+                    batch
+                )
+                batch_to_persistent = torch.tensor(
+                    list(map(int, batch.key_index))
+                )
 
-            batch = batch.to(DEVICE)
-            batch_to_persistent = batch_to_persistent.to(DEVICE)
+                batch = batch.to(DEVICE)
+                batch_to_persistent = batch_to_persistent.to(DEVICE)
 
-            embs = embedder(batch.x, batch.edge_index)
+                embs = embedder(batch.x, batch.edge_index)
 
-            x, line_spans, batch_idxs = actor(
-                embs,
-                batch.edge_index,
-                batch.batch,
-                persistent_to_batch_id_map,
-                batch.lines,
-                closest_node_pool,
-            )
-            persistent_ids = batch_to_persistent[batch_idxs].cpu().numpy()
-            xs.append(x)
-            spanss.append(line_spans)
-            persistent_idss.append(persistent_ids)
+                x, line_spans, batch_idxs = actor(
+                    embs,
+                    batch.edge_index,
+                    batch.batch,
+                    persistent_to_batch_id_map,
+                    batch.lines,
+                    closest_node_pool,
+                )
+                persistent_ids = batch_to_persistent[batch_idxs].cpu().numpy()
+                xs.append(x)
+                spanss.append(line_spans)
+                persistent_idss.append(persistent_ids)
 
     x = torch.cat(xs, dim=0)
     spans = np.concat(spanss, axis=0)
@@ -391,7 +394,6 @@ def train(
     keys: dict[tuple[int, int], NDArray],
     artifact_dir: Path,
     config: ModelConfig,
-    closest_node_pool,
     gamma=0.99,
     lam=0.95,
     entropy_coefs: tuple[float, float] = (0.01, 0.001),
@@ -457,96 +459,21 @@ def train(
             ]
         )
 
-    for epoch in range(episodes):
-        print(f"\n⏰ EPOCH {epoch}")
-        embedder.train()
-        actor.train()
-        critic.train()
+    with Pool(DATA_WORKERS) as closest_node_pool:
+        for epoch in range(episodes):
+            print(f"\n⏰ EPOCH {epoch}")
+            embedder.train()
+            actor.train()
+            critic.train()
 
-        entropy = lerp(entropy_coefs[0], entropy_coefs[1], epoch / episodes)
+            entropy = lerp(entropy_coefs[0], entropy_coefs[1], epoch / episodes)
 
-        total_actor_loss = total_critic_loss = 0.0
+            total_actor_loss = total_critic_loss = 0.0
 
-        # Train
-        for batch in train_data:
-            print("\n\nNEXT BATCH ->")
+            # Train
+            for batch in train_data:
+                print("\n\nNEXT BATCH ->")
 
-            persistent_to_batch_id_map, keys_1d, key_batch = (
-                persistent_to_batch_id_map_and_keys(batch, keys)
-            )
-
-            selected_spans = batch.lines
-            batch = batch.to(DEVICE)
-
-            embs = embedder(batch.x, batch.edge_index)
-
-            learning_data = LearningData(
-                critic=critic,
-                keys_1d=keys_1d,
-                key_batch=key_batch,
-            )
-
-            transitions = actor(
-                embs,
-                batch.edge_index,
-                batch.batch,
-                persistent_to_batch_id_map,
-                selected_spans,
-                learning_data=learning_data,
-                closest_node_pool=closest_node_pool,
-            )
-            metrics = actor_critic_loss(
-                transitions,
-                gamma=gamma,
-                lam=lam,
-                entropy_coef=entropy,
-                critic_loss_fn=config.critic_loss_fn,
-            )
-
-            aux_emb_loss = auxiliary_embedding_loss_helper(
-                embs,
-                batch=batch,
-                persistent_to_batch_id_map=persistent_to_batch_id_map,
-                keys=keys,
-                config=config,
-            )
-
-            actor_loss = metrics.actor_loss
-            if aux_emb_loss is not None:
-                actor_loss += aux_emb_loss
-            critic_loss = metrics.critic_loss
-
-            actor_optim.zero_grad()
-            actor_loss.backward()
-            actor_optim.step()
-
-            critic_optim.zero_grad()
-            critic_loss.backward()
-            critic_optim.step()
-
-            total_actor_loss += actor_loss.item()
-            total_critic_loss += critic_loss.item()
-
-            write_metrics(train_csv, metrics)
-
-            print(
-                "*" * 10
-                + f"\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
-                + "*" * 10
-            )
-
-            del batch, actor_loss, critic_loss, aux_emb_loss
-            cleanup()
-
-        print(
-            f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
-        )
-
-        total_actor_loss = total_critic_loss = 0.0
-
-        # Val
-        with torch.no_grad():
-            for batch in val_data:
                 persistent_to_batch_id_map, keys_1d, key_batch = (
                     persistent_to_batch_id_map_and_keys(batch, keys)
                 )
@@ -557,7 +484,9 @@ def train(
                 embs = embedder(batch.x, batch.edge_index)
 
                 learning_data = LearningData(
-                    critic=critic, key_batch=key_batch, keys_1d=keys_1d
+                    critic=critic,
+                    keys_1d=keys_1d,
+                    key_batch=key_batch,
                 )
 
                 transitions = actor(
@@ -569,7 +498,6 @@ def train(
                     learning_data=learning_data,
                     closest_node_pool=closest_node_pool,
                 )
-
                 metrics = actor_critic_loss(
                     transitions,
                     gamma=gamma,
@@ -590,7 +518,14 @@ def train(
                 if aux_emb_loss is not None:
                     actor_loss += aux_emb_loss
                 critic_loss = metrics.critic_loss
-                critic_loss = metrics.critic_loss
+
+                actor_optim.zero_grad()
+                actor_loss.backward()
+                actor_optim.step()
+
+                critic_optim.zero_grad()
+                critic_loss.backward()
+                critic_optim.step()
 
                 total_actor_loss += actor_loss.item()
                 total_critic_loss += critic_loss.item()
@@ -598,82 +533,150 @@ def train(
                 write_metrics(train_csv, metrics)
 
                 print(
-                    "%" * 10
-                    + f"\nValidation =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
-                    + "%" * 10
+                    "*" * 10
+                    + f"\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
+                    + "*" * 10
                 )
 
                 del batch, actor_loss, critic_loss, aux_emb_loss
                 cleanup()
 
-        print(
-            f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
-        )
+            print(
+                f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+            )
+
+            total_actor_loss = total_critic_loss = 0.0
+
+            # Val
+            with torch.no_grad():
+                for batch in val_data:
+                    persistent_to_batch_id_map, keys_1d, key_batch = (
+                        persistent_to_batch_id_map_and_keys(batch, keys)
+                    )
+
+                    selected_spans = batch.lines
+                    batch = batch.to(DEVICE)
+
+                    embs = embedder(batch.x, batch.edge_index)
+
+                    learning_data = LearningData(
+                        critic=critic, key_batch=key_batch, keys_1d=keys_1d
+                    )
+
+                    transitions = actor(
+                        embs,
+                        batch.edge_index,
+                        batch.batch,
+                        persistent_to_batch_id_map,
+                        selected_spans,
+                        learning_data=learning_data,
+                        closest_node_pool=closest_node_pool,
+                    )
+
+                    metrics = actor_critic_loss(
+                        transitions,
+                        gamma=gamma,
+                        lam=lam,
+                        entropy_coef=entropy,
+                        critic_loss_fn=config.critic_loss_fn,
+                    )
+
+                    aux_emb_loss = auxiliary_embedding_loss_helper(
+                        embs,
+                        batch=batch,
+                        persistent_to_batch_id_map=persistent_to_batch_id_map,
+                        keys=keys,
+                        config=config,
+                    )
+
+                    actor_loss = metrics.actor_loss
+                    if aux_emb_loss is not None:
+                        actor_loss += aux_emb_loss
+                    critic_loss = metrics.critic_loss
+                    critic_loss = metrics.critic_loss
+
+                    total_actor_loss += actor_loss.item()
+                    total_critic_loss += critic_loss.item()
+
+                    write_metrics(train_csv, metrics)
+
+                    print(
+                        "%" * 10
+                        + f"\nValidation =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
+                        + "%" * 10
+                    )
+
+                    del batch, actor_loss, critic_loss, aux_emb_loss
+                    cleanup()
+
+            print(
+                f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+            )
+
+        # Test
+        total_actor_loss = total_critic_loss = 0.0
+        test_actor_losses = test_critic_losses = []
+        with torch.no_grad():
+            for batch in test_data:
+                persistent_to_batch_id_map, keys_1d, key_batch = (
+                    persistent_to_batch_id_map_and_keys(batch, keys)
+                )
+
+                selected_spans = batch.lines
+                batch = batch.to(DEVICE)
+
+                embs = embedder(batch.x, batch.edge_index)
+
+                learning_data = LearningData(
+                    critic=critic, keys_1d=keys_1d, key_batch=key_batch
+                )
+
+                transitions = actor(
+                    embs,
+                    batch.edge_index,
+                    batch.batch,
+                    persistent_to_batch_id_map,
+                    selected_spans,
+                    learning_data=learning_data,
+                    closest_node_pool=closest_node_pool,
+                )
+                metrics = actor_critic_loss(
+                    transitions,
+                    gamma=gamma,
+                    lam=lam,
+                    entropy_coef=entropy_coefs[1],
+                    critic_loss_fn=config.critic_loss_fn,
+                )
+
+                aux_emb_loss = auxiliary_embedding_loss_helper(
+                    embs,
+                    batch=batch,
+                    persistent_to_batch_id_map=persistent_to_batch_id_map,
+                    keys=keys,
+                    config=config,
+                )
+
+                actor_loss = metrics.actor_loss
+                if aux_emb_loss is not None:
+                    actor_loss += aux_emb_loss
+                critic_loss = metrics.critic_loss
+
+                total_actor_loss += actor_loss.item()
+                test_actor_losses.append(actor_loss.item())
+                total_critic_loss += critic_loss.item()
+                test_critic_losses.append(critic_loss.item())
+
+                print(
+                    "=" * 10
+                    + f"\nTest =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
+                    + "=" * 10
+                )
+
+                del batch, actor_loss, critic_loss, aux_emb_loss
+                cleanup()
 
     train_f.close()
     val_f.close()
-
-    # Test
-    total_actor_loss = total_critic_loss = 0.0
-    test_actor_losses = test_critic_losses = []
-    with torch.no_grad():
-        for batch in test_data:
-            persistent_to_batch_id_map, keys_1d, key_batch = (
-                persistent_to_batch_id_map_and_keys(batch, keys)
-            )
-
-            selected_spans = batch.lines
-            batch = batch.to(DEVICE)
-
-            embs = embedder(batch.x, batch.edge_index)
-
-            learning_data = LearningData(
-                critic=critic, keys_1d=keys_1d, key_batch=key_batch
-            )
-
-            transitions = actor(
-                embs,
-                batch.edge_index,
-                batch.batch,
-                persistent_to_batch_id_map,
-                selected_spans,
-                learning_data=learning_data,
-                closest_node_pool=closest_node_pool,
-            )
-            metrics = actor_critic_loss(
-                transitions,
-                gamma=gamma,
-                lam=lam,
-                entropy_coef=entropy_coefs[1],
-                critic_loss_fn=config.critic_loss_fn,
-            )
-
-            aux_emb_loss = auxiliary_embedding_loss_helper(
-                embs,
-                batch=batch,
-                persistent_to_batch_id_map=persistent_to_batch_id_map,
-                keys=keys,
-                config=config,
-            )
-
-            actor_loss = metrics.actor_loss
-            if aux_emb_loss is not None:
-                actor_loss += aux_emb_loss
-            critic_loss = metrics.critic_loss
-
-            total_actor_loss += actor_loss.item()
-            test_actor_losses.append(actor_loss.item())
-            total_critic_loss += critic_loss.item()
-            test_critic_losses.append(critic_loss.item())
-
-            print(
-                "=" * 10
-                + f"\nTest =====\nBatch Loss:\nActor: {actor_loss}\nCritic: {critic_loss}\n"
-                + "=" * 10
-            )
-
-            del batch, actor_loss, critic_loss, aux_emb_loss
-            cleanup()
 
     with open(artifact_dir / "test_loss.csv", "w+") as f:
         csv.writer(f).writerows(
@@ -1080,34 +1083,32 @@ def rust_train(
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
 
-            with Pool(DATA_WORKERS) as closest_node_pool:
-                train(
-                    dataset,
-                    embedder=embedder,
-                    actor=actor,
-                    critic=critic,
-                    actor_optim=optim.Adam(
-                        actor.parameters(),
-                        lr=schema.actor_lr,
-                        weight_decay=schema.actor_wd,
-                    ),
-                    critic_optim=optim.Adam(
-                        critic.parameters(),
-                        lr=schema.critic_lr,
-                        weight_decay=schema.critic_wd,
-                    ),
-                    episodes=schema.num_episodes,
-                    keys=keys,
-                    artifact_dir=artifact_dir / artifact_suffix,
-                    config=schema,
-                    closest_node_pool=closest_node_pool,
-                    entropy_coefs=(
-                        schema.actor.entropy_start,
-                        schema.actor.entropy_end,
-                    ),
-                    gamma=schema.gae.gamma,
-                    lam=schema.gae.lam,
-                )
+            train(
+                dataset,
+                embedder=embedder,
+                actor=actor,
+                critic=critic,
+                actor_optim=optim.Adam(
+                    actor.parameters(),
+                    lr=schema.actor_lr,
+                    weight_decay=schema.actor_wd,
+                ),
+                critic_optim=optim.Adam(
+                    critic.parameters(),
+                    lr=schema.critic_lr,
+                    weight_decay=schema.critic_wd,
+                ),
+                episodes=schema.num_episodes,
+                keys=keys,
+                artifact_dir=artifact_dir / artifact_suffix,
+                config=schema,
+                entropy_coefs=(
+                    schema.actor.entropy_start,
+                    schema.actor.entropy_end,
+                ),
+                gamma=schema.gae.gamma,
+                lam=schema.gae.lam,
+            )
         case "eval":
             if not (
                 os.path.exists(artifact_dir / "embeddings_tuned.pt")
@@ -1128,5 +1129,4 @@ def rust_train(
                 map_location=DEVICE,
             )
 
-            with Pool(DATA_WORKERS) as closest_node_pool:
-                return eval(actor, embedder, dataset, closest_node_pool)
+            return eval(actor, embedder, dataset)
