@@ -4,6 +4,7 @@ import gc
 import itertools
 import os
 from collections import defaultdict
+from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import Literal, Optional, cast
 
@@ -325,7 +326,9 @@ def cluster_and_calculate_reward(
     return f1
 
 
-def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
+def eval(
+    actor: Actor, embedder: nn.Module, dataset: Dataset, closest_node_pool: Pool
+):
     embedder.eval()
     actor.eval()
 
@@ -355,6 +358,7 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
                 batch.batch,
                 persistent_to_batch_id_map,
                 batch.lines,
+                closest_node_pool,
             )
             persistent_ids = batch_to_persistent[batch_idxs].cpu().numpy()
             xs.append(x)
@@ -387,6 +391,7 @@ def train(
     keys: dict[tuple[int, int], NDArray],
     artifact_dir: Path,
     config: ModelConfig,
+    closest_node_pool,
     gamma=0.99,
     lam=0.95,
     entropy_coefs: tuple[float, float] = (0.01, 0.001),
@@ -488,6 +493,7 @@ def train(
                 persistent_to_batch_id_map,
                 selected_spans,
                 learning_data=learning_data,
+                closest_node_pool=closest_node_pool,
             )
             metrics = actor_critic_loss(
                 transitions,
@@ -561,6 +567,7 @@ def train(
                     persistent_to_batch_id_map,
                     selected_spans,
                     learning_data=learning_data,
+                    closest_node_pool=closest_node_pool,
                 )
 
                 metrics = actor_critic_loss(
@@ -631,6 +638,7 @@ def train(
                 persistent_to_batch_id_map,
                 selected_spans,
                 learning_data=learning_data,
+                closest_node_pool=closest_node_pool,
             )
             metrics = actor_critic_loss(
                 transitions,
@@ -1072,32 +1080,34 @@ def rust_train(
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
 
-            train(
-                dataset,
-                embedder=embedder,
-                actor=actor,
-                critic=critic,
-                actor_optim=optim.Adam(
-                    actor.parameters(),
-                    lr=schema.actor_lr,
-                    weight_decay=schema.actor_wd,
-                ),
-                critic_optim=optim.Adam(
-                    critic.parameters(),
-                    lr=schema.critic_lr,
-                    weight_decay=schema.critic_wd,
-                ),
-                episodes=schema.num_episodes,
-                keys=keys,
-                artifact_dir=artifact_dir / artifact_suffix,
-                config=schema,
-                entropy_coefs=(
-                    schema.actor.entropy_start,
-                    schema.actor.entropy_end,
-                ),
-                gamma=schema.gae.gamma,
-                lam=schema.gae.lam,
-            )
+            with Pool(DATA_WORKERS) as closest_node_pool:
+                train(
+                    dataset,
+                    embedder=embedder,
+                    actor=actor,
+                    critic=critic,
+                    actor_optim=optim.Adam(
+                        actor.parameters(),
+                        lr=schema.actor_lr,
+                        weight_decay=schema.actor_wd,
+                    ),
+                    critic_optim=optim.Adam(
+                        critic.parameters(),
+                        lr=schema.critic_lr,
+                        weight_decay=schema.critic_wd,
+                    ),
+                    episodes=schema.num_episodes,
+                    keys=keys,
+                    artifact_dir=artifact_dir / artifact_suffix,
+                    config=schema,
+                    closest_node_pool=closest_node_pool,
+                    entropy_coefs=(
+                        schema.actor.entropy_start,
+                        schema.actor.entropy_end,
+                    ),
+                    gamma=schema.gae.gamma,
+                    lam=schema.gae.lam,
+                )
         case "eval":
             if not (
                 os.path.exists(artifact_dir / "embeddings_tuned.pt")
@@ -1118,4 +1128,5 @@ def rust_train(
                 map_location=DEVICE,
             )
 
-            return eval(actor, embedder, dataset)
+            with Pool(DATA_WORKERS) as closest_node_pool:
+                return eval(actor, embedder, dataset, closest_node_pool)

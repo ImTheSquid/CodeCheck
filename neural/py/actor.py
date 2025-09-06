@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import dataclass
-from multiprocessing import Pool
+from multiprocessing.pool import Pool
 from typing import Optional
 
 import numpy as np
@@ -14,7 +14,6 @@ from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
 from utils import (
-    DATA_WORKERS,
     ModelConfig,
     RunningNorm,
     Transition,
@@ -225,6 +224,7 @@ class Actor(nn.Module):
         persistent_to_batch_id_map: list[tuple[int, int]],
         feature_spans: NDArray,
         learning_data: Optional[LearningData],
+        closest_node_pool: Pool,
     ) -> list[Transition] | tuple[torch.Tensor, NDArray]:
         if learning_data is None == self.training:
             raise AssertionError("Learning data is None when training")
@@ -300,18 +300,17 @@ class Actor(nn.Module):
 
             perm_set = set(perm.tolist())
             # 6) For each removed local node, find its BFS‐nearest surviving *local* node:
-            with Pool(DATA_WORKERS) as pool:
-                rep_locs = pool.starmap(
-                    find_closest_surviving_node,
-                    map(
-                        lambda loc: (loc, pre_edge_index.cpu(), perm_set),
-                        removed_local.tolist(),
-                    ),
-                )
-                for rep_loc, loc in zip(rep_locs, removed_local.tolist()):
-                    rep_glob = pre_global_map[rep_loc]
-                    orig = pre_global_map[loc]
-                    merge_map[orig] = rep_glob
+            rep_locs = closest_node_pool.starmap(
+                find_closest_surviving_node,
+                map(
+                    lambda loc: (loc, pre_edge_index.cpu(), perm_set),
+                    removed_local.tolist(),
+                ),
+            )
+            for rep_loc, loc in zip(rep_locs, removed_local.tolist()):
+                rep_glob = pre_global_map[rep_loc]
+                orig = pre_global_map[loc]
+                merge_map[orig] = rep_glob
 
             # 7) Ensure survivors map to self
             merge_map[surv_global] = surv_global
