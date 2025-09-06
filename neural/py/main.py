@@ -30,6 +30,7 @@ from critic import MergeCritic
 from embedding import EmbeddingPredictor, GatGraphEmbedding
 from utils import (
     DATA_WORKERS,
+    MAX_POOL_TASKS,
     AverageAccumulator,
     Metrics,
     ModelConfig,
@@ -341,7 +342,9 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
     spanss = []
     persistent_idss = []
     with torch.no_grad():
-        with Pool(DATA_WORKERS) as closest_node_pool:
+        with Pool(
+            DATA_WORKERS, maxtasksperchild=MAX_POOL_TASKS
+        ) as closest_node_pool:
             for batch in eval_data:
                 persistent_to_batch_id_map = make_persistent_to_batch_id_map(
                     batch
@@ -459,7 +462,9 @@ def train(
             ]
         )
 
-    with Pool(DATA_WORKERS) as closest_node_pool:
+    with Pool(
+        DATA_WORKERS, maxtasksperchild=MAX_POOL_TASKS
+    ) as closest_node_pool:
         for epoch in range(episodes):
             print(f"\n⏰ EPOCH {epoch}")
             embedder.train()

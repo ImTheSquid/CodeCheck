@@ -14,6 +14,7 @@ from torch import Tensor
 from torch_geometric.utils import k_hop_subgraph, subgraph
 
 DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
+MAX_POOL_TASKS = 100
 
 
 @dataclass
