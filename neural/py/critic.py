@@ -5,6 +5,8 @@ from torch import Tensor
 from torch_geometric.nn import GATv2Conv, global_mean_pool
 from torch_geometric.nn.norm import LayerNorm
 
+from utils import build_gats_and_layer_norms
+
 
 class Critic(nn.Module):
     def __init__(self, in_dim, hidden_dim, num_heads):
@@ -31,27 +33,41 @@ class MergeCritic(nn.Module):
     If no points in the graph are in the true labels, then it doesn't matter
     """
 
-    def __init__(self, in_dim, hidden_dim_generator):
+    def __init__(
+        self,
+        in_dim,
+        hidden_dim_generator,
+        num_layers: int,
+        p_dropout: float = 0.1,
+    ):
         super().__init__()
         hidden_dim = hidden_dim_generator(in_dim)
         self.max_hidden_dim = in_dim
-        self.gats = nn.ModuleList(
-            [
-                GATv2Conv(in_dim, hidden_dim, heads=8),
-                GATv2Conv(hidden_dim * 8, hidden_dim, heads=4),
-                GATv2Conv(hidden_dim * 4, hidden_dim, concat=False),
-            ]
+        self.gats, self.norms, output_dim = build_gats_and_layer_norms(
+            [in_dim] + [hidden_dim] * num_layers + [hidden_dim],
+            [8] * num_layers + [1],
         )
-        self.norms = nn.ModuleList(
-            [
-                LayerNorm(hidden_dim * 8),
-                LayerNorm(hidden_dim * 4),
-                LayerNorm(hidden_dim),
-            ]
-        )
+        # self.gats = nn.ModuleList(
+        #     [
+        #         GATv2Conv(in_dim, hidden_dim, heads=8),
+        #         GATv2Conv(hidden_dim * 8, hidden_dim, heads=8),
+        #         GATv2Conv(hidden_dim * 8, hidden_dim * 16, heads=2),
+        #         GATv2Conv(hidden_dim * 32, hidden_dim, concat=False),
+        #     ]
+        # )
+        # self.norms = nn.ModuleList(
+        #     [
+        #         LayerNorm(hidden_dim * 8),
+        #         LayerNorm(hidden_dim * 4),
+        #         LayerNorm(hidden_dim),
+        #     ]
+        # )
         self.graph_value_head = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Linear(output_dim, hidden_dim // 2),
             nn.GELU(),
+            nn.Linear(hidden_dim // 2, hidden_dim // 2),
+            nn.GELU(),
+            nn.Dropout(p=p_dropout),
             nn.Linear(hidden_dim // 2, hidden_dim // 4),
             nn.GELU(),
             nn.Linear(hidden_dim // 4, 1),

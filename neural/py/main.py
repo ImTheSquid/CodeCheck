@@ -1074,6 +1074,8 @@ def rust_train(
             critic = MergeCritic(
                 in_dim=embedding_dim // 2 * 4,
                 hidden_dim_generator=lambda d: d // 2,
+                num_layers=schema.critic_layers,
+                p_dropout=schema.critic_dropout,
             ).to(DEVICE)
             actor = Actor(
                 in_dim=embedding_dim,

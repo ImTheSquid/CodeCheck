@@ -9,14 +9,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from numpy._typing import NDArray
 from torch.distributions import Bernoulli
-from torch_geometric.nn import GATv2Conv
-from torch_geometric.nn.norm import LayerNorm
 from torch_geometric.utils import degree, subgraph
 
 from utils import (
     ModelConfig,
     RunningNorm,
     Transition,
+    build_gats_and_layer_norms,
     calculate_line_spans,
     compute_reward,
     diou_loss,
@@ -98,15 +97,17 @@ class Actor(nn.Module):
 
         dims = [in_dim] + hidden_dims
 
+        self.gats, self.norms, _ = build_gats_and_layer_norms(dims, num_heads)
+
         for i in range(self.num_layers):
-            self.gats.append(
-                GATv2Conv(
-                    dims[i] * (num_heads[i - 1] if i > 0 else 1),
-                    dims[i + 1],
-                    heads=num_heads[i],
-                )
-            )
-            self.norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
+            # self.gats.append(
+            #     GATv2Conv(
+            #         dims[i] * (num_heads[i - 1] if i > 0 else 1),
+            #         dims[i + 1],
+            #         heads=num_heads[i],
+            #     )
+            # )
+            # self.norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
 
             # self.pools.append(TopKPooling(dims[i+1], ratio=pool_ratios[i]))
             self.policy_heads.append(

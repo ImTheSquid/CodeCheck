@@ -11,6 +11,8 @@ from diskcache import Cache
 from numpy.typing import NDArray
 from progress import deque
 from torch import Tensor
+from torch.nn import ModuleList
+from torch_geometric.nn import GATv2Conv, LayerNorm
 from torch_geometric.utils import k_hop_subgraph, subgraph
 
 DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
@@ -68,6 +70,9 @@ class ModelConfig:
     # Critic optimizer
     critic_lr: float = 2e-5
     critic_wd: float = 1e-5
+
+    critic_dropout: float = 0.1
+    critic_layers: int = 4
 
     critic_loss_fn: str = "huber"
 
@@ -913,3 +918,25 @@ def persistent_to_batch_id_map_and_keys(
                 add_key_to_keys_and_batch(keys[(left, right)], gid, pid == left)
 
     return persistent_to_batch_id_map, keys_1d, key_batch
+
+
+def build_gats_and_layer_norms(
+    dims: list[int],
+    num_heads: list[int],
+) -> tuple[ModuleList, ModuleList, int]:
+    """
+    Last head value is ignored since we are creating based on current dim output
+    """
+    assert len(dims) == len(num_heads) + 1
+    gats = ModuleList()
+    norms = ModuleList()
+    for i in range(len(num_heads)):
+        gats.append(
+            GATv2Conv(
+                dims[i] * (num_heads[i - 1] if i > 0 else 1),
+                dims[i + 1],
+                heads=num_heads[i],
+            )
+        )
+        norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
+    return gats, norms, dims[-1] * num_heads[-1]
