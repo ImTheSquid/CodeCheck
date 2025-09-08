@@ -1072,7 +1072,7 @@ def rust_train(
             schema = cast(ModelConfig, schema)
 
             critic = MergeCritic(
-                in_dim=embedding_dim // 2 * 4,
+                in_dim=embedding_dim // 2 * schema.actor.num_heads,
                 hidden_dim_generator=lambda d: d // 2,
                 num_layers=schema.critic_layers,
                 p_dropout=schema.critic_dropout,
