@@ -1081,7 +1081,8 @@ def rust_train(
                 in_dim=embedding_dim,
                 hidden_dims=[embedding_dim // 2] * schema.actor.num_layers
                 + [embedding_dim],
-                num_heads=[4] * schema.actor.num_layers + [1],
+                num_heads=[schema.actor.num_heads] * schema.actor.num_layers
+                + [1],
                 config=schema,  # pyright: ignore
                 # pool_ratios=[0.5, 0.6, 0.8, 0.8, 0.8],
                 alpha=schema.actor.alpha,

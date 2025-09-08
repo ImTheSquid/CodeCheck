@@ -25,6 +25,7 @@ class ActorConfig:
     beta: float = 0.1
     selection_dropout: float = 0.2
     num_layers: int = 4
+    num_heads: int = 4
 
     entropy_start: float = 0.02
     entropy_end: float = 0.001
