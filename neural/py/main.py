@@ -529,9 +529,10 @@ def train(
                     actor_loss.backward()
                     actor_optim.step()
 
-                critic_optim.zero_grad()
-                critic_loss.backward()
-                critic_optim.step()
+                if critic_loss.requires_grad:
+                    critic_optim.zero_grad()
+                    critic_loss.backward()
+                    critic_optim.step()
 
                 total_actor_loss += actor_loss.item()
                 total_critic_loss += critic_loss.item()
