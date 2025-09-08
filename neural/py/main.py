@@ -524,19 +524,24 @@ def train(
                     actor_loss += aux_emb_loss
                 critic_loss = metrics.critic_loss
 
-                # Sometimes all graphs will be removed
-                # For right now ignore I guess
-                if actor_loss.requires_grad:
-                    actor_optim.zero_grad()
-                    actor_loss.backward()
-                    actor_optim.step()
-                    total_actor_loss += actor_loss.item()
+                if not (actor_loss.requires_grad and critic_loss.requires_grad):
+                    print(
+                        "All graphs removed on first iteration. Skipping batch"
+                    )
+                    del batch, actor_loss, critic_loss, aux_emb_loss
+                    cleanup()
+                    continue
 
-                if critic_loss.requires_grad:
-                    critic_optim.zero_grad()
-                    critic_loss.backward()
-                    critic_optim.step()
-                    total_critic_loss += critic_loss.item()
+                actor_optim.zero_grad()
+                actor_loss.backward()
+                actor_optim.step()
+
+                critic_optim.zero_grad()
+                critic_loss.backward()
+                critic_optim.step()
+
+                total_actor_loss += actor_loss.item()
+                total_critic_loss += critic_loss.item()
 
                 write_metrics(train_csv, metrics)
 
