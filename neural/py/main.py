@@ -524,9 +524,10 @@ def train(
                     actor_loss += aux_emb_loss
                 critic_loss = metrics.critic_loss
 
-                actor_optim.zero_grad()
-                actor_loss.backward()
-                actor_optim.step()
+                if actor_loss.requires_grad:
+                    actor_optim.zero_grad()
+                    actor_loss.backward()
+                    actor_optim.step()
 
                 critic_optim.zero_grad()
                 critic_loss.backward()
