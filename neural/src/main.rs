@@ -80,13 +80,14 @@ fn main() {
 
     env::set_var("PYTHONMALLOC", "mimalloc");
     if let Some(cmd) = args.lt.py {
+        let Some(venv) = env::var("CODECHECK_VENV")
+            .ok()
+            .map(|ccv| PathBuf::from_str(&ccv).expect("valid path"))
+        else {
+            panic!("CODECHECK_VENV not set!");
+        };
         Python::with_gil(|py| {
-            neural::initialize_python(
-                py,
-                env::var("CODECHECK_VENV")
-                    .ok()
-                    .map(|ccv| PathBuf::from_str(&ccv).expect("valid path")),
-            );
+            neural::initialize_python(py, Some(venv));
             neural::add_rust_data(py).expect("add rd");
             neural::mp_mode(py).expect("add mp");
 
@@ -110,15 +111,20 @@ fn main() {
 
         let dataset = collated.compile_to_tmpdir().expect("valid load for path");
 
-        if let Some(venv) = &args.venv {
+        let venv = if let Some(venv) = &args.venv {
             println!("🔄 Loading venv from {venv:?}");
-            env::set_var("CODECHECK_VENV", venv);
-        }
+            let venv = venv.canonicalize().expect("valid canoicalization");
+            println!("✅ Caononicalized venv to {venv:?}");
+            env::set_var("CODECHECK_VENV", venv.clone());
+            Some(venv)
+        } else {
+            None
+        };
 
         let dirs = args.lt.dirs;
 
         Python::with_gil(|py| {
-            neural::initialize_python(py, args.venv);
+            neural::initialize_python(py, venv);
             neural::add_rust_data(py).expect("add rd");
 
             match args.mode {

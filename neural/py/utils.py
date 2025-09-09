@@ -291,7 +291,7 @@ def auxiliary_embedding_loss(
     positives: list[tuple[int, int]],
     top_k: int,
     margin: float,
-):
+) -> Optional[Tensor]:
     """
     embs: (N, D)
     batch: (N,)
@@ -300,43 +300,73 @@ def auxiliary_embedding_loss(
     Calculates the embedding loss to aid in clustering
     """
 
-    G = int(batch.max()) + 1
-    positives_tensor = torch.zeros((G, G), dtype=torch.int, device=embs.device)
-    for a, b in positives:
-        positives_tensor[a, b] = 1
-        positives_tensor[b, a] = 1
-
-    positives_tensor.fill_diagonal_(2)
-
-    # Mine triplets
-    anchors = poss = negs = []
-    for i in range(embs.shape[0]):
-        batch_association = batch[i]
-
-        pos = torch.argwhere(positives_tensor[batch_association] == 1)
-        pos_batch_mask = torch.isin(batch, pos.flatten())
-        pos_embs = embs[pos_batch_mask]
-        pos_node_indices = torch.randperm(pos_embs.shape[0])[:top_k]
-        chosen_pos_embs = pos_embs[pos_node_indices]
-
-        neg = torch.argwhere(positives_tensor[batch_association] == 0)
-        neg_batch_mask = torch.isin(batch, neg.flatten())
-        neg_embs = embs[neg_batch_mask]
-        neg_node_indices = torch.randperm(neg_embs.shape[0])[:top_k]
-        chosen_neg_embs = neg_embs[neg_node_indices]
-
-        for pos in chosen_pos_embs:
-            for neg in chosen_neg_embs:
-                anchors.append(embs[i])
-                poss.append(pos)
-                negs.append(neg)
-
-    if not anchors:
+    if not positives:
         return None
 
-    a, p, n = torch.stack(anchors), torch.stack(poss), torch.stack(negs)
+    # Build positives adjacency matrix (symmetric)
+    G = int(batch.max()) + 1
+    positives_tensor = torch.zeros((G, G), dtype=torch.bool, device=embs.device)
+    idx = torch.tensor(positives, device=embs.device).T  # shape [2, num_pos]
+    positives_tensor[idx[0], idx[1]] = True
+    positives_tensor[idx[1], idx[0]] = True
+    positives_tensor.fill_diagonal_(True)  # treat self as positive
 
-    return F.triplet_margin_loss(a, p, n, margin=margin)
+    N = embs.shape[0]
+
+    # Build batch association masks in one go
+    batch_onehot = torch.nn.functional.one_hot(batch, num_classes=G).to(
+        embs.device
+    )  # [N, G], int64
+
+    # For each sample i, mark positives & negatives in its batch
+    pos_mask = (
+        batch_onehot @ positives_tensor.to(torch.long)
+    ) > 0  # [N, G], bool
+    neg_mask = ~pos_mask
+
+    # Convert from group membership to node membership
+    # pos_nodes[i] = bool mask of which nodes are positive wrt batch[i]
+    pos_nodes = pos_mask[batch]  # [N, G]
+    neg_nodes = neg_mask[batch]  # [N, G]
+
+    # Broadcast to node-level masks
+    pos_mask_nodes = (batch_onehot.unsqueeze(0) & pos_nodes.unsqueeze(1)).any(
+        -1
+    )  # [N, N]
+    neg_mask_nodes = (batch_onehot.unsqueeze(0) & neg_nodes.unsqueeze(1)).any(
+        -1
+    )  # [N, N]
+
+    # Randomly sample top_k positives and negatives for each anchor
+    anchors_idx = torch.arange(N, device=embs.device).repeat_interleave(
+        top_k * top_k
+    )
+
+    pos_indices = []
+    neg_indices = []
+
+    for i in range(N):
+        pos_pool = torch.where(pos_mask_nodes[i])[0]
+        neg_pool = torch.where(neg_mask_nodes[i])[0]
+        if len(pos_pool) >= top_k and len(neg_pool) >= top_k:
+            pos_sample = pos_pool[
+                torch.randperm(len(pos_pool), device=embs.device)[:top_k]
+            ]
+            neg_sample = neg_pool[
+                torch.randperm(len(neg_pool), device=embs.device)[:top_k]
+            ]
+            # make all pos × neg combinations
+            pos_indices.append(pos_sample.repeat_interleave(top_k))
+            neg_indices.append(neg_sample.repeat(top_k))
+
+    pos_indices = torch.cat(pos_indices)
+    neg_indices = torch.cat(neg_indices)
+
+    anchors = embs[anchors_idx]
+    poss = embs[pos_indices]
+    negs = embs[neg_indices]
+
+    return F.triplet_margin_loss(anchors, poss, negs, margin=margin)
 
 
 def auxiliary_embedding_loss_helper(

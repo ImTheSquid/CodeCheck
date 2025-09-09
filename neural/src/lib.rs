@@ -93,10 +93,7 @@ pub fn mp_mode(py: Python<'_>) -> PyResult<()> {
 
 pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
     if let Some(location) = venv_location {
-        let location = location
-            .canonicalize()
-            .expect("valid canoicalization")
-            .join("bin/activate_this.py");
+        let location = location.join("bin/activate_this.py");
         let location = location.to_string_lossy();
         let code = format!(
             r#"
