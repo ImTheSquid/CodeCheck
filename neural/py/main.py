@@ -3,10 +3,11 @@ import datetime
 import gc
 import itertools
 import os
+import shutil
 from collections import defaultdict
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Literal, Optional, cast
+from typing import Literal, Optional
 
 import numpy as np
 import psutil
@@ -41,6 +42,7 @@ from utils import (
     make_persistent_to_batch_id_map,
     mine_triplets_from_aux_embeddings,
     persistent_to_batch_id_map_and_keys,
+    try_load_schema_from_file,
 )
 
 DEVICE = torch.device(
@@ -393,9 +395,11 @@ def train(
     critic: nn.Module,
     actor_optim: optim.Optimizer,
     critic_optim: optim.Optimizer,
+    start_epoch: int,
     episodes: int,
     keys: dict[tuple[int, int], NDArray],
     artifact_dir: Path,
+    train_checkpoints_dir: Path,
     config: ModelConfig,
     gamma=0.99,
     lam=0.95,
@@ -415,6 +419,7 @@ def train(
     val_data = DataLoader(
         val_set,  # type: ignore
         batch_size=config.batch_sizes.val,
+        shuffle=True,
         num_workers=DATA_WORKERS,
     )
     test_data = DataLoader(
@@ -423,8 +428,8 @@ def train(
         num_workers=DATA_WORKERS,
     )
 
-    train_f = open(artifact_dir / "train_loss.csv", "w+")
-    val_f = open(artifact_dir / "val_loss.csv", "w+")
+    train_f = open(artifact_dir / "train_loss.csv", "w")
+    val_f = open(artifact_dir / "val_loss.csv", "w")
 
     train_csv = csv.writer(train_f)
     val_csv = csv.writer(val_f)
@@ -465,7 +470,7 @@ def train(
     with Pool(
         DATA_WORKERS, maxtasksperchild=MAX_POOL_TASKS
     ) as closest_node_pool:
-        for epoch in range(episodes):
+        for epoch in range(start_epoch, episodes):
             print(f"\n⏰ EPOCH {epoch}")
             embedder.train()
             actor.train()
@@ -557,6 +562,12 @@ def train(
             print(
                 f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
             )
+
+            train_checkpoints_dir = train_checkpoints_dir / f"{epoch}"
+            os.makedirs(train_checkpoints_dir)
+            torch.save(actor, train_checkpoints_dir / "actor.pt")
+            torch.save(critic, train_checkpoints_dir / "critic.pt")
+            torch.save(embedder, train_checkpoints_dir / "embeddings.pt")
 
             total_actor_loss = total_critic_loss = 0.0
 
@@ -691,7 +702,7 @@ def train(
     train_f.close()
     val_f.close()
 
-    with open(artifact_dir / "test_loss.csv", "w+") as f:
+    with open(artifact_dir / "test_loss.csv", "w") as f:
         csv.writer(f).writerows(
             [["Actor", "Critic"]]
             + list(zip(test_actor_losses, test_critic_losses))
@@ -702,8 +713,8 @@ def train(
     )
 
     print("Training complete")
-    torch.save(embedder.state_dict(), artifact_dir / "embedder_tuned.pt")
-    torch.save(actor.state_dict(), artifact_dir / "actor.pt")
+    torch.save(embedder, artifact_dir / "embedder_tuned.pt")
+    torch.save(actor, artifact_dir / "actor.pt")
 
 
 def train_embeddings(
@@ -980,6 +991,7 @@ def rust_train(
     mode: Literal["train", "embed", "embed-test", "eval"] = "train",
     top_k: int = 3,
     device: Optional[str] = None,
+    restart_from_checkpoint: bool = True,
 ):
     global DEVICE
     if device:
@@ -1057,11 +1069,7 @@ def rust_train(
                     map_location=DEVICE,
                 )
 
-            schema = OmegaConf.structured(ModelConfig)
-
-            if os.path.exists(config_dir / "config.yml"):
-                cfg = OmegaConf.load(config_dir / "config.yml")
-                schema = OmegaConf.merge(schema, cfg)
+            schema = try_load_schema_from_file(config_dir / "config.yml")
 
             artifact_suffix = (
                 datetime.datetime.now()
@@ -1073,11 +1081,9 @@ def rust_train(
             os.makedirs(artifact_dir / artifact_suffix)
 
             with open(
-                artifact_dir / artifact_suffix / "config.yml", mode="w+"
+                artifact_dir / artifact_suffix / "config.yml", mode="w"
             ) as f:
                 OmegaConf.save(schema, f)
-
-            schema = cast(ModelConfig, schema)
 
             critic = MergeCritic(
                 in_dim=embedding_dim // 2 * schema.actor.num_heads,
@@ -1099,6 +1105,58 @@ def rust_train(
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
 
+            start_epoch = 0
+            train_checkpoints_dir = artifact_dir / "train_checkpoints"
+            if os.path.exists(train_checkpoints_dir):
+                files = os.listdir(train_checkpoints_dir)
+                sorted_files = list(
+                    sorted(
+                        filter(
+                            lambda f: os.path.isdir(train_checkpoints_dir / f),
+                            files,
+                        )
+                    )
+                )
+                if restart_from_checkpoint and sorted_files:
+                    last_complete_epoch = sorted_files[-1]
+                    start_epoch = int(last_complete_epoch) + 1
+
+                    print(f"🏃‍➡️ Restarting from epoch {start_epoch}")
+
+                    schema = try_load_schema_from_file(
+                        train_checkpoints_dir / "config.yml"
+                    )
+
+                    embedder = torch.load(
+                        train_checkpoints_dir
+                        / last_complete_epoch
+                        / "embeddings.pt",
+                        weights_only=False,
+                        map_location=DEVICE,
+                    )
+                    actor = torch.load(
+                        train_checkpoints_dir
+                        / last_complete_epoch
+                        / "actor.pt",
+                        weights_only=False,
+                        map_location=DEVICE,
+                    )
+                    critic = torch.load(
+                        train_checkpoints_dir
+                        / last_complete_epoch
+                        / "critic.pt",
+                        weights_only=False,
+                        map_location=DEVICE,
+                    )
+                else:
+                    shutil.rmtree(train_checkpoints_dir)
+                    os.makedirs(train_checkpoints_dir)
+            else:
+                os.makedirs(train_checkpoints_dir)
+
+            with open(train_checkpoints_dir / "config.yml", mode="w") as f:
+                OmegaConf.save(schema, f)
+
             train(
                 dataset,
                 embedder=embedder,
@@ -1114,9 +1172,11 @@ def rust_train(
                     lr=schema.critic_lr,
                     weight_decay=schema.critic_wd,
                 ),
+                start_epoch=start_epoch,
                 episodes=schema.num_episodes,
                 keys=keys,
                 artifact_dir=artifact_dir / artifact_suffix,
+                train_checkpoints_dir=train_checkpoints_dir,
                 config=schema,
                 entropy_coefs=(
                     schema.actor.entropy_start,
@@ -1125,6 +1185,8 @@ def rust_train(
                 gamma=schema.gae.gamma,
                 lam=schema.gae.lam,
             )
+
+            shutil.rmtree(train_checkpoints_dir)
         case "eval":
             if not (
                 os.path.exists(artifact_dir / "embeddings_tuned.pt")

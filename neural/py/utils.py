@@ -1,7 +1,8 @@
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Literal, NamedTuple, Optional
+from pathlib import Path
+from typing import Literal, NamedTuple, Optional, cast
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ import torch.nn.functional as F
 import torch_scatter
 from diskcache import Cache
 from numpy.typing import NDArray
+from omegaconf.omegaconf import OmegaConf
 from progress import deque
 from torch import Tensor
 from torch.nn import ModuleList
@@ -86,6 +88,15 @@ class ModelConfig:
 @dataclass
 class EvalConfig:
     actor: ActorConfig = field(default_factory=ActorConfig)
+
+
+def try_load_schema_from_file(p: Path) -> ModelConfig:
+    schema = OmegaConf.structured(ModelConfig)
+
+    if os.path.exists(p):
+        cfg = OmegaConf.load(p)
+        schema = OmegaConf.merge(schema, cfg)
+    return cast(ModelConfig, schema)
 
 
 class Transition(NamedTuple):
@@ -358,6 +369,9 @@ def auxiliary_embedding_loss(
             # make all pos × neg combinations
             pos_indices.append(pos_sample.repeat_interleave(top_k))
             neg_indices.append(neg_sample.repeat(top_k))
+
+    if not pos_indices:
+        return None
 
     pos_indices = torch.cat(pos_indices)
     neg_indices = torch.cat(neg_indices)
