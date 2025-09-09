@@ -63,7 +63,7 @@ def find_closest_surviving_node(
 @dataclass
 class LearningData:
     critic: nn.Module
-    keys_1d: list[torch.Tensor]
+    keys_1d: list[NDArray]
     key_batch: list[int]
 
 
@@ -325,10 +325,18 @@ class Actor(nn.Module):
 
             key_batch_associations = keys_stack = None
             if learning_data is not None:
-                key_batch_associations = np.vstack(
-                    learning_data.key_batch
-                ).squeeze(1)
-                keys_stack = np.vstack(learning_data.keys_1d)
+                key_batch_associations = (
+                    np.vstack(learning_data.key_batch).squeeze(1)
+                    if len(learning_data.key_batch) > 0
+                    else np.array([])
+                )
+                keys_stack = (
+                    np.vstack(learning_data.keys_1d)
+                    if len(learning_data.keys_1d) > 0
+                    else np.array([], dtype=int)
+                )
+
+                assert key_batch_associations.shape[0] == keys_stack.shape[0]
 
                 if len(batch) == 0:
                     # Terminal state

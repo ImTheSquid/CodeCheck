@@ -899,7 +899,7 @@ def make_persistent_to_batch_id_map(batch):
 
 def persistent_to_batch_id_map_and_keys(
     batch, keys
-) -> tuple[list[tuple[int, int]], list[Tensor], list[int]]:
+) -> tuple[list[tuple[int, int]], list[NDArray], list[int]]:
     persistent_to_batch_id_map = make_persistent_to_batch_id_map(batch)
 
     keys_1d = []
