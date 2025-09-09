@@ -319,7 +319,9 @@ def auxiliary_embedding_loss(
     )  # [N, G], int
 
     # For each sample i, mark positives & negatives in its batch
-    pos_mask = (batch_onehot.int() @ positives_tensor.int()) > 0  # [N, G], bool
+    pos_mask = (
+        batch_onehot.float() @ positives_tensor.float()
+    ) > 0  # [N, G], bool
     neg_mask = ~pos_mask
 
     # Convert from group membership to node membership
