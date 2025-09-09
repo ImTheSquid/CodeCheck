@@ -314,14 +314,14 @@ def auxiliary_embedding_loss(
     N = embs.shape[0]
 
     # Build batch association masks in one go
-    batch_onehot = torch.nn.functional.one_hot(batch, num_classes=G).to(
-        embs.device
-    )  # [N, G], int64
+    batch_onehot = (
+        torch.nn.functional.one_hot(batch, num_classes=G)
+        .to(embs.device)
+        .to(torch.int)
+    )  # [N, G], int
 
     # For each sample i, mark positives & negatives in its batch
-    pos_mask = (
-        batch_onehot @ positives_tensor.to(torch.long)
-    ) > 0  # [N, G], bool
+    pos_mask = (batch_onehot @ positives_tensor) > 0  # [N, G], bool
     neg_mask = ~pos_mask
 
     # Convert from group membership to node membership
