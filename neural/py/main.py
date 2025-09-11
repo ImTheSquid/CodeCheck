@@ -404,6 +404,7 @@ def train(
     gamma=0.99,
     lam=0.95,
     entropy_coefs: tuple[float, float] = (0.01, 0.001),
+    keep_last_n_old_checkpoints: int = 3,
 ):
     train_set, val_set, test_set = random_split(
         dataset,
@@ -563,11 +564,14 @@ def train(
                 f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
             )
 
-            train_checkpoints_dir = train_checkpoints_dir / f"{epoch}"
-            os.makedirs(train_checkpoints_dir)
-            torch.save(actor, train_checkpoints_dir / "actor.pt")
-            torch.save(critic, train_checkpoints_dir / "critic.pt")
-            torch.save(embedder, train_checkpoints_dir / "embeddings.pt")
+            train_checkpoints_dir_latest = train_checkpoints_dir / f"{epoch}"
+            os.makedirs(train_checkpoints_dir_latest)
+            torch.save(actor, train_checkpoints_dir_latest / "actor.pt")
+            torch.save(critic, train_checkpoints_dir_latest / "critic.pt")
+            torch.save(embedder, train_checkpoints_dir_latest / "embeddings.pt")
+
+            for epoch_del in range(epoch - keep_last_n_old_checkpoints):
+                shutil.rmtree(train_checkpoints_dir / f"{epoch_del}")
 
             total_actor_loss = total_critic_loss = 0.0
 
