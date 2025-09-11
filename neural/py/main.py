@@ -571,7 +571,8 @@ def train(
             torch.save(embedder, train_checkpoints_dir_latest / "embeddings.pt")
 
             for epoch_del in range(epoch - keep_last_n_old_checkpoints):
-                shutil.rmtree(train_checkpoints_dir / f"{epoch_del}")
+                if os.path.exists(train_checkpoints_dir / f"{epoch_del}"):
+                    shutil.rmtree(train_checkpoints_dir / f"{epoch_del}")
 
             total_actor_loss = total_critic_loss = 0.0
 
