@@ -2,6 +2,7 @@ import csv
 import datetime
 import gc
 import itertools
+import multiprocessing
 import os
 import shutil
 from collections import defaultdict
@@ -998,6 +999,19 @@ def rust_train(
     device: Optional[str] = None,
     restart_from_checkpoint: bool = True,
 ):
+    try:
+        multiprocessing.set_start_method("forkserver", force=True)
+    except ValueError:
+        # ValueError: "forkserver" not available on this platform
+        print(
+            'WARNING: "forkserver" start method not available on this platform'
+        )
+
+    if "file_system" in torch.multiprocessing.get_all_sharing_strategies():
+        torch.multiprocessing.set_sharing_strategy("file_system")
+    else:
+        print('WARNING: "file_system" sharing not available on this platform')
+
     global DEVICE
     if device:
         DEVICE = torch.device(device)
