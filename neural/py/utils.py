@@ -296,13 +296,18 @@ class Metrics:
     entropy: Tensor
 
 
+from typing import Optional
+
+import torch
+
+
 def auxiliary_embedding_loss(
-    embs: Tensor,
-    batch: Tensor,
+    embs: torch.Tensor,
+    batch: torch.Tensor,
     positives: list[tuple[int, int]],
     top_k: int,
     margin: float,
-) -> Optional[Tensor]:
+) -> Optional[torch.Tensor]:
     """
     embs: (N, D)
     batch: (N,)
@@ -314,65 +319,51 @@ def auxiliary_embedding_loss(
     if not positives:
         return None
 
-    # Build positives adjacency matrix (symmetric)
+    device = embs.device
+    N = embs.shape[0]
     G = int(batch.max()) + 1
-    positives_tensor = torch.zeros((G, G), dtype=torch.bool, device=embs.device)
-    idx = torch.tensor(positives, device=embs.device).T  # shape [2, num_pos]
+
+    # build adjacency of graph-level positives
+    positives_tensor = torch.zeros((G, G), dtype=torch.bool, device=device)
+    idx = torch.tensor(positives, device=device).T
     positives_tensor[idx[0], idx[1]] = True
     positives_tensor[idx[1], idx[0]] = True
-    positives_tensor.fill_diagonal_(True)  # treat self as positive
+    positives_tensor.fill_diagonal_(True)
 
-    N = embs.shape[0]
+    # map graphs to their nodes
+    graph_to_nodes = [torch.where(batch == g)[0] for g in range(G)]
 
-    # Build batch association masks in one go
-    batch_onehot = torch.nn.functional.one_hot(batch, num_classes=G).to(
-        embs.device
-    )  # [N, G], int
-
-    # For each sample i, mark positives & negatives in its batch
-    pos_mask = (
-        batch_onehot.float() @ positives_tensor.float()
-    ) > 0  # [N, G], bool
-    neg_mask = ~pos_mask
-
-    # Convert from group membership to node membership
-    # pos_nodes[i] = bool mask of which nodes are positive wrt batch[i]
-    pos_nodes = pos_mask[batch]  # [N, G]
-    neg_nodes = neg_mask[batch]  # [N, G]
-
-    # Broadcast to node-level masks
-    pos_mask_nodes = (batch_onehot.unsqueeze(0) & pos_nodes.unsqueeze(1)).any(
-        -1
-    )  # [N, N]
-    neg_mask_nodes = (batch_onehot.unsqueeze(0) & neg_nodes.unsqueeze(1)).any(
-        -1
-    )  # [N, N]
-
-    # Randomly sample top_k positives and negatives for each anchor
-    anchors_idx = torch.arange(N, device=embs.device).repeat_interleave(
-        top_k * top_k
-    )
-
+    anchors_idx = []
     pos_indices = []
     neg_indices = []
 
     for i in range(N):
-        pos_pool = torch.where(pos_mask_nodes[i])[0]
-        neg_pool = torch.where(neg_mask_nodes[i])[0]
+        g = batch[i].item()
+
+        # which graphs are positive/negative to g
+        pos_graphs = torch.where(positives_tensor[g])[0]
+        neg_graphs = torch.where(~positives_tensor[g])[0]
+
+        # collect node pools
+        pos_pool = torch.cat([graph_to_nodes[pg] for pg in pos_graphs])
+        neg_pool = torch.cat([graph_to_nodes[ng] for ng in neg_graphs])
+
         if len(pos_pool) >= top_k and len(neg_pool) >= top_k:
             pos_sample = pos_pool[
-                torch.randperm(len(pos_pool), device=embs.device)[:top_k]
+                torch.randperm(len(pos_pool), device=device)[:top_k]
             ]
             neg_sample = neg_pool[
-                torch.randperm(len(neg_pool), device=embs.device)[:top_k]
+                torch.randperm(len(neg_pool), device=device)[:top_k]
             ]
-            # make all pos × neg combinations
+
+            anchors_idx.append(torch.full((top_k * top_k,), i, device=device))
             pos_indices.append(pos_sample.repeat_interleave(top_k))
             neg_indices.append(neg_sample.repeat(top_k))
 
     if not pos_indices:
         return None
 
+    anchors_idx = torch.cat(anchors_idx)
     pos_indices = torch.cat(pos_indices)
     neg_indices = torch.cat(neg_indices)
 
