@@ -1,10 +1,9 @@
 *
-!analysis/
-!auth/
-!db/
 !macros/
-!storage/
 !util/
-!web/
-!Cargo.toml
+!neural/
+!ast/
+!docker/
+!Cargo.*
 !.env
+**/.*/
