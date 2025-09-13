@@ -4,7 +4,6 @@
 
 use std::{collections::HashMap, ffi::CString, io::Cursor, path::PathBuf, range::Range};
 
-use mimalloc::MiMalloc;
 use pyo3::{
     ffi::c_str,
     intern,
@@ -28,9 +27,6 @@ pub mod data;
 // fn leaky_gain(slope: f64) -> f64 {
 //     (2.0 / (1.0 + slope.powi(2))).sqrt()
 // }
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 const AST_NAME_EMBEDDINGS: &[u8] = include_bytes!("ast_name_embeddings.npz");
 

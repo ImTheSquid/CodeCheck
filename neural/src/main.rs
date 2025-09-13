@@ -78,7 +78,6 @@ fn main() {
 
     let args = Arguments::parse_from(a.iter());
 
-    env::set_var("PYTHONMALLOC", "mimalloc");
     if let Some(cmd) = args.lt.py {
         let Some(venv) = env::var("CODECHECK_VENV")
             .ok()
