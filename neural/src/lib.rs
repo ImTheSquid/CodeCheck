@@ -2,7 +2,9 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use std::{collections::HashMap, ffi::CString, io::Cursor, path::PathBuf, range::Range};
+use std::{
+    collections::HashMap, env::current_exe, ffi::CString, io::Cursor, path::PathBuf, range::Range,
+};
 
 use pyo3::{
     ffi::c_str,
@@ -105,10 +107,20 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         .unwrap();
     }
 
+    PyModule::import(py, "sys")
+        .unwrap()
+        .setattr("executable", current_exe().unwrap().to_string_lossy())
+        .unwrap();
+
     // debug_python_env(py);
 
     assert!(
         py.import("math").is_ok(),
+        "Sanity check failed: Something is very wrong, math import failed!"
+    );
+
+    assert!(
+        py.import("_ctypes").is_ok(),
         "Sanity check failed: Something is very wrong, math import failed!"
     );
 

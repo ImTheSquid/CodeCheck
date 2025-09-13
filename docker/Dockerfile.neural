@@ -37,7 +37,7 @@ WORKDIR /src
 COPY neural/py/uv.lock .
 COPY neural/py/pyproject.toml .
 
-RUN uv venv
+RUN uv venv --python `python3.13 --version 2>&1 | awk '{print $2}'`
 RUN . .venv/bin/activate
 RUN uv pip install torch
 RUN uv sync --no-build-isolation
