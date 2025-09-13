@@ -121,7 +121,7 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
 
     assert!(
         py.import("_ctypes").is_ok(),
-        "Sanity check failed: Something is very wrong, math import failed!"
+        "Sanity check failed: Something is very wrong, _ctypes import failed! Make sure venv and system python versions are the same."
     );
 
     assert!(
