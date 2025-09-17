@@ -40,6 +40,7 @@ class RewardConfig:
     removed_graph_reward: float = 0.5
     correct_range_reward: float = 1.1
     timestep_node_removal_penalty_numerator: int = 1
+    removal_incentive: str = "penalty"
 
 
 @dataclass
@@ -190,6 +191,7 @@ def compute_reward(
     removed_graph_reward: float,
     correct_range_reward: float,
     timestep_node_removal_penalty_numerator: int,
+    removal_incentive: str,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -243,13 +245,23 @@ def compute_reward(
     # Missing graph penalty
     reward_per_graph -= missing_graph_penalty * missing_count
 
-    # Removed graph reward: If a graph with no keys was removed, that's good! Give a reward
-    # Find all unique members of key batches and actual batches
-    # For each item in the no key tensor, if it ISN'T present in the batch then add a reward
-    correct_removals = len(no_key_graph_indices) - torch.sum(
-        torch.isin(no_key_graph_indices, batch)
-    )
-    reward_per_graph += correct_removals * removed_graph_reward
+    # This can go one of two ways, either rewarding removals or punishing a lackthereof
+    match removal_incentive:
+        case "reward":
+            # Removed graph reward: If a graph with no keys was removed, that's good! Give a reward
+            # Find all unique members of key batches and actual batches
+            # For each item in the no key tensor, if it ISN'T present in the batch then add a reward
+            correct_removals = len(no_key_graph_indices) - torch.sum(
+                torch.isin(no_key_graph_indices, batch)
+            )
+            reward_per_graph += correct_removals * removed_graph_reward
+        case "penalty":
+            # Scale penalty based on number of extra graphs, only applied to said graphs
+            reward_per_graph[no_key_graph_indices] -= (
+                removed_graph_reward * len(no_key_graph_indices)
+            )
+        case _:
+            raise ValueError("Invalid removal incentive")
 
     return reward_per_graph
 

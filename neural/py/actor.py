@@ -402,6 +402,7 @@ class Actor(nn.Module):
                     removed_graph_reward=self.model_config.reward.removed_graph_reward,
                     correct_range_reward=self.model_config.reward.correct_range_reward,
                     timestep_node_removal_penalty_numerator=self.model_config.reward.timestep_node_removal_penalty_numerator,
+                    removal_incentive=self.model_config.reward.removal_incentive,
                 )  # [G]
                 prev_reward_data = PreviousTimestepData(
                     diou_l=diou_l,
