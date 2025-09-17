@@ -39,6 +39,7 @@ class RewardConfig:
     graph_size_penalty: float = 0.1
     removed_graph_reward: float = 0.5
     correct_range_reward: float = 1.1
+    timestep_node_removal_penalty_numerator: int = 1
 
 
 @dataclass
@@ -170,16 +171,25 @@ def lerp(a: float, b: float, t: float) -> float:
     return (1 - t) * a + t * b
 
 
+@dataclass
+class PreviousTimestepData:
+    diou_l: Tensor
+    remaining_keys: int
+    num_layers: int
+
+
 def compute_reward(
     diou_l: Tensor,
     total_keys: int,
     remaining_keys: int,
     batch: Tensor,
     no_key_graph_indices: Tensor,
-    size_penalty: float = 0.01,
-    missing_graph_penalty: float = 1.0,
-    removed_graph_reward: float = 1.0,
-    correct_range_reward: float = 1.0,
+    prev_data: Optional[PreviousTimestepData],
+    size_penalty: float,
+    missing_graph_penalty: float,
+    removed_graph_reward: float,
+    correct_range_reward: float,
+    timestep_node_removal_penalty_numerator: int,
 ) -> Tensor:
     """
     diou_l: [N] – node‑wise DIoU (lower is better)
@@ -205,14 +215,33 @@ def compute_reward(
         node_reward, batch, dim=0, out=reward_per_graph
     )
 
+    if prev_data := prev_data:
+        prev_reward = (
+            diou_to_reward(diou=prev_data.diou_l, mode="log")
+            * correct_range_reward
+        )
+        key_improvement_factor = remaining_keys / max(
+            1, prev_data.remaining_keys
+        )
+        avg_diou_improvement_factor = torch.mean(node_reward) / max(
+            1e-6, prev_reward.mean()
+        )
+        reward_per_graph *= key_improvement_factor * avg_diou_improvement_factor
+
+        # Penalize removing more than 1/num_layers proportion of the nodes
+        overly_eager_removal_penalty = max(
+            0.0,
+            (1 - diou_l.shape[0] / prev_data.diou_l.shape[0])
+            - timestep_node_removal_penalty_numerator / prev_data.num_layers,
+        )
+        reward_per_graph -= overly_eager_removal_penalty
+
     # Size penalty – encourage fewer nodes
     num_nodes = torch_scatter.scatter_sum(torch.ones_like(diou_l), batch, dim=0)
     reward_per_graph -= size_penalty * num_nodes.float()
 
     # Missing graph penalty
     reward_per_graph -= missing_graph_penalty * missing_count
-    # for event in missing:
-    # reward_per_graph[event] -= missing_graph_penalty
 
     # Removed graph reward: If a graph with no keys was removed, that's good! Give a reward
     # Find all unique members of key batches and actual batches
@@ -221,6 +250,56 @@ def compute_reward(
         torch.isin(no_key_graph_indices, batch)
     )
     reward_per_graph += correct_removals * removed_graph_reward
+
+    return reward_per_graph
+
+
+def compute_incremental_reward(
+    diou_prev: torch.Tensor,
+    diou_curr: torch.Tensor,
+    total_keys: int,
+    remaining_keys_prev: int,
+    remaining_keys_curr: int,
+    batch: torch.Tensor,
+    size_penalty: float = 0.01,
+) -> torch.Tensor:
+    """
+    diou_prev: [N_prev] node-wise DIoU before this step
+    diou_curr: [N_curr] node-wise DIoU after this step
+    total_keys: total graphs at episode start
+    remaining_keys_prev: graphs alive before this step
+    remaining_keys_curr: graphs alive after this step
+    batch: [N_curr] graph ID for each surviving node
+    Returns: [G_curr] per-graph incremental reward
+    """
+
+    # --- Normalize DIoU so lower = better ---
+    reward_prev = diou_to_reward(diou_prev, mode="log")
+    reward_curr = diou_to_reward(diou_curr, mode="log")
+
+    # --- Aggregate graph-wise mean ---
+    G = batch.max().item() + 1 if batch.numel() > 0 else 0
+    reward_per_graph = torch.zeros(int(G), device=diou_curr.device)
+
+    if G > 0:
+        reward_per_graph = torch_scatter.scatter_mean(
+            reward_curr, batch, dim=0, out=reward_per_graph
+        )
+
+    # --- Incremental improvement: how much better than last step? ---
+    # If DIoU improved, this will be positive. If worse, negative.
+    improvement_factor = remaining_keys_curr / max(1, remaining_keys_prev)
+    reward_per_graph = reward_per_graph * improvement_factor
+
+    # --- Penalize excessive size ---
+    if G > 0:
+        num_nodes = torch_scatter.scatter_sum(
+            torch.ones_like(diou_curr), batch, dim=0
+        )
+        reward_per_graph -= size_penalty * num_nodes.float()
+
+    # --- Apply missing graph penalty globally ---
+    reward_per_graph *= remaining_keys_curr / total_keys
 
     return reward_per_graph
 

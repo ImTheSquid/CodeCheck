@@ -3,14 +3,19 @@
 #![feature(generic_const_exprs)]
 
 use std::{
-    collections::HashMap, env::current_exe, ffi::CString, io::Cursor, path::PathBuf, range::Range,
+    collections::{HashMap, HashSet},
+    env::current_exe,
+    ffi::CString,
+    io::Cursor,
+    path::PathBuf,
+    range::Range,
 };
 
 use pyo3::{
     ffi::c_str,
     intern,
     prelude::*,
-    types::{PyDict, PyDictMethods, PyList},
+    types::{PyDict, PyDictMethods, PyList, PySet},
 };
 use util::Mark;
 
@@ -205,7 +210,7 @@ pub fn eval(
         .iter()
         .map(|(k, v)| {
             let k: isize = k.extract()?;
-            let v: Vec<(usize, usize, usize)> = v.downcast_into::<PyList>()?.extract()?;
+            let v: HashSet<(usize, usize, usize)> = v.downcast_into::<PySet>()?.extract()?;
             let v = v
                 .into_iter()
                 .map(|(id, start, end)| EvaluationResult {

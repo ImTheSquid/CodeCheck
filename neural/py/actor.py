@@ -13,6 +13,7 @@ from torch_geometric.utils import degree, subgraph
 
 from utils import (
     ModelConfig,
+    PreviousTimestepData,
     RunningNorm,
     Transition,
     build_gats_and_layer_norms,
@@ -226,7 +227,7 @@ class Actor(nn.Module):
         feature_spans: NDArray,
         learning_data: Optional[LearningData],
         closest_node_pool: Pool,
-    ) -> list[Transition] | tuple[torch.Tensor, NDArray]:
+    ) -> list[Transition] | tuple[torch.Tensor, NDArray, torch.Tensor]:
         if learning_data is None == self.training:
             raise AssertionError("Learning data is None when training")
 
@@ -255,6 +256,7 @@ class Actor(nn.Module):
         logp_last = None
 
         transitions = []
+        prev_reward_data = None
 
         for i in range(self.num_layers):
             # 1) GAT + score
@@ -321,7 +323,9 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
-            print(f"Graphs remaining: {torch.unique(batch).cpu().tolist()}")
+            print(
+                f"Graph/nodes remaining: {list(map(lambda i: (i, torch.sum(batch == i).item()), torch.unique(batch).cpu().tolist()))}"
+            )
 
             key_batch_associations = keys_stack = None
             if learning_data is not None:
@@ -385,17 +389,25 @@ class Actor(nn.Module):
 
                 diou_l = diou_l.to(x.device)
 
+                remaining_keys = keys_stack.shape[0] - len(missing)
                 reward_g = compute_reward(
                     diou_l,
                     total_keys=keys_stack.shape[0],
-                    remaining_keys=keys_stack.shape[0] - len(missing),
+                    remaining_keys=remaining_keys,
                     batch=batch,
                     no_key_graph_indices=no_key_graph_indices,
+                    prev_data=prev_reward_data,
                     size_penalty=self.model_config.reward.graph_size_penalty,
                     missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
                     removed_graph_reward=self.model_config.reward.removed_graph_reward,
                     correct_range_reward=self.model_config.reward.correct_range_reward,
+                    timestep_node_removal_penalty_numerator=self.model_config.reward.timestep_node_removal_penalty_numerator,
                 )  # [G]
+                prev_reward_data = PreviousTimestepData(
+                    diou_l=diou_l,
+                    remaining_keys=remaining_keys,
+                    num_layers=self.num_layers,
+                )
                 self.running_reward_norm.update(reward_g)
                 r = self.running_reward_norm.normalize(reward_g)
                 # r = reward_g
@@ -424,7 +436,7 @@ class Actor(nn.Module):
                 if len(batch) > 0:
                     x = self.reducer(x)
 
-                return x, line_spans
+                return x, line_spans, batch
 
         if len(batch) > 0:
             x = self.reducer(x)

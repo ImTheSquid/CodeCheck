@@ -19,7 +19,6 @@ from numpy.typing import NDArray
 from omegaconf import OmegaConf
 from progress.bar import Bar
 from sklearn.cluster import HDBSCAN
-from tabulate import tabulate
 from torch import Tensor, nn, optim
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset
@@ -141,193 +140,8 @@ def find_relevant_keys_for_clustering(
     return out
 
 
-def mean_pool_same_lines(
-    x: NDArray, batch: NDArray, lines: NDArray
-) -> tuple[NDArray, NDArray, NDArray]:
-    """
-    Mean pool all of the x values that are on the same line in the same graph
-    """
-
-    batch_with_lines = np.hstack([lines, np.expand_dims(batch, 1)])
-    meaned = []
-    batch_lines = []
-    for collection in np.unique(batch_with_lines, axis=0):
-        mask = np.all(batch_with_lines == collection, axis=1)
-        all_x = x[mask]
-        all_x_mean = all_x.mean(axis=0)
-        meaned.append(all_x_mean)
-        batch_lines.append(collection)
-
-    meaned = np.vstack(meaned)
-    batch_lines = np.vstack(batch_lines)
-
-    return meaned, batch_lines[:, 2], batch_lines[:, :2]
-
-
-def cluster_and_calculate_reward(
-    nodes: NDArray,
-    keys: dict[tuple[int, int], NDArray],
-    selected_indices_for_batch: list[tuple[int, int]],
-    batch: NDArray,
-    line_spans: NDArray,
-) -> float:
-    assert not np.isnan(np.sum(nodes)), "NaN in nodes! Bad training :("
-    assert batch.shape[0] == nodes.shape[0], (
-        "Something is wrong, nodes must match batch"
-    )
-
-    nodes, batch, line_spans = mean_pool_same_lines(nodes, batch, line_spans)
-
-    relevant = find_relevant_keys_for_clustering(
-        keys, selected_indices_for_batch
-    )
-    print(
-        f"Graphs in this batch are:\n{tabulate(selected_indices_for_batch, headers=['Persistent ID', 'Batch ID'])}"
-    )
-    print(f"Relevant keys for clustering: {relevant}")
-    # If there aren't any relevant keys in this dataset then no change in score
-    if len(relevant) == 0:
-        return 0.0
-
-    selected_indices_dictionary = {
-        gid: pid for (pid, gid) in selected_indices_for_batch
-    }
-
-    print(
-        tabulate(
-            list(
-                zip(
-                    batch.tolist(),
-                    map(lambda bid: selected_indices_dictionary[bid], batch),
-                    map(lambda arr: f"{arr[0]}, {arr[1]}", line_spans),
-                )
-            ),
-            headers=["Batch", "Persistent ID", "Line Assignments"],
-        )
-    )
-
-    # 1) Cluster
-    # clusterer = HDBSCAN(min_cluster_size=2, cluster_selection_method='leaf')
-    clusterer = HDBSCAN(
-        min_cluster_size=2,
-        # n_jobs=-1,
-        # prediction_data=True,
-        cluster_selection_method="leaf",
-        allow_single_cluster=True,
-    )
-    labels = clusterer.fit_predict(nodes)  # -1 = noise
-
-    print(f"{labels.max()} clusters created")
-
-    for label in np.unique(labels):
-        mask = label == labels
-        print(
-            f"\n\nMEMBERS IN CLUSTER {label} (total {np.count_nonzero(mask)}):\n"
-        )
-
-        line_data = line_spans[mask]
-        bid = batch[mask]
-        pid = map(lambda b: selected_indices_dictionary[b], bid)
-        print(
-            tabulate(
-                list(
-                    zip(
-                        bid,
-                        pid,
-                        map(lambda arr: f"{arr[0]}, {arr[1]}", line_data),
-                    )
-                ),
-                headers=["Batch", "Persistent ID", "Line Assignments"],
-            )
-        )
-
-    # 2) Recover per‐node spans
-    #    If you want "true" spans per node from your original mapping,
-    #    you can call the helper above. Otherwise assume line_spans is already per node.
-
-    # 3) Build lookup: local_idx -> (pid,graph)
-    # pid_graph = {i: selected_indices_for_batch[i] for i in range(len(selected_indices_for_batch))}
-
-    # 4) Count TP/FP and track which key‐rows we match exactly
-    TP = FP = 0
-    matched = set()  # (pair, (si,sj,ei,ej))
-
-    # all_keys = set(keys.keys())
-
-    for cluster in set(labels):
-        if cluster < 0:
-            continue
-        members = np.where(labels == cluster)[0]
-        for i, j in itertools.combinations(members, 2):
-            g_i = batch[i]
-            g_j = batch[j]
-
-            # print(f"SEL {i}, {j}")
-            # pid_i, g_i = pid_graph[i]
-            # pid_j, g_j = pid_graph[j]
-            if g_i == g_j:
-                continue
-
-            pid_i = pid_j = -1
-
-            for pid, g in selected_indices_for_batch:
-                if g == g_i:
-                    pid_i = pid
-                elif g == g_j:
-                    pid_j = pid
-                # Early return if both found
-                if pid_i > -1 and pid_j > -1:
-                    break
-
-            span_i = tuple(line_spans[i].tolist())
-            span_j = tuple(line_spans[j].tolist())
-
-            pair = (pid_i, pid_j)
-            arr = keys.get(pair, None)
-            if arr is None or arr.size == 0:
-                # no true spans → false positive
-                FP += 1
-                continue
-
-            # want to see [si, sj, ei, ej]
-            want1 = (span_i[0], span_j[0], span_i[1], span_j[1])
-            want2 = (span_j[0], span_i[0], span_j[1], span_i[1])
-
-            found = False
-            for row in arr:
-                row_t = (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
-                if row_t == want1 or row_t == want2:
-                    TP += 1
-                    matched.add((pair, row_t))
-                    found = True
-                    break
-            if not found:
-                FP += 1
-
-    # 5) Count FN: ground‐truth rows never matched
-    FN = 0
-    for pair, arr in keys.items():
-        if arr.size == 0:
-            continue
-        for row in arr:
-            row_t = (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
-            if (pair, row_t) not in matched:
-                FN += 1
-
-    # 6) Precision/Recall/F1
-    precision = TP / (TP + FP) if TP + FP > 0 else 0.0
-    recall = TP / (TP + FN) if TP + FN > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall > 0
-        else 0.0
-    )
-
-    print(
-        f"True Positives: {TP}\nFalse Positives: {FP}\nFalse Negatives: {FN}\nF1: {f1}"
-    )
-
-    return f1
+def eliminate_dupes():
+    pass
 
 
 def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
@@ -354,10 +168,10 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
                 )
                 batch_to_persistent = torch.tensor(
                     list(map(int, batch.key_index))
-                )
+                ).to(DEVICE)
 
+                selected_spans = batch.lines
                 batch = batch.to(DEVICE)
-                batch_to_persistent = batch_to_persistent.to(DEVICE)
 
                 embs = embedder(batch.x, batch.edge_index)
 
@@ -365,10 +179,12 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
                     embs,
                     batch.edge_index,
                     batch.batch,
-                    persistent_to_batch_id_map,
-                    batch.lines,
-                    closest_node_pool,
+                    persistent_to_batch_id_map=persistent_to_batch_id_map,
+                    feature_spans=selected_spans,
+                    learning_data=None,
+                    closest_node_pool=closest_node_pool,
                 )
+
                 persistent_ids = batch_to_persistent[batch_idxs].cpu().numpy()
                 xs.append(x)
                 spanss.append(line_spans)
@@ -381,10 +197,10 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
     hdbscan = HDBSCAN(cluster_selection_method="leaf")
     hdbscan.fit(x.cpu().numpy())
 
-    detections = defaultdict(list)
+    detections = defaultdict(set)
     for i, label in enumerate(hdbscan.labels_):
         row = spans[i]
-        detections[label].append((persistent_ids[i], row[0], row[1]))
+        detections[label].add((persistent_ids[i], row[0], row[1]))
 
     return detections
 
@@ -484,7 +300,7 @@ def train(
 
             # Train
             for batch in train_data:
-                print("\n\nNEXT BATCH ->")
+                print(f"\n\nNEXT BATCH | EPOCH {epoch} ->")
 
                 persistent_to_batch_id_map, keys_1d, key_batch = (
                     persistent_to_batch_id_map_and_keys(batch, keys)
@@ -562,14 +378,14 @@ def train(
                 cleanup()
 
             print(
-                f"~~\nTotal Training Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+                f"~~\nTotal Training Loss for Epoch {epoch}:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
             )
 
             train_checkpoints_dir_latest = train_checkpoints_dir / f"{epoch}"
             os.makedirs(train_checkpoints_dir_latest)
             torch.save(actor, train_checkpoints_dir_latest / "actor.pt")
             torch.save(critic, train_checkpoints_dir_latest / "critic.pt")
-            torch.save(embedder, train_checkpoints_dir_latest / "embeddings.pt")
+            torch.save(embedder, train_checkpoints_dir_latest / "embedder.pt")
 
             for epoch_del in range(epoch - keep_last_n_old_checkpoints):
                 if os.path.exists(train_checkpoints_dir / f"{epoch_del}"):
@@ -640,7 +456,7 @@ def train(
                     cleanup()
 
             print(
-                f"~~\nTotal Validation Loss:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
+                f"~~\nTotal Validation Loss for Epoch {epoch}:\nActor: {total_actor_loss}\nCritic: {total_critic_loss}\n~~"
             )
 
         # Test
@@ -1149,7 +965,7 @@ def rust_train(
                     embedder = torch.load(
                         train_checkpoints_dir
                         / last_complete_epoch
-                        / "embeddings.pt",
+                        / "embedder.pt",
                         weights_only=False,
                         map_location=DEVICE,
                     )
@@ -1208,7 +1024,7 @@ def rust_train(
             shutil.rmtree(train_checkpoints_dir)
         case "eval":
             if not (
-                os.path.exists(artifact_dir / "embeddings_tuned.pt")
+                os.path.exists(artifact_dir / "embedder_tuned.pt")
                 and os.path.exists(artifact_dir / "actor.pt")
             ):
                 raise FileNotFoundError(
@@ -1216,7 +1032,7 @@ def rust_train(
                 )
 
             embedder = torch.load(
-                artifact_dir / "embeddings_tuned.pt",
+                artifact_dir / "embedder_tuned.pt",
                 weights_only=False,
                 map_location=DEVICE,
             )
