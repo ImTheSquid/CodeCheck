@@ -323,8 +323,10 @@ class Actor(nn.Module):
 
             x = F.gelu(x)
 
+            kb = set(learning_data.key_batch) if learning_data else set()
+
             print(
-                f"Graph/nodes remaining: {list(map(lambda i: (i, torch.sum(batch == i).item()), torch.unique(batch).cpu().tolist()))}"
+                f"Graph/nodes remaining: {list(map(lambda i: (i, torch.sum(batch == i).item(), i in kb), torch.unique(batch).cpu().tolist()))}"
             )
 
             key_batch_associations = keys_stack = None
