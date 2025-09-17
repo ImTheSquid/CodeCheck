@@ -201,7 +201,9 @@ def compute_reward(
     """
     missing_count = total_keys - remaining_keys
     if len(batch) == 0 and total_keys > 0:
-        return torch.full((1,), -missing_count, device=diou_l.device)
+        return torch.full(
+            (1,), -missing_count * missing_graph_penalty, device=diou_l.device
+        )
     # # Normalise DIoU so that lower = better
     # diou_norm = (diou_l - diou_l.mean()) / (diou_l.std() + 1e-6)
 
