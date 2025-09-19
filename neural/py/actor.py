@@ -8,17 +8,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from numpy._typing import NDArray
-from torch.distributions import Bernoulli
-from torch_geometric.utils import degree, subgraph
+from torch_geometric.utils import degree
 
 from utils import (
     ModelConfig,
-    PreviousTimestepData,
     RunningNorm,
     Transition,
     build_gats_and_layer_norms,
-    calculate_line_spans,
-    compute_reward,
+    compute_node_reward,
     diou_loss,
 )
 
@@ -98,7 +95,9 @@ class Actor(nn.Module):
 
         dims = [in_dim] + hidden_dims
 
-        self.gats, self.norms, _ = build_gats_and_layer_norms(dims, num_heads)
+        self.gats, self.norms, last = build_gats_and_layer_norms(
+            dims, num_heads
+        )
 
         for i in range(self.num_layers):
             # self.gats.append(
@@ -115,6 +114,8 @@ class Actor(nn.Module):
                 nn.Sequential(
                     nn.Linear(dims[i + 1] * num_heads[i], dims[i + 1]),
                     nn.GELU(),
+                    nn.Linear(dims[i + 1], dims[i + 1]),
+                    nn.GELU(),
                     nn.Linear(dims[i + 1], dims[i + 1] // 2),
                     nn.GELU(),
                     nn.Dropout(p=selection_dropout),
@@ -124,10 +125,6 @@ class Actor(nn.Module):
                 )
             )  # Node selection score
 
-        self.reducer = nn.Sequential(
-            nn.Linear(dims[-1] * num_heads[-1], dims[-1]), nn.GELU()
-        )
-
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -136,10 +133,6 @@ class Actor(nn.Module):
             for layer in seq:
                 if isinstance(layer, nn.Linear):
                     nn.init.xavier_normal_(layer.weight)
-
-        for layer in self.reducer:
-            if isinstance(layer, nn.Linear):
-                nn.init.xavier_uniform_(layer.weight)
 
     def compute_depths(self, edge_index, batch):
         num_nodes = batch.size(0)
@@ -231,20 +224,18 @@ class Actor(nn.Module):
         if learning_data is None == self.training:
             raise AssertionError("Learning data is None when training")
 
-        N0 = x.size(0)
-        merge_map = torch.arange(N0, device=x.device)  # global merge_map
-        global_map = torch.arange(N0, device=x.device)  # local→global map
-        perm = 0
+        graph_has_key = (
+            torch.isin(
+                torch.unique(batch),
+                torch.tensor(learning_data.key_batch, device=batch.device),
+            )
+            if learning_data is not None
+            else None
+        )
 
         no_key_graph_indices = (
-            torch.unique(
-                torch.from_numpy(
-                    np.setdiff1d(
-                        np.array(learning_data.key_batch), batch.cpu().numpy()
-                    )
-                )
-            ).to(batch.device)
-            if learning_data is not None
+            torch.argwhere(~graph_has_key)
+            if graph_has_key is not None
             else None
         )
 
@@ -252,7 +243,6 @@ class Actor(nn.Module):
         # b_start = torch.unique(torch.clone(batch))
         # start_num_graphs = b_start.shape[0]
 
-        logp_terms = []
         logp_last = None
 
         transitions = []
@@ -263,71 +253,23 @@ class Actor(nn.Module):
             x = self.gats[i](x, edge_index)
             x = F.relu(x)
             x = self.norms[i](x)
-            policy_logits = self.policy_heads[i](x).squeeze(-1)
-            prior_prob = self.bias_nodes_per_degree(
-                x, edge_index, batch, torch.sigmoid(policy_logits)
-            ).clamp(1e-6, 1.0 - 1e-6)
-            prior_logits = torch.logit(prior_prob, eps=1e-6)
-            mixed_logits = (
-                self.alpha * policy_logits + (1.0 - self.alpha) * prior_logits
-            )
-            dist = Bernoulli(logits=mixed_logits)
-            actions = dist.sample()  # 0/1 per node
-            logp = dist.log_prob(actions)  # [N], can be negative
-            entropy_per_node = dist.entropy()  # [N]
-
-            logp_last = logp
-            logp_terms.append(logp)
-
-            keep_mask = actions.bool()
-            perm = keep_mask.nonzero(as_tuple=True)[0]
-
-            # 2) Save pre‐pool state for BFS
-            pre_edge_index = edge_index.clone().detach()
-            # pre_batch      = batch
-            pre_global_map = global_map.clone().detach()
-
-            edge_index, _ = subgraph(
-                perm, edge_index, relabel_nodes=True, num_nodes=x.size(0)
-            )
-            logp_last = logp_last[perm]
-            x = x[perm]
-            batch = batch[perm]
-
-            # 4) Survivors in this layer, in original indexing
-            surv_global = pre_global_map[perm]  # shape = [# kept nodes]
-
-            # 5) Which local nodes were removed *this* layer?
-            all_local = torch.arange(pre_global_map.size(0), device=x.device)
-            removed_local = all_local[~torch.isin(all_local, perm)]
-
-            perm_set = set(perm.tolist())
-            # 6) For each removed local node, find its BFS‐nearest surviving *local* node:
-            rep_locs = closest_node_pool.starmap(
-                find_closest_surviving_node,
-                map(
-                    lambda loc: (loc, pre_edge_index.cpu(), perm_set),
-                    removed_local.tolist(),
-                ),
-            )
-            for rep_loc, loc in zip(rep_locs, removed_local.tolist()):
-                rep_glob = pre_global_map[rep_loc]
-                orig = pre_global_map[loc]
-                merge_map[orig] = rep_glob
-
-            # 7) Ensure survivors map to self
-            merge_map[surv_global] = surv_global
-
-            # 8) Shrink your local→global map for the next layer
-            global_map = surv_global.clone()
 
             x = F.gelu(x)
 
-            kb = set(learning_data.key_batch) if learning_data else set()
+            # Actor head: outputs one logit per node
+            logits = self.policy_heads[i](x)  # shape: (N_nodes,)
 
-            print(
-                f"Graph/nodes remaining: {list(map(lambda i: (i, torch.sum(batch == i).item(), i in kb), torch.unique(batch).cpu().tolist()))}"
-            )
+            # Bernoulli distribution for each node
+            probs = torch.sigmoid(
+                logits
+            )  # probabilities of selecting each node
+            dist = torch.distributions.Bernoulli(probs=probs)
+
+            # Sample binary mask of important nodes
+            actions = dist.sample()  # shape: (N_nodes,), entries in {0,1}
+
+            # Log-prob of those actions
+            logp = dist.log_prob(actions).sum(dim=-1)  # sum across nodes
 
             key_batch_associations = keys_stack = None
             if learning_data is not None:
@@ -344,40 +286,14 @@ class Actor(nn.Module):
 
                 assert key_batch_associations.shape[0] == keys_stack.shape[0]
 
-                if len(batch) == 0:
-                    # Terminal state
-                    # All graphs removed
-                    # All keys are automatically assumed missing
-                    if len(key_batch_associations) > 0:
-                        terminal_reward = -1.0
-                    else:
-                        terminal_reward = 10.0
-                    transitions.append(
-                        Transition(
-                            logp=None,
-                            reward=torch.tensor(
-                                [terminal_reward], device=x.device
-                            ),
-                            value=torch.tensor([0.0], device=x.device),
-                            batch=None,
-                            entropy=None,
-                        )
-                    )
-                    break
-
-            line_spans = calculate_line_spans(
-                merge_map=merge_map.cpu().numpy(),
-                selected_indices_for_batch=persistent_to_batch_id_map,
-                batch=batch.cpu().numpy(),
-                perm=perm.cpu().numpy(),
-                selected_line_assignments_for_batch=feature_spans,
-            )
+            line_spans = feature_spans
 
             if (
                 keys_stack is not None
                 and key_batch_associations is not None
                 and learning_data is not None
                 and no_key_graph_indices is not None
+                and graph_has_key is not None
             ):
                 diou_l, missing = diou_loss(
                     line_mappings=line_spans,
@@ -391,28 +307,18 @@ class Actor(nn.Module):
 
                 diou_l = diou_l.to(x.device)
 
-                remaining_keys = keys_stack.shape[0] - len(missing)
-                reward_g = compute_reward(
-                    diou_l,
-                    total_keys=keys_stack.shape[0],
-                    remaining_keys=remaining_keys,
-                    batch=batch,
-                    no_key_graph_indices=no_key_graph_indices,
-                    prev_data=prev_reward_data,
-                    size_penalty=self.model_config.reward.graph_size_penalty,
-                    missing_graph_penalty=self.model_config.reward.missing_graph_penalty,
-                    removed_graph_reward=self.model_config.reward.removed_graph_reward,
-                    correct_range_reward=self.model_config.reward.correct_range_reward,
-                    timestep_node_removal_penalty_numerator=self.model_config.reward.timestep_node_removal_penalty_numerator,
-                    removal_incentive=self.model_config.reward.removal_incentive,
-                )  # [G]
-                prev_reward_data = PreviousTimestepData(
+                reward_n = compute_node_reward(
                     diou_l=diou_l,
-                    remaining_keys=remaining_keys,
-                    num_layers=self.num_layers,
+                    edge_index=edge_index,
+                    batch=batch,
+                    graph_has_key=graph_has_key,
+                    prev_diou_l=prev_reward_data,
+                    reward_config=self.model_config.reward,
                 )
-                self.running_reward_norm.update(reward_g)
-                r = self.running_reward_norm.normalize(reward_g)
+
+                prev_reward_data = diou_l
+                self.running_reward_norm.update(reward_n)
+                r = self.running_reward_norm.normalize(reward_n)
                 # r = reward_g
                 # r = (r - r.mean()) / (r.std() + 1e-6)
 
@@ -423,12 +329,19 @@ class Actor(nn.Module):
                 assert r.shape == predicted_reward.shape, (
                     f"Reward/value mismatch ({r.shape} != {predicted_reward.shape})"
                 )
+
+                r = (r * actions).sum() / (actions.sum() + 1e-6)
+                value = (predicted_reward * actions).sum() / (
+                    actions.sum() + 1e-6
+                )
+
                 transition = Transition(
-                    logp=logp_last,
+                    logp=logp,
                     reward=r,
-                    value=predicted_reward,
+                    value=value,
                     batch=batch,
-                    entropy=entropy_per_node,
+                    entropy=dist.entropy().mean(),
+                    diou_loss=diou_l,
                 )
                 transitions.append(transition)
             elif i == self.num_layers - 1:
@@ -436,24 +349,6 @@ class Actor(nn.Module):
                     "Transitions added in evaluation run"
                 )
 
-                if len(batch) > 0:
-                    x = self.reducer(x)
-
                 return x, line_spans, batch
-
-        if len(batch) > 0:
-            x = self.reducer(x)
-
-        # Sanity check
-        # end_num_graphs = torch.unique(batch).shape[0]
-        # assert start_num_graphs == end_num_graphs, (
-        #     f"Graph quantity mismatch! {start_num_graphs} != {end_num_graphs}, Removed: {b_start[~torch.isin(b_start, torch.unique(batch))]}"
-        # )
-
-        # All graphs have now been processed. It should theoretically be impossible for any graph to have
-        # nodes that failed to find a survivor.
-        assert not torch.any(merge_map == -1), (
-            "Some nodes failed to find a survivor!"
-        )
 
         return transitions

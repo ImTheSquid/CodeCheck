@@ -15,7 +15,7 @@ from progress import deque
 from torch import Tensor
 from torch.nn import ModuleList
 from torch_geometric.nn import GATv2Conv, LayerNorm
-from torch_geometric.utils import k_hop_subgraph, subgraph
+from torch_geometric.utils import degree, k_hop_subgraph, subgraph
 
 DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
 MAX_POOL_TASKS = 100
@@ -41,6 +41,8 @@ class RewardConfig:
     correct_range_reward: float = 1.1
     timestep_node_removal_penalty_numerator: int = 1
     removal_incentive: str = "penalty"
+    keyed_graph_reward: float = 0.5
+    nonkeyed_graph_penalty: float = 0.5
 
 
 @dataclass
@@ -83,6 +85,7 @@ class ModelConfig:
 
     embedding_loss_margin: float = 1.0
     embedding_loss_top_k: int = 50
+    embedding_loss_selection_k: int = 50
 
     batch_sizes: BatchSizes = field(default_factory=BatchSizes)
 
@@ -107,6 +110,7 @@ class Transition(NamedTuple):
     value: torch.Tensor  # [G]
     batch: Optional[torch.Tensor]
     entropy: Optional[torch.Tensor]
+    diou_loss: Optional[torch.Tensor]
 
 
 class RunningNorm:
@@ -170,6 +174,41 @@ def lerp(a: float, b: float, t: float) -> float:
         4.2 == lerp(1, 5, 0.8)
     """
     return (1 - t) * a + t * b
+
+
+def compute_node_reward(
+    diou_l: Tensor,
+    edge_index: Tensor,
+    batch: Tensor,
+    graph_has_key: Tensor,
+    prev_diou_l: Optional[Tensor],
+    reward_config: RewardConfig,
+):
+    # DIoU loss for each node
+    # Importance via position in graph (higher degree, more important)
+    # General degredation for a graph not having a key
+    # Reward for anywhere where diou_l < prev_diou_l
+
+    node_reward_raw = diou_to_reward(diou=diou_l, mode="log")
+    node_reward = node_reward_raw * reward_config.correct_range_reward
+
+    deg = degree(edge_index[0], num_nodes=batch.size(0))
+    deg = torch.tanh(deg / deg.std())
+    node_reward += deg
+
+    # Add a reward per graph that is a key, penalty otherwise
+    keyed_graphs = torch.argwhere(graph_has_key)
+    keyed_graph_mask = torch.isin(batch, keyed_graphs)
+    node_reward[keyed_graph_mask] += reward_config.keyed_graph_reward
+    node_reward[~keyed_graph_mask] -= reward_config.nonkeyed_graph_penalty
+
+    if prev_diou_l is not None:
+        prev_reward = diou_to_reward(diou=prev_diou_l, mode="log")
+        node_reward += (
+            prev_reward - node_reward
+        ) * reward_config.correct_range_reward
+
+    return node_reward
 
 
 @dataclass
@@ -319,65 +358,47 @@ def compute_incremental_reward(
 
 
 def compute_returns_and_advantages(
-    transitions,
+    transitions: list[Transition],
     gamma: float = 0.99,
     lam: float = 0.95,
     reward_last_only: bool = False,
     standardize_adv: bool = True,
 ):
-    """assistant-wrote: corrected returns/advantages with per-layer standardization"""
-    # Figure out the maximum number of graphs across all transitions
-    max_G = max(t.reward.shape[0] for t in transitions)
+    """
+    Computes returns/advantages for a sequence of transitions.
+    Now transitions.reward and transitions.value are scalars
+    (aggregated over selected nodes), not per-graph vectors.
+    """
     L = len(transitions)
 
-    # Pad rewards/values to [L, max_G], and keep a mask
-    R = torch.zeros(L, max_G, device=transitions[0].reward.device)
-    V = torch.zeros(L, max_G, device=transitions[0].reward.device)
-    V_critic = torch.zeros(L, max_G, device=transitions[0].reward.device)
-    mask = torch.zeros(L, max_G, dtype=torch.bool, device=R.device)
-
-    for i, t in enumerate(transitions):
-        g = t.reward.shape[0]
-        R[i, :g] = t.reward
-        V[i, :g] = t.value.detach()
-        V_critic[i, :g] = t.value
-        mask[i, :g] = True
+    R = torch.stack([t.reward for t in transitions])  # [L]
+    V = torch.stack([t.value.detach() for t in transitions])  # [L]
+    V_critic = torch.stack([t.value for t in transitions])  # [L]
 
     if reward_last_only:
-        R[:-1] = R[-1].unsqueeze(0)
+        R[:-1] = R[-1]
 
     returns = torch.zeros_like(R)
-    gae = torch.zeros(max_G, device=R.device)
+    gae = 0.0
 
-    # Compute GAE backwards in time
+    # GAE backwards
     for t in reversed(range(L)):
         v_t = V[t]
-        v_tp1 = V[t + 1] if t + 1 < L else torch.zeros_like(v_t)
+        v_tp1 = V[t + 1] if t + 1 < L else 0.0
         delta = R[t] + gamma * v_tp1 - v_t
         gae = delta + gamma * lam * gae
         returns[t] = gae + v_t
 
     advantages = returns - V
 
-    # Mask out invalid graphs
-    returns = returns * mask
-    advantages = advantages * mask
-
     if standardize_adv:
         eps = 1e-8
-        # avoid dividing by zero for masked-out entries
-        mean = (
-            advantages.sum(dim=1, keepdim=True)
-            / mask.sum(dim=1, keepdim=True).clamp(min=1)
-        ).detach()
-        var = ((advantages - mean) ** 2 * mask).sum(
-            dim=1, keepdim=True
-        ) / mask.sum(dim=1, keepdim=True).clamp(min=1)
-        std = var.sqrt().clamp(min=eps)
+        mean = advantages.mean().detach()
+        std = advantages.std().clamp(min=eps).detach()
         advantages = (advantages - mean) / std
 
     advantages = torch.clamp(advantages, -10.0, 10.0)
-    return returns, advantages, V_critic, mask
+    return returns, advantages, V_critic
 
 
 @dataclass
@@ -387,11 +408,6 @@ class Metrics:
     reward: Tensor
     value: Tensor
     entropy: Tensor
-
-
-from typing import Optional
-
-import torch
 
 
 def auxiliary_embedding_loss(
@@ -470,6 +486,7 @@ def auxiliary_embedding_loss(
 def auxiliary_embedding_loss_helper(
     embs: Tensor,
     batch,
+    diou_loss: Tensor,
     persistent_to_batch_id_map: list[tuple[int, int]],
     keys: dict[tuple[int, int], NDArray],
     config: ModelConfig,
@@ -486,9 +503,31 @@ def auxiliary_embedding_loss_helper(
         )
     )
 
+    assert diou_loss.shape[0] == embs.shape[0], (
+        f"diou_loss.shape != embs.shape ({diou_loss.shape[0]} != {embs.shape[0]})"
+    )
+
+    # Only take the lowest losses per graph
+    bottom_ks = []
+    for g in range(batch.batch.max()):
+        mask = batch.batch == g
+        indices_of_nodes_in_graph_g = torch.argwhere(mask)
+        diou_loss_g_bottom_k = torch.argsort(
+            diou_loss[indices_of_nodes_in_graph_g], descending=True
+        )[: config.embedding_loss_selection_k]
+        global_bottom_k = indices_of_nodes_in_graph_g[diou_loss_g_bottom_k]
+        bottom_ks.append(global_bottom_k)
+
+    bottom_ks = torch.cat(bottom_ks)
+
+    assert (
+        bottom_ks.shape[0]
+        <= batch.batch.max() * config.embedding_loss_selection_k
+    ), "bottom ks too big"
+
     aux_emb_loss = auxiliary_embedding_loss(
-        embs,
-        batch.batch,
+        embs[bottom_ks],
+        batch.batch[bottom_ks],
         positives=positives,
         top_k=config.embedding_loss_top_k,
         margin=config.embedding_loss_margin,
@@ -505,35 +544,30 @@ def actor_critic_loss(
     critic_loss_fn: str = "huber",
 ) -> Metrics:
     """
-    transitions : list[Transition] – all layers
-    returns    : [G]
-    advantages : [G]
+    transitions: list[Transition]
+      - transition.logp : scalar log-prob of sampled action(s)
+      - transition.reward : scalar reward (aggregated over mask)
+      - transition.value : scalar critic value (aggregated over mask)
+      - transition.entropy : scalar entropy term
     """
-    returns, advantages, V, mask = compute_returns_and_advantages(
-        transitions,
-        gamma,
-        lam,
+    returns, advantages, V = compute_returns_and_advantages(
+        transitions, gamma, lam
     )
-    mask = mask.reshape([-1])
 
-    # Policy loss (PG)
+    # Policy loss
     actor_loss = 0.0
     entropy_terms = []
-    for i, transition in enumerate(transitions):
-        if transition.logp is None:
+    for i, t in enumerate(transitions):
+        if t.logp is None:
             continue
-        actor_loss += -(
-            advantages[i][transition.batch] * transition.logp
-        ).mean()
-        entropy_terms.append(transition.entropy)
+        actor_loss += -(advantages[i] * t.logp)
+        if t.entropy is not None:
+            entropy_terms.append(t.entropy)
 
-    # Critic loss (smooth L1 / Huber)
-    V_all = V.reshape([-1])[mask]
-    # V_all = torch.cat([t.value for t in transitions])  # [L, G]
-    R_all = torch.cat([returns[t] for t in range(len(returns))])[mask]  # [L, G]
-    assert V_all.shape == R_all.shape, (
-        f"Shapes mismatch: V_all: {V_all.shape} R_all: {R_all.shape}"
-    )
+    # Critic loss
+    V_all = V
+    R_all = returns
+    assert V_all.shape == R_all.shape
 
     match critic_loss_fn:
         case "huber":
@@ -545,17 +579,17 @@ def actor_critic_loss(
 
     # Entropy bonus
     entropy = (
-        torch.cat(entropy_terms, dim=0).mean()
+        torch.stack(entropy_terms).mean()
         if entropy_terms
         else torch.tensor(0.0, device=transitions[0].reward.device)
     )
     actor_loss -= entropy_coef * entropy
 
     return Metrics(
-        actor_loss=actor_loss,
+        actor_loss=actor_loss.mean(),
         critic_loss=critic_loss,
-        value=V_all,
         reward=R_all,
+        value=V_all,
         entropy=entropy,
     )
 
@@ -1065,6 +1099,7 @@ def build_gats_and_layer_norms(
                 dims[i] * (num_heads[i - 1] if i > 0 else 1),
                 dims[i + 1],
                 heads=num_heads[i],
+                concat=i < len(num_heads) - 1,
             )
         )
         norms.append(LayerNorm(dims[i + 1] * num_heads[i]))

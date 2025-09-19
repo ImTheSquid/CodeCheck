@@ -337,6 +337,9 @@ def train(
                 aux_emb_loss = auxiliary_embedding_loss_helper(
                     embs,
                     batch=batch,
+                    diou_loss=torch.stack(
+                        [t.diou_loss for t in transitions]
+                    ).mean(dim=0),
                     persistent_to_batch_id_map=persistent_to_batch_id_map,
                     keys=keys,
                     config=config,
@@ -344,7 +347,7 @@ def train(
 
                 actor_loss = metrics.actor_loss
                 if aux_emb_loss is not None:
-                    actor_loss += aux_emb_loss
+                    actor_loss -= aux_emb_loss
                 critic_loss = metrics.critic_loss
 
                 if not (actor_loss.requires_grad and critic_loss.requires_grad):

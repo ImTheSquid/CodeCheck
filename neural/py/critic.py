@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch_geometric.nn import GATv2Conv, global_mean_pool
+from torch_geometric.nn import GATv2Conv
 from torch_geometric.nn.norm import LayerNorm
 
 from utils import build_gats_and_layer_norms
@@ -103,7 +103,7 @@ class MergeCritic(nn.Module):
             x = F.gelu(x)
             x = norm(x)
 
-        graph_mean = global_mean_pool(x, batch)
-        values = self.graph_value_head(graph_mean).squeeze(-1)
+        # graph_mean = global_mean_pool(x, batch)
+        values = self.graph_value_head(x).squeeze(-1)
 
         return values
