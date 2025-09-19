@@ -24,6 +24,9 @@ struct Arguments {
     /// Mode
     #[arg(short = 'm', value_enum, default_value = "train")]
     mode: Mode,
+    /// Alternative python files directory for live loading
+    #[arg(short = 'p', long = "python-files-dir", default_value = "None")]
+    python_files_dir: Option<PathBuf>,
     /// Embeddings only: Top-k for triplet mining
     #[arg(short = 'k', default_value = "3")]
     top_k: usize,
@@ -85,8 +88,11 @@ fn main() {
         else {
             panic!("CODECHECK_VENV not set!");
         };
+        let python_files = env::var("CODECHECK_PYTHON_FILES")
+            .ok()
+            .map(|ccp| PathBuf::from_str(&ccp).expect("valid path"));
         Python::with_gil(|py| {
-            neural::initialize_python(py, Some(venv));
+            neural::initialize_python(py, Some(venv), python_files);
             neural::add_rust_data(py).expect("add rd");
             neural::mp_mode(py).expect("add mp");
 
@@ -120,10 +126,16 @@ fn main() {
             None
         };
 
+        if let Some(ref python_files) = args.python_files_dir {
+            let python_files = python_files.canonicalize().expect("valid canonicalization");
+            println!("🐍 Using alternative load location {python_files:?}");
+            env::set_var("CODECHECK_PYTHON_FILES", python_files);
+        }
+
         let dirs = args.lt.dirs;
 
         Python::with_gil(|py| {
-            neural::initialize_python(py, venv);
+            neural::initialize_python(py, venv, args.python_files_dir);
             neural::add_rust_data(py).expect("add rd");
 
             match args.mode {

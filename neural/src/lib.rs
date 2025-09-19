@@ -5,7 +5,8 @@
 use std::{
     collections::{HashMap, HashSet},
     env::current_exe,
-    ffi::CString,
+    ffi::{CStr, CString},
+    fs::read_to_string,
     io::Cursor,
     path::PathBuf,
     range::Range,
@@ -94,7 +95,22 @@ pub fn mp_mode(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
-pub fn initialize_python(py: Python<'_>, venv_location: Option<PathBuf>) {
+fn force_load_if_given(dir: &Option<PathBuf>, name: &str, alternative: &CStr) -> CString {
+    match dir {
+        Some(dir) => CString::new(
+            read_to_string(dir.join(name))
+                .unwrap_or_else(|_| panic!("Could not find {name} in {dir:?}")),
+        )
+        .expect("valid cstr"),
+        None => alternative.to_owned(),
+    }
+}
+
+pub fn initialize_python(
+    py: Python<'_>,
+    venv_location: Option<PathBuf>,
+    alternative_load_location: Option<PathBuf>,
+) {
     if let Some(location) = venv_location {
         let location = location.join("bin/activate_this.py");
         let location = location.to_string_lossy();
@@ -134,34 +150,56 @@ exec(open(activate_this).read(), {{'__file__': activate_this}})"#
         "Sanity check failed: PyTorch not found! Ensure a virtual environment is present with the necessary packages."
     );
 
-    PyModule::from_code(py, python_files::UTILS, c_str!("utils.py"), c_str!("utils"))
-        .expect("Import utils");
-    PyModule::from_code(py, python_files::ACTOR, c_str!("actor.py"), c_str!("actor"))
-        .expect("Import actor");
     PyModule::from_code(
         py,
-        python_files::CRITIC,
+        &force_load_if_given(&alternative_load_location, "utils.py", python_files::UTILS),
+        c_str!("utils.py"),
+        c_str!("utils"),
+    )
+    .expect("Import utils");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(&alternative_load_location, "actor.py", python_files::ACTOR),
+        c_str!("actor.py"),
+        c_str!("actor"),
+    )
+    .expect("Import actor");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(
+            &alternative_load_location,
+            "critic.py",
+            python_files::CRITIC,
+        ),
         c_str!("critic.py"),
         c_str!("critic"),
     )
     .expect("Import critic");
     PyModule::from_code(
         py,
-        python_files::GRAPHHAM,
+        &force_load_if_given(
+            &alternative_load_location,
+            "graphham.py",
+            python_files::GRAPHHAM,
+        ),
         c_str!("graphham.py"),
         c_str!("graphham"),
     )
     .expect("Import graphham");
     PyModule::from_code(
         py,
-        python_files::EMBEDDING,
+        &force_load_if_given(
+            &alternative_load_location,
+            "embedding.py",
+            python_files::EMBEDDING,
+        ),
         c_str!("embedding.py"),
         c_str!("embedding"),
     )
     .expect("Import embedding");
     PyModule::from_code(
         py,
-        python_files::MAIN,
+        &force_load_if_given(&alternative_load_location, "main.py", python_files::MAIN),
         c_str!("main.py"),
         c_str!("codecheck"),
     )
