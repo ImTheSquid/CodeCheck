@@ -262,7 +262,6 @@ def train(
         "Mean Absolute Reward",
         "Mean Absolute Value",
         "Mean Entropy",
-        "Entropy Standard Deviation",
         "Mean Absolute Entropy",
     ]
     train_csv.writerow(ROWS)
@@ -280,7 +279,6 @@ def train(
                 metrics.reward.abs().mean().item(),
                 metrics.value.abs().mean().item(),
                 metrics.entropy.mean().item(),
-                metrics.entropy.std().item(),
                 metrics.entropy.abs().mean().item(),
             ]
         )
@@ -350,14 +348,6 @@ def train(
                     actor_loss -= aux_emb_loss
                 critic_loss = metrics.critic_loss
 
-                if not (actor_loss.requires_grad and critic_loss.requires_grad):
-                    print(
-                        "All graphs removed on first iteration. Skipping batch"
-                    )
-                    del batch, actor_loss, critic_loss, aux_emb_loss
-                    cleanup()
-                    continue
-
                 actor_optim.zero_grad()
                 actor_loss.backward()
                 actor_optim.step()
@@ -377,7 +367,7 @@ def train(
                     + "*" * 10
                 )
 
-                del batch, actor_loss, critic_loss, aux_emb_loss
+                del batch, actor_loss, critic_loss, aux_emb_loss, metrics
                 cleanup()
 
             print(
@@ -458,7 +448,7 @@ def train(
                         + "%" * 10
                     )
 
-                    del batch, actor_loss, critic_loss, aux_emb_loss
+                    del batch, actor_loss, critic_loss, aux_emb_loss, metrics
                     cleanup()
 
             print(
@@ -527,7 +517,7 @@ def train(
                     + "=" * 10
                 )
 
-                del batch, actor_loss, critic_loss, aux_emb_loss
+                del batch, actor_loss, critic_loss, aux_emb_loss, metrics
                 cleanup()
 
     train_f.close()

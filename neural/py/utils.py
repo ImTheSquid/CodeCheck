@@ -509,11 +509,11 @@ def auxiliary_embedding_loss_helper(
 
     # Only take the lowest losses per graph
     bottom_ks = []
-    for g in range(batch.batch.max()):
+    for g in range(batch.batch.max() + 1):
         mask = batch.batch == g
-        indices_of_nodes_in_graph_g = torch.argwhere(mask)
+        indices_of_nodes_in_graph_g = torch.nonzero(mask, as_tuple=True)[0]
         diou_loss_g_bottom_k = torch.argsort(
-            diou_loss[indices_of_nodes_in_graph_g], descending=True
+            diou_loss[indices_of_nodes_in_graph_g]
         )[: config.embedding_loss_selection_k]
         global_bottom_k = indices_of_nodes_in_graph_g[diou_loss_g_bottom_k]
         bottom_ks.append(global_bottom_k)
@@ -522,7 +522,7 @@ def auxiliary_embedding_loss_helper(
 
     assert (
         bottom_ks.shape[0]
-        <= batch.batch.max() * config.embedding_loss_selection_k
+        <= (batch.batch.max() + 1) * config.embedding_loss_selection_k
     ), "bottom ks too big"
 
     aux_emb_loss = auxiliary_embedding_loss(
