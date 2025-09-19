@@ -25,7 +25,7 @@ struct Arguments {
     #[arg(short = 'm', value_enum, default_value = "train")]
     mode: Mode,
     /// Alternative python files directory for live loading
-    #[arg(short = 'p', long = "python-files-dir", default_value = "None")]
+    #[arg(short = 'p', long = "python-files-dir")]
     python_files_dir: Option<PathBuf>,
     /// Embeddings only: Top-k for triplet mining
     #[arg(short = 'k', default_value = "3")]
