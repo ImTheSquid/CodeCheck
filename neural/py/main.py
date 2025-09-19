@@ -433,6 +433,9 @@ def train(
                     aux_emb_loss = auxiliary_embedding_loss_helper(
                         embs,
                         batch=batch,
+                        diou_loss=torch.stack(
+                            [t.diou_loss for t in transitions]
+                        ).mean(dim=0),
                         persistent_to_batch_id_map=persistent_to_batch_id_map,
                         keys=keys,
                         config=config,
@@ -500,6 +503,9 @@ def train(
                 aux_emb_loss = auxiliary_embedding_loss_helper(
                     embs,
                     batch=batch,
+                    diou_loss=torch.stack(
+                        [t.diou_loss for t in transitions]
+                    ).mean(dim=0),
                     persistent_to_batch_id_map=persistent_to_batch_id_map,
                     keys=keys,
                     config=config,

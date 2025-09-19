@@ -425,7 +425,7 @@ def auxiliary_embedding_loss(
     Calculates the embedding loss to aid in clustering
     """
 
-    if not positives:
+    if len(positives) == 0:
         return None
 
     device = embs.device
