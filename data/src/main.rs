@@ -76,7 +76,6 @@ async fn write_files_and_update_manifest(
     files: &[(String, Language)],
     pairs: &HashMap<String, Vec<PlagiarismEvent>>,
     basedir: &Path,
-    base_index: usize,
 ) -> Result<()> {
     let files = files
         .iter()
@@ -140,15 +139,12 @@ async fn write_files_and_update_manifest(
         }
     }
 
-    for (i, ((a, b), marks)) in data.into_iter().enumerate() {
-        dataset.pairs.insert(
-            i + base_index,
-            Pair {
-                a: files[a].1.clone(),
-                b: files[b].1.clone(),
-                marks,
-            },
-        );
+    for ((a, b), marks) in data {
+        dataset.pairs.push(Pair {
+            a: files[a].1.clone(),
+            b: files[b].1.clone(),
+            marks,
+        });
     }
 
     Ok(())
@@ -281,13 +277,11 @@ async fn main() -> Result<()> {
                             p.finish();
                         }
 
-                        let base_index = dataset.pairs.len();
                         write_files_and_update_manifest(
                             &mut dataset,
                             &res.codes,
                             &res.pairs,
                             &dataset_dir,
-                            if base_index == 0 { 0 } else { base_index + 1 },
                         )
                         .await?;
 

@@ -151,8 +151,11 @@ fn process_code(
                     bail!("No start when found full capture!");
                 };
                 let start = start + 1;
-                // Plus one makes it exclusive
-                let end = plag.lines().count() - 3 + start + 1;
+                // Exclusive
+                let end = plag.lines().count() - 2 + start;
+                if start >= end {
+                    bail!("start not less than end! {start} >= {end}");
+                }
                 line_buffer = plagiarism_regex.replace(&line_buffer, "$2").to_string();
                 found_open_plag_on_line_number = None;
 
@@ -574,17 +577,17 @@ class BinaryTree:
             PlagiarismEvent {
                 file: 0,
                 start: 4,
-                end: 7,
+                end: 8,
             },
             PlagiarismEvent {
                 file: 1,
                 start: 4,
-                end: 7,
+                end: 8,
             },
             PlagiarismEvent {
                 file: 3,
                 start: 4,
-                end: 6,
+                end: 7,
             },
         ];
 
@@ -592,22 +595,22 @@ class BinaryTree:
             PlagiarismEvent {
                 file: 0,
                 start: 12,
-                end: 16,
+                end: 17,
             },
             PlagiarismEvent {
                 file: 1,
                 start: 12,
-                end: 16,
+                end: 17,
             },
             PlagiarismEvent {
                 file: 2,
                 start: 9,
-                end: 16,
+                end: 17,
             },
             PlagiarismEvent {
                 file: 3,
                 start: 15,
-                end: 18,
+                end: 19,
             },
         ];
 

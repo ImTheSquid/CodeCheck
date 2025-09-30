@@ -100,8 +100,8 @@ class MergeCritic(nn.Module):
 
         for gat, norm in zip(self.gats, self.norms):
             x = gat(x, edge_index)
-            x = F.gelu(x)
             x = norm(x)
+            x = F.gelu(x)
 
         # graph_mean = global_mean_pool(x, batch)
         values = self.graph_value_head(x).squeeze(-1)

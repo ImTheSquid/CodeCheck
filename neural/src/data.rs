@@ -253,6 +253,18 @@ impl TmpDirDataset {
                     .marks
                     .iter()
                     .map(|m| {
+                        assert!(
+                            m.a.start <= m.a.end,
+                            "Mark a start {} is greater than end {}",
+                            m.a.start,
+                            m.a.end
+                        );
+                        assert!(
+                            m.b.start <= m.b.end,
+                            "Mark b start {} is greater than end {}",
+                            m.b.start,
+                            m.b.end
+                        );
                         [
                             m.a.start as f64,
                             m.b.start as f64,
@@ -465,20 +477,23 @@ where
         features.push(node_feature);
         let span = node.span();
         // Spans are not inclusive
-        spans.push(array![
+        let start =
             *character_map
                 .get(&span.start)
                 .ok_or(DataError::InvalidCharacterMapConstruction {
                     character_index: span.start,
-                    designator: InvalidCharacterMapSpanPartDesignator::Start
-                })?,
+                    designator: InvalidCharacterMapSpanPartDesignator::Start,
+                })?;
+        let end =
             *character_map
                 .get(&span.end)
                 .ok_or(DataError::InvalidCharacterMapConstruction {
                     character_index: span.end,
-                    designator: InvalidCharacterMapSpanPartDesignator::End
+                    designator: InvalidCharacterMapSpanPartDesignator::End,
                 })?
-        ]);
+                + 1;
+        assert!(start < end, "Start {} is not less than end {}", start, end);
+        spans.push(array![start, end]);
 
         last_index = i;
         i += 1;

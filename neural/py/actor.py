@@ -251,7 +251,6 @@ class Actor(nn.Module):
         for i in range(self.num_layers):
             # 1) GAT + score
             x = self.gats[i](x, edge_index)
-            x = F.relu(x)
             x = self.norms[i](x)
 
             x = F.gelu(x)
@@ -317,8 +316,9 @@ class Actor(nn.Module):
                 )
 
                 prev_reward_data = diou_l
-                self.running_reward_norm.update(reward_n)
-                r = self.running_reward_norm.normalize(reward_n)
+                # self.running_reward_norm.update(reward_n)
+                # r = self.running_reward_norm.normalize(reward_n)
+                r = reward_n
                 # r = reward_g
                 # r = (r - r.mean()) / (r.std() + 1e-6)
 
@@ -330,10 +330,17 @@ class Actor(nn.Module):
                     f"Reward/value mismatch ({r.shape} != {predicted_reward.shape})"
                 )
 
-                r = (r * actions).sum() / (actions.sum() + 1e-6)
-                value = (predicted_reward * actions).sum() / (
-                    actions.sum() + 1e-6
+                r = (
+                    (r * actions).sum()
+                    - self.model_config.actor.action_reward_scale
+                    * actions.sum()
                 )
+                value = predicted_reward.mean()
+                # value = (
+                #     (predicted_reward * actions).sum()
+                #     - self.model_config.actor.action_reward_scale
+                #     * actions.sum()
+                # )
 
                 transition = Transition(
                     logp=logp,

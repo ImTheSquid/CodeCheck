@@ -14,7 +14,7 @@ from omegaconf.omegaconf import OmegaConf
 from progress import deque
 from torch import Tensor
 from torch.nn import ModuleList
-from torch_geometric.nn import GATv2Conv, LayerNorm
+from torch_geometric.nn import GATv2Conv, LayerNorm, SAGPooling
 from torch_geometric.utils import degree, k_hop_subgraph, subgraph
 
 DATA_WORKERS = (os.cpu_count() or 1) * 3 // 4
@@ -31,6 +31,8 @@ class ActorConfig:
 
     entropy_start: float = 0.02
     entropy_end: float = 0.001
+
+    action_reward_scale: float = 0.2
 
 
 @dataclass
@@ -59,6 +61,15 @@ class BatchSizes:
 
 
 @dataclass
+class LossConfig:
+    latent: float = 10.0
+    relevance: float = 2.0
+    auxiliary: float = 0.25
+    focal_alpha: float = 1.0
+    focal_gamma: float = 2.0
+
+
+@dataclass
 class ModelConfig:
     num_episodes: int = 10
 
@@ -69,6 +80,8 @@ class ModelConfig:
     reward: RewardConfig = field(default_factory=RewardConfig)
 
     gae: GaeConfig = field(default_factory=GaeConfig)
+
+    loss: LossConfig = field(default_factory=LossConfig)
 
     # Actor optimizer
     actor_lr: float = 1e-5
@@ -86,8 +99,14 @@ class ModelConfig:
     embedding_loss_margin: float = 1.0
     embedding_loss_top_k: int = 50
     embedding_loss_selection_k: int = 50
+    embedding_loss_weight: float = 0.05
 
     batch_sizes: BatchSizes = field(default_factory=BatchSizes)
+
+    pool_every_n: int = 3
+    pool_threshold: float = 0.7
+    pool_offset: int = 0
+    pool_multiplier: int = 5
 
 
 @dataclass
@@ -174,6 +193,14 @@ def lerp(a: float, b: float, t: float) -> float:
         4.2 == lerp(1, 5, 0.8)
     """
     return (1 - t) * a + t * b
+
+
+def focal_loss(logits, labels, alpha=1.0, gamma=2.0):
+    bce = F.binary_cross_entropy_with_logits(logits, labels, reduction="none")
+    p = torch.sigmoid(logits)
+    pt = labels * p + (1 - labels) * (1 - p)
+    loss = alpha * (1 - pt) ** gamma * bce
+    return loss.mean()
 
 
 def compute_node_reward(
@@ -363,6 +390,7 @@ def compute_returns_and_advantages(
     lam: float = 0.95,
     reward_last_only: bool = False,
     standardize_adv: bool = True,
+    reward_norm: bool = True,
 ):
     """
     Computes returns/advantages for a sequence of transitions.
@@ -377,6 +405,12 @@ def compute_returns_and_advantages(
 
     if reward_last_only:
         R[:-1] = R[-1]
+
+    if reward_norm:
+        eps = 1e-8
+        r_mean = R.mean().detach()
+        r_std = R.std().clamp(min=eps).detach()
+        R = (R - r_mean) / r_std
 
     returns = torch.zeros_like(R)
     gae = 0.0
@@ -397,7 +431,7 @@ def compute_returns_and_advantages(
         std = advantages.std().clamp(min=eps).detach()
         advantages = (advantages - mean) / std
 
-    advantages = torch.clamp(advantages, -10.0, 10.0)
+    advantages = torch.clamp(advantages, -5.0, 5.0)
     return returns, advantages, V_critic
 
 
@@ -453,6 +487,9 @@ def auxiliary_embedding_loss(
         pos_graphs = torch.where(positives_tensor[g])[0]
         neg_graphs = torch.where(~positives_tensor[g])[0]
 
+        if not (torch.any(pos_graphs) and torch.any(neg_graphs)):
+            continue
+
         # collect node pools
         pos_pool = torch.cat([graph_to_nodes[pg] for pg in pos_graphs])
         neg_pool = torch.cat([graph_to_nodes[ng] for ng in neg_graphs])
@@ -485,19 +522,21 @@ def auxiliary_embedding_loss(
 
 def auxiliary_embedding_loss_helper(
     embs: Tensor,
-    batch,
+    batch: Tensor,
     diou_loss: Tensor,
-    persistent_to_batch_id_map: list[tuple[int, int]],
+    persistent_to_batch_id_map: dict[int, int],
     keys: dict[tuple[int, int], NDArray],
     config: ModelConfig,
 ):
-    pers_to_batch = dict(persistent_to_batch_id_map)
-
     positives = list(
         map(
-            lambda k: (pers_to_batch[k[0]], pers_to_batch[k[1]]),
+            lambda k: (
+                persistent_to_batch_id_map[k[0]],
+                persistent_to_batch_id_map[k[1]],
+            ),
             filter(
-                lambda k: k[0] in pers_to_batch and k[1] in pers_to_batch,
+                lambda k: k[0] in persistent_to_batch_id_map
+                and k[1] in persistent_to_batch_id_map,
                 keys.keys(),
             ),
         )
@@ -509,8 +548,8 @@ def auxiliary_embedding_loss_helper(
 
     # Only take the lowest losses per graph
     bottom_ks = []
-    for g in range(batch.batch.max() + 1):
-        mask = batch.batch == g
+    for g in range(batch.max() + 1):
+        mask = batch == g
         indices_of_nodes_in_graph_g = torch.nonzero(mask, as_tuple=True)[0]
         diou_loss_g_bottom_k = torch.argsort(
             diou_loss[indices_of_nodes_in_graph_g]
@@ -522,12 +561,12 @@ def auxiliary_embedding_loss_helper(
 
     assert (
         bottom_ks.shape[0]
-        <= (batch.batch.max() + 1) * config.embedding_loss_selection_k
+        <= (batch.max() + 1) * config.embedding_loss_selection_k
     ), "bottom ks too big"
 
     aux_emb_loss = auxiliary_embedding_loss(
         embs[bottom_ks],
-        batch.batch[bottom_ks],
+        batch[bottom_ks],
         positives=positives,
         top_k=config.embedding_loss_top_k,
         margin=config.embedding_loss_margin,
@@ -560,7 +599,7 @@ def actor_critic_loss(
     for i, t in enumerate(transitions):
         if t.logp is None:
             continue
-        actor_loss += -(advantages[i] * t.logp)
+        actor_loss += -(advantages[i] * t.logp).mean()
         if t.entropy is not None:
             entropy_terms.append(t.entropy)
 
@@ -583,10 +622,11 @@ def actor_critic_loss(
         if entropy_terms
         else torch.tensor(0.0, device=transitions[0].reward.device)
     )
+
     actor_loss -= entropy_coef * entropy
 
     return Metrics(
-        actor_loss=actor_loss.mean(),
+        actor_loss=actor_loss,
         critic_loss=critic_loss,
         reward=R_all,
         value=V_all,
@@ -1104,3 +1144,42 @@ def build_gats_and_layer_norms(
         )
         norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
     return gats, norms, dims[-1] * num_heads[-1]
+
+
+def build_gats_and_layer_norms_with_pooling(
+    dims: list[int],
+    num_heads: list[int],
+    pool_every_n: int = 3,
+    pool_threshold: float = 0.5,
+    pool_offset: int = 0,
+    pool_multiplier: int = 5,
+) -> tuple[ModuleList, ModuleList, ModuleList, int]:
+    """
+    Last head value is ignored since we are creating based on current dim output
+    """
+    assert len(dims) == len(num_heads) + 1
+    gats = ModuleList()
+    norms = ModuleList()
+    pools = ModuleList()
+    for i in range(len(num_heads)):
+        gats.append(
+            GATv2Conv(
+                dims[i] * (num_heads[i - 1] if i > 0 else 1),
+                dims[i + 1],
+                heads=num_heads[i],
+                concat=i < len(num_heads) - 1,
+            )
+        )
+        norms.append(LayerNorm(dims[i + 1] * num_heads[i]))
+        if (i - pool_offset) % pool_every_n == 0:
+            pools.append(
+                SAGPooling(
+                    dims[i + 1] * num_heads[i],
+                    min_score=pool_threshold,
+                    multiplier=pool_multiplier,
+                    GNN=GATv2Conv,  # type: ignore
+                )
+            )
+        else:
+            pools.append(None)  # type: ignore
+    return gats, norms, pools, dims[-1] * num_heads[-1]

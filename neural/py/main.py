@@ -25,6 +25,7 @@ from torch.utils.data.dataset import Dataset
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
+from torch_geometric.typing import torch_scatter
 
 from actor import Actor, LearningData
 from critic import MergeCritic
@@ -33,10 +34,14 @@ from utils import (
     DATA_WORKERS,
     MAX_POOL_TASKS,
     AverageAccumulator,
+    LossConfig,
     Metrics,
     ModelConfig,
     actor_critic_loss,
     auxiliary_embedding_loss_helper,
+    build_gats_and_layer_norms_with_pooling,
+    diou_loss,
+    focal_loss,
     get_projections_and_targets_for_each_batch,
     lerp,
     make_persistent_to_batch_id_map,
@@ -140,8 +145,413 @@ def find_relevant_keys_for_clustering(
     return out
 
 
-def eliminate_dupes():
-    pass
+def calculate_node_inside_ranges(
+    line_associations: Tensor,
+    ranges: Tensor,
+    mode: Literal["any", "sum", "all"] = "all",
+) -> Tensor:
+    """
+    line_associations: [N, 2]
+    ranges: [M, 2]
+    is_in_any: bool if true, only return how many ranges each node is in
+
+    Returns [N*M, 1], the portion of the range they take up, 0 if outside
+    """
+
+    assert torch.all(line_associations[:, 1] - line_associations[:, 0] > 0), (
+        "line associations have zero-length items!"
+    )
+    assert torch.all(ranges[:, 1] - ranges[:, 0] > 0), (
+        "ranges have zero-length items!"
+    )
+
+    lines = torch.repeat_interleave(line_associations, ranges.shape[0], dim=0)
+    r = ranges.repeat((line_associations.shape[0], 1))
+    assert lines.shape == r.shape, (
+        f"lines.shape={lines.shape}, r.shape={r.shape}"
+    )
+
+    inside = (lines[:, 0] >= r[:, 0]) & (lines[:, 1] <= r[:, 1])
+    if mode == "any":
+        return torch_scatter.scatter_add(
+            inside.int(),
+            torch.repeat_interleave(
+                torch.arange(
+                    line_associations.shape[0], device=line_associations.device
+                ),
+                ranges.shape[0],
+            ),
+        )
+
+    proportion = (lines[:, 1] - lines[:, 0]) / (r[:, 1] - r[:, 0])
+    assert proportion.shape == inside.shape, (
+        f"proportion.shape={proportion.shape}, inside.shape={inside.shape}"
+    )
+
+    proportion[~inside] = 0
+    assert (
+        proportion.shape[0] == line_associations.shape[0] * ranges.shape[0]
+    ), (
+        f"proportion.shape={proportion.shape}, line_associations.shape={line_associations.shape}, ranges.shape={ranges.shape}"
+    )
+
+    if mode == "sum":
+        return torch_scatter.scatter_add(
+            proportion,
+            torch.repeat_interleave(
+                torch.arange(
+                    line_associations.shape[0], device=line_associations.device
+                ),
+                ranges.shape[0],
+            ),
+        )
+
+    return proportion
+
+
+def clustering_loss(
+    x: Tensor,
+    batch: Tensor,
+    line_associations: Tensor,
+    persistent_to_batch_id_map: dict[int, int],
+    keys: dict[tuple[int, int], NDArray],
+    negative_k: int = 3,
+):
+    """
+    Ensures graphs that have keys are clustered closer together.
+    Positive clustering for nodes within key ranges,
+    negative clustering for nodes outside key ranges.
+    """
+
+    anchors, positives, negatives = [], [], []
+
+    # filter keys to only those present in this batch
+    valid_keys = [
+        (k, torch.as_tensor(v, device=x.device, dtype=torch.long))
+        for k, v in keys.items()
+        if k[0] in persistent_to_batch_id_map
+        and k[1] in persistent_to_batch_id_map
+    ]
+
+    print(f"LA: {line_associations.shape[0]} X: {x.shape}")
+
+    if not valid_keys:
+        print("WARNING: No keys present for batch")
+        return torch.tensor(0.0, device=x.device)
+
+    for k, v in valid_keys:
+        left_ranges, right_ranges = v[:, [0, 2]], v[:, [1, 3]]
+
+        left_mask = batch == persistent_to_batch_id_map[k[0]]
+        right_mask = batch == persistent_to_batch_id_map[k[1]]
+
+        assert torch.any(left_mask), (
+            f"No nodes in batch for key {k[0]} (batch_id={persistent_to_batch_id_map[k[0]]})"
+        )
+        assert torch.any(right_mask), (
+            f"No nodes in batch for key {k[1]} (batch_id={persistent_to_batch_id_map[k[1]]})"
+        )
+
+        left_nodes, right_nodes = x[left_mask], x[right_mask]
+        left_assoc, right_assoc = (
+            line_associations[left_mask],
+            line_associations[right_mask],
+        )
+
+        relevant_left = (
+            calculate_node_inside_ranges(left_assoc, left_ranges, mode="any")
+            > 0
+        )
+        relevant_right = (
+            calculate_node_inside_ranges(right_assoc, right_ranges, mode="any")
+            > 0
+        )
+
+        pos_left, pos_right = (
+            left_nodes[relevant_left],
+            right_nodes[relevant_right],
+        )
+        neg_left, neg_right = (
+            left_nodes[~relevant_left],
+            right_nodes[~relevant_right],
+        )
+
+        if pos_left.numel() == 0 or pos_right.numel() == 0:
+            print(
+                f"WARNING: No positive nodes found for graph pair {persistent_to_batch_id_map[k[0]], persistent_to_batch_id_map[k[1]]}"
+            )
+            continue
+
+        # --- Vectorized positive pairing ---
+        # All pairs between pos_left and pos_right
+        pl = pos_left.unsqueeze(1).expand(
+            -1, pos_right.size(0), -1
+        )  # (L, R, D)
+        pr = pos_right.unsqueeze(0).expand(
+            pos_left.size(0), -1, -1
+        )  # (L, R, D)
+
+        # flatten into (L*R, D)
+        pl = pl.reshape(-1, x.size(-1))
+        pr = pr.reshape(-1, x.size(-1))
+
+        # symmetric anchors/positives
+        anchors.extend([pl, pr])
+        positives.extend([pr, pl])
+
+        # --- Negative sampling ---
+        def sample_negatives(pool: Tensor, count: int) -> Tensor:
+            if pool.numel() == 0:
+                rand_idx = torch.randint(
+                    0, x.size(0), (count,), device=x.device
+                )
+                return x[rand_idx]
+            else:
+                idx = torch.randint(0, pool.size(0), (count,), device=x.device)
+                return pool[idx]
+
+        n_total = pl.size(0)  # same for pr
+        neg_r = sample_negatives(neg_right, n_total * negative_k)
+        neg_l = sample_negatives(neg_left, n_total * negative_k)
+
+        negatives.extend(
+            [
+                neg_r.view(n_total, negative_k, -1).mean(1),
+                neg_l.view(n_total, negative_k, -1).mean(1),
+            ]
+        )
+
+    if not anchors:
+        print("WARNING: No anchors present for batch")
+        return torch.tensor(0.0, device=x.device)
+
+    anchors = torch.cat(anchors, dim=0)
+    positives = torch.cat(positives, dim=0)
+    negatives = torch.cat(negatives, dim=0)
+
+    # trim negatives if oversampled
+    negatives = negatives[: anchors.size(0)]
+
+    loss_fn = torch.nn.TripletMarginLoss(margin=1.0, p=2)
+    return loss_fn(anchors, positives, negatives)
+
+
+def relevance_loss(
+    x: Tensor,
+    batch: Tensor,
+    line_associations: Tensor,
+    persistent_to_batch_id_map: dict[int, int],
+    keys_1d: list[NDArray],
+    keys_batch: list[int],
+    config: LossConfig,
+):
+    """
+    Calculates loss relevant to the keys
+    Finds nodes where key ranges overlap exactly
+    """
+
+    scores = torch.zeros((x.shape[0]), device=x.device)
+    for range, graph in zip(keys_1d, keys_batch):
+        mask = batch == graph
+        masked_scores = calculate_node_inside_ranges(
+            line_associations[mask],
+            torch.tensor(
+                range, device=line_associations.device, dtype=torch.long
+            ),
+            mode="sum",
+        )
+        scores[mask] += masked_scores
+
+    return focal_loss(
+        x, scores, alpha=config.focal_alpha, gamma=config.focal_gamma
+    )
+
+
+class TraditionalModel(nn.Module):
+    def __init__(
+        self,
+        in_dim: int,
+        hidden_dims: list[int],
+        num_heads: list[int],
+        config: ModelConfig,
+    ) -> None:
+        super().__init__()
+        dims = [in_dim] + hidden_dims
+
+        self.num_layers = len(num_heads)
+
+        self.gats, self.norms, self.pools, out_dim = (
+            build_gats_and_layer_norms_with_pooling(
+                dims,
+                num_heads,
+                config.pool_every_n,
+                config.pool_threshold,
+                config.pool_offset,
+                config.pool_multiplier,
+            )
+        )
+
+        self.importance_head = nn.Sequential(
+            nn.Linear(out_dim, out_dim),
+            nn.GELU(),
+            nn.Linear(out_dim, out_dim),
+            nn.GELU(),
+            nn.Dropout(p=config.actor.selection_dropout),
+            nn.Linear(out_dim, out_dim // 2),
+            nn.GELU(),
+            nn.Linear(out_dim // 2, out_dim // 4),
+            nn.GELU(),
+            nn.Linear(out_dim // 4, 1),
+            nn.Softplus(),
+        )
+
+        self.latent_head = nn.Sequential(
+            nn.Linear(out_dim, out_dim),
+            nn.Dropout(p=config.actor.selection_dropout),
+            nn.GELU(),
+            nn.Linear(out_dim, out_dim),
+            nn.GELU(),
+            nn.Linear(out_dim, out_dim),
+        )
+
+        self.config = config
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for layer in self.importance_head:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_normal_(layer.weight)
+
+        for layer in self.latent_head:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_normal_(layer.weight)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        edge_index: torch.Tensor,
+        batch: torch.Tensor,
+        persistent_to_batch_id_map: list[tuple[int, int]],
+        feature_spans: Tensor,
+    ):
+        print(f"start: {x.shape}")
+        for i in range(self.num_layers):
+            x = self.gats[i](x, edge_index)
+            # x = self.norms[i](x)
+            x = F.gelu(x)
+
+            if p := self.pools[i]:
+                print(f"POOL at {i}")
+                x, edge_index, _, batch, perm, _ = p(
+                    x=x, edge_index=edge_index, batch=batch
+                )
+                feature_spans = feature_spans[perm]
+
+            print(x.shape)
+
+        return (
+            self.latent_head(x),
+            self.importance_head(x).squeeze(-1),
+            edge_index,
+            batch,
+            feature_spans,
+        )
+
+
+def eval_traditional(
+    model: TraditionalModel, embedder: nn.Module, dataset: Dataset, keys
+):
+    embedder.eval()
+    model.eval()
+
+    eval_data = DataLoader(
+        dataset,  # type: ignore
+        batch_size=25,
+        shuffle=False,
+        num_workers=DATA_WORKERS,
+    )
+
+    xs = []
+    spanss = []
+    relevances = []
+    persistent_idss = []
+    with torch.no_grad():
+        for batch in eval_data:
+            p_to_b_id_dict = dict(make_persistent_to_batch_id_map(batch))
+
+            batch_to_persistent = torch.tensor(
+                list(map(int, batch.key_index))
+            ).to(DEVICE)
+
+            batch = batch.to(DEVICE)
+
+            embs = embedder(batch.x, batch.edge_index)
+
+            latent, relevance, _, b, feature_spans = model(
+                embs,
+                batch.edge_index,
+                batch.batch,
+                p_to_b_id_dict,
+                batch.lines,
+            )
+
+            assert (
+                latent.shape[0] == relevance.shape[0] == feature_spans.shape[0]
+            )
+
+            persistent_ids = batch_to_persistent[b]
+            xs.append(latent)
+            spanss.append(feature_spans)
+            relevances.append(relevance)
+            persistent_idss.append(persistent_ids)
+
+    x = torch.cat(xs, dim=0)
+    spans = torch.cat(spanss, dim=0).cpu().numpy()
+    relevance = torch.cat(relevances, dim=0).cpu().numpy()
+    persistent_ids = torch.cat(persistent_idss, dim=0).cpu().numpy()
+
+    hdbscan = HDBSCAN(cluster_selection_method="leaf")
+    hdbscan.fit(x.cpu().numpy())
+
+    assert len(hdbscan.labels_) == len(spans)
+    detections = defaultdict(set)
+    for i, label in enumerate(hdbscan.labels_):
+        row = spans[i]
+        detections[label].add((persistent_ids[i], row[0], row[1], relevance[i]))
+
+    for k, v in detections.items():
+        print(
+            "These items are not members of any cluster"
+            if k == -1
+            else f"Items in cluster {k}"
+        )
+
+        graphs_present = set(map(lambda x: x[0], v))
+        successful_graphs = {}
+        if keys is not None:
+            for k_k, k_v in keys.items():
+                a, b = k_k
+                if a in graphs_present and b in graphs_present:
+                    print(k_v)
+                    successful_graphs[a] = (
+                        b,
+                        np.hstack([k_v[:, 0].T, k_v[:, 2].T]),
+                    )
+                    successful_graphs[b] = (
+                        a,
+                        np.hstack([k_v[:, 1].T, k_v[:, 3].T]),
+                    )
+
+        for graph, start, end, relevance in v:
+            print(
+                f"Graph: {graph}, Start: {start}, End: {end}, Relevance: {relevance} {f'✅ {successful_graphs[graph]}' if graph in successful_graphs else ''}"
+            )
+
+    print(
+        f"The provided dataset yielded {len(detections.keys()) - 1} positive clusters"
+    )
+
+    # return detections
 
 
 def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
@@ -203,6 +613,204 @@ def eval(actor: Actor, embedder: nn.Module, dataset: Dataset):
         detections[label].add((persistent_ids[i], row[0], row[1]))
 
     return detections
+
+
+def run_model_batch(
+    embedder: nn.Module,
+    model: TraditionalModel,
+    batch,
+    keys,
+    config: ModelConfig,
+) -> Tensor:
+    persistent_to_batch_id_map, keys_1d, key_batch = (
+        persistent_to_batch_id_map_and_keys(batch, keys)
+    )
+
+    p_to_b_id_dict = dict(persistent_to_batch_id_map)
+
+    batch = batch.to(DEVICE)
+
+    embs = embedder(batch.x, batch.edge_index)
+
+    latent, relevance, _, b, feature_spans = model(
+        embs,
+        batch.edge_index,
+        batch.batch,
+        persistent_to_batch_id_map,
+        batch.lines,
+    )
+
+    assert latent.shape[0] == relevance.shape[0] == feature_spans.shape[0]
+
+    l_loss = clustering_loss(
+        latent,
+        b,
+        feature_spans,
+        p_to_b_id_dict,
+        keys,
+    )
+    r_loss = relevance_loss(
+        relevance,
+        b,
+        feature_spans,
+        p_to_b_id_dict,
+        keys_1d,
+        key_batch,
+        config=config.loss,
+    )
+
+    d_loss = diou_loss(
+        batch.lines.cpu().numpy(),
+        batch.edge_index.cpu().numpy(),
+        batch.batch.cpu().numpy(),
+        np.vstack(keys_1d),
+        np.vstack(key_batch),
+        k=config.embedding_loss_top_k,
+    )[0].to(DEVICE)
+
+    aux_emb_loss = auxiliary_embedding_loss_helper(
+        embs,
+        batch=batch.batch,
+        diou_loss=d_loss,
+        persistent_to_batch_id_map=p_to_b_id_dict,
+        keys=keys,
+        config=config,
+    )
+
+    aux_emb_loss = (
+        aux_emb_loss
+        if aux_emb_loss is not None
+        else torch.tensor(0.0, device=d_loss.device)
+    )
+
+    print(
+        f"Losses: Latent={l_loss.item()}, Relevance={r_loss.item()}, Auxiliary={aux_emb_loss.item()}"
+    )
+
+    loss_weights = config.loss
+    return (
+        l_loss * loss_weights.latent
+        + r_loss * loss_weights.relevance
+        + aux_emb_loss * loss_weights.auxiliary
+    )
+
+
+def train_traditional(
+    dataset: Dataset,
+    embedder: nn.Module,
+    model: TraditionalModel,
+    model_optim: optim.Optimizer,
+    start_epoch: int,
+    episodes: int,
+    keys: dict[tuple[int, int], NDArray],
+    artifact_dir: Path,
+    train_checkpoints_dir: Path,
+    config: ModelConfig,
+    keep_last_n_old_checkpoints: int = 3,
+):
+    train_set, val_set, test_set = random_split(
+        dataset,
+        make_splits(len(dataset)),  # type: ignore
+    )
+
+    train_data = DataLoader(
+        train_set,  # type: ignore
+        batch_size=config.batch_sizes.train,
+        shuffle=True,
+        num_workers=DATA_WORKERS,
+    )
+    val_data = DataLoader(
+        val_set,  # type: ignore
+        batch_size=config.batch_sizes.val,
+        shuffle=True,
+        num_workers=DATA_WORKERS,
+    )
+    test_data = DataLoader(
+        test_set,  # type: ignore
+        batch_size=config.batch_sizes.test,
+        num_workers=DATA_WORKERS,
+    )
+    for epoch in range(start_epoch, episodes):
+        print(f"\n⏰ EPOCH {epoch}")
+        embedder.train()
+        model.train()
+
+        total_model_loss = 0.0
+
+        # Train
+        for batch in train_data:
+            print(f"\n\nNEXT BATCH | EPOCH {epoch} ->")
+
+            model_loss = run_model_batch(embedder, model, batch, keys, config)
+
+            model_optim.zero_grad()
+            model_loss.backward()
+            model_optim.step()
+
+            model_loss = model_loss.item()
+            total_model_loss += model_loss
+
+            print("*" * 10 + f"\nBatch Loss:\nModel: {model_loss}\n" + "*" * 10)
+
+            del batch, model_loss
+            cleanup()
+
+        print(
+            f"~~\nTotal Training Loss for Epoch {epoch}:\nModel: {total_model_loss}\n~~"
+        )
+
+        train_checkpoints_dir_latest = train_checkpoints_dir / f"{epoch}"
+        os.makedirs(train_checkpoints_dir_latest)
+        torch.save(model, train_checkpoints_dir_latest / "model.pt")
+        torch.save(embedder, train_checkpoints_dir_latest / "embedder.pt")
+
+        for epoch_del in range(epoch - keep_last_n_old_checkpoints):
+            if os.path.exists(train_checkpoints_dir / f"{epoch_del}"):
+                shutil.rmtree(train_checkpoints_dir / f"{epoch_del}")
+
+        total_model_loss = 0.0
+        # Val
+        with torch.no_grad():
+            for batch in val_data:
+                model_loss = run_model_batch(
+                    embedder, model, batch, keys, config
+                )
+
+                total_model_loss += model_loss.item()
+
+                print(
+                    "%" * 10
+                    + f"\nValidation =====\nBatch Loss:\nModel: {model_loss}\n"
+                    + "%" * 10
+                )
+
+                del batch, model_loss
+                cleanup()
+
+        print(
+            f"~~\nTotal Validation Loss for Epoch {epoch}:\nModel: {total_model_loss}\n~~"
+        )
+
+    # Test
+    total_model_loss = 0.0
+    with torch.no_grad():
+        for batch in test_data:
+            model_loss = run_model_batch(embedder, model, batch, keys, config)
+
+            total_model_loss += model_loss.item()
+
+            print(
+                "=" * 10
+                + f"\nTest=====\nBatch Loss:\nModel: {model_loss}\n"
+                + "=" * 10
+            )
+
+            del batch, model_loss
+            cleanup()
+
+    print("Training complete")
+    torch.save(embedder, artifact_dir / "embedder_tuned.pt")
+    torch.save(model, artifact_dir / "model.pt")
 
 
 def train(
@@ -304,6 +912,8 @@ def train(
                     persistent_to_batch_id_map_and_keys(batch, keys)
                 )
 
+                p_to_b_id_dict = dict(persistent_to_batch_id_map)
+
                 selected_spans = batch.lines
                 batch = batch.to(DEVICE)
 
@@ -338,7 +948,7 @@ def train(
                     diou_loss=torch.stack(
                         [t.diou_loss for t in transitions]
                     ).mean(dim=0),
-                    persistent_to_batch_id_map=persistent_to_batch_id_map,
+                    persistent_to_batch_id_map=p_to_b_id_dict,
                     keys=keys,
                     config=config,
                 )
@@ -426,7 +1036,9 @@ def train(
                         diou_loss=torch.stack(
                             [t.diou_loss for t in transitions]
                         ).mean(dim=0),
-                        persistent_to_batch_id_map=persistent_to_batch_id_map,
+                        persistent_to_batch_id_map=dict(
+                            persistent_to_batch_id_map
+                        ),
                         keys=keys,
                         config=config,
                     )
@@ -496,14 +1108,14 @@ def train(
                     diou_loss=torch.stack(
                         [t.diou_loss for t in transitions]
                     ).mean(dim=0),
-                    persistent_to_batch_id_map=persistent_to_batch_id_map,
+                    persistent_to_batch_id_map=dict(persistent_to_batch_id_map),
                     keys=keys,
                     config=config,
                 )
 
                 actor_loss = metrics.actor_loss
                 if aux_emb_loss is not None:
-                    actor_loss += aux_emb_loss
+                    actor_loss += aux_emb_loss * config.embedding_loss_weight
                 critic_loss = metrics.critic_loss
 
                 total_actor_loss += actor_loss.item()
@@ -841,6 +1453,7 @@ def rust_train(
     # dataset = generate_dataset(edges, features, feature_spans, languages)
     languages = dataset.languages
     keys = dataset.keys
+    print(f"The provided dataset has {len(keys.keys())} keys")
     dataset = GraphDataset(dataset.loader, languages)
 
     embedding_in_features = dataset[0].x.shape[1]  # pyright: ignore reportOptionalMemberAccess
@@ -938,6 +1551,14 @@ def rust_train(
                 selection_dropout=schema.actor.selection_dropout,
             ).to(DEVICE)
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
+            model = TraditionalModel(
+                in_dim=embedding_dim,
+                hidden_dims=[embedding_dim // 2] * schema.actor.num_layers
+                + [embedding_dim],
+                num_heads=[schema.actor.num_heads] * schema.actor.num_layers
+                + [1],
+                config=schema,
+            ).to(DEVICE)
 
             start_epoch = 0
             train_checkpoints_dir = artifact_dir / "train_checkpoints"
@@ -945,14 +1566,19 @@ def rust_train(
                 files = os.listdir(train_checkpoints_dir)
                 sorted_files = list(
                     sorted(
-                        filter(
-                            lambda f: os.path.isdir(train_checkpoints_dir / f),
-                            files,
-                        )
+                        map(
+                            lambda d: int(d),
+                            filter(
+                                lambda f: os.path.isdir(
+                                    train_checkpoints_dir / f
+                                ),
+                                files,
+                            ),
+                        ),
                     )
                 )
                 if restart_from_checkpoint and sorted_files:
-                    last_complete_epoch = sorted_files[-1]
+                    last_complete_epoch = str(sorted_files[-1])
                     start_epoch = int(last_complete_epoch) + 1
 
                     print(f"🏃‍➡️ Restarting from epoch {start_epoch}")
@@ -968,20 +1594,27 @@ def rust_train(
                         weights_only=False,
                         map_location=DEVICE,
                     )
-                    actor = torch.load(
+                    model = torch.load(
                         train_checkpoints_dir
                         / last_complete_epoch
-                        / "actor.pt",
+                        / "model.pt",
                         weights_only=False,
                         map_location=DEVICE,
                     )
-                    critic = torch.load(
-                        train_checkpoints_dir
-                        / last_complete_epoch
-                        / "critic.pt",
-                        weights_only=False,
-                        map_location=DEVICE,
-                    )
+                    # actor = torch.load(
+                    #     train_checkpoints_dir
+                    #     / last_complete_epoch
+                    #     / "actor.pt",
+                    #     weights_only=False,
+                    #     map_location=DEVICE,
+                    # )
+                    # critic = torch.load(
+                    #     train_checkpoints_dir
+                    #     / last_complete_epoch
+                    #     / "critic.pt",
+                    #     weights_only=False,
+                    #     map_location=DEVICE,
+                    # )
                 else:
                     shutil.rmtree(train_checkpoints_dir)
                     os.makedirs(train_checkpoints_dir)
@@ -991,20 +1624,14 @@ def rust_train(
             with open(train_checkpoints_dir / "config.yml", mode="w") as f:
                 OmegaConf.save(schema, f)
 
-            train(
+            train_traditional(
                 dataset,
                 embedder=embedder,
-                actor=actor,
-                critic=critic,
-                actor_optim=optim.Adam(
-                    actor.parameters(),
+                model=model,
+                model_optim=optim.Adam(
+                    model.parameters(),
                     lr=schema.actor_lr,
                     weight_decay=schema.actor_wd,
-                ),
-                critic_optim=optim.Adam(
-                    critic.parameters(),
-                    lr=schema.critic_lr,
-                    weight_decay=schema.critic_wd,
                 ),
                 start_epoch=start_epoch,
                 episodes=schema.num_episodes,
@@ -1012,19 +1639,42 @@ def rust_train(
                 artifact_dir=artifact_dir / artifact_suffix,
                 train_checkpoints_dir=train_checkpoints_dir,
                 config=schema,
-                entropy_coefs=(
-                    schema.actor.entropy_start,
-                    schema.actor.entropy_end,
-                ),
-                gamma=schema.gae.gamma,
-                lam=schema.gae.lam,
             )
+
+            # train(
+            #     dataset,
+            #     embedder=embedder,
+            #     actor=actor,
+            #     critic=critic,
+            #     actor_optim=optim.Adam(
+            #         actor.parameters(),
+            #         lr=schema.actor_lr,
+            #         weight_decay=schema.actor_wd,
+            #     ),
+            #     critic_optim=optim.Adam(
+            #         critic.parameters(),
+            #         lr=schema.critic_lr,
+            #         weight_decay=schema.critic_wd,
+            #     ),
+            #     start_epoch=start_epoch,
+            #     episodes=schema.num_episodes,
+            #     keys=keys,
+            #     artifact_dir=artifact_dir / artifact_suffix,
+            #     train_checkpoints_dir=train_checkpoints_dir,
+            #     config=schema,
+            #     entropy_coefs=(
+            #         schema.actor.entropy_start,
+            #         schema.actor.entropy_end,
+            #     ),
+            #     gamma=schema.gae.gamma,
+            #     lam=schema.gae.lam,
+            # )
 
             shutil.rmtree(train_checkpoints_dir)
         case "eval":
             if not (
                 os.path.exists(artifact_dir / "embedder_tuned.pt")
-                and os.path.exists(artifact_dir / "actor.pt")
+                and os.path.exists(artifact_dir / "model.pt")
             ):
                 raise FileNotFoundError(
                     "Actor or tuned embedding weights not found in artifact dir!"
@@ -1035,10 +1685,16 @@ def rust_train(
                 weights_only=False,
                 map_location=DEVICE,
             )
-            actor = torch.load(
-                artifact_dir / "actor.pt",
+            # actor = torch.load(
+            #     artifact_dir / "actor.pt",
+            #     weights_only=False,
+            #     map_location=DEVICE,
+            # )
+            model = torch.load(
+                artifact_dir / "model.pt",
                 weights_only=False,
                 map_location=DEVICE,
             )
 
-            return eval(actor, embedder, dataset)
+            # return eval(actor, embedder, dataset)
+            eval_traditional(model, embedder, dataset, keys)
