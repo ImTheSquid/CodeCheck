@@ -248,7 +248,7 @@ async fn main() -> Result<()> {
                             .unwrap()
                             .progress_chars("#>-"));
 
-            p.set_message("avg ?s, 0 failures");
+            p.set_message("avg ?s, 0 failures, ?% success");
 
             while !p.is_finished() {
                 let start = Instant::now();
@@ -304,24 +304,32 @@ async fn main() -> Result<()> {
                 }
 
                 p.set_message(format!(
-                    "avg {}, {} failure{}",
+                    "avg {}, {} failure{}, {}% success",
                     indicatif::HumanDuration(s.checked_div(durations.len() as u32).unwrap()),
                     failures,
-                    if failures != 1 { "s" } else { "" }
+                    if failures != 1 { "s" } else { "" },
+                    ((p.position() as f32 / (failures as u64 + p.position()).max(1) as f32) * 100.0)
+                        as usize
                 ));
+
+                write_dataset(&dataset_dir, &dataset).await?;
             }
-
-            let mut f = OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .write(true)
-                .open(dataset_dir.join("dataset.json"))
-                .await?;
-
-            f.write_all(serde_json::to_string(&dataset)?.as_bytes())
-                .await?;
         }
     }
+
+    Ok(())
+}
+
+async fn write_dataset(dataset_dir: &Path, dataset: &Dataset) -> Result<()> {
+    let mut f = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(dataset_dir.join("dataset.json"))
+        .await?;
+
+    f.write_all(serde_json::to_string(&dataset)?.as_bytes())
+        .await?;
 
     Ok(())
 }

@@ -100,8 +100,8 @@ fn process_code(
     response = topic_regex.replace_all(&response, "").to_string();
 
     let code_regex = Regex::new(r#"(?ms)```([^\n]*)\n(.*?)\n?```"#)?;
-    let open_plagiarism_regex = Regex::new(r#"\s*<plag .+?>"#)?;
-    let plagiarism_regex = Regex::new(r#"(?ms)<plag (.+?)>(.*?)</plag( \1)?>"#)?;
+    let open_plagiarism_regex = Regex::new(r#"\s*<plag ?.+?>"#)?;
+    let plagiarism_regex = Regex::new(r#"(?ms)<plag ?(.+?)>(.*?)</plag( ?\1)?>"#)?;
     let mut cleaned_code: Vec<(String, Language)> = vec![];
 
     let mut plagiarism_by_id: HashMap<String, Vec<PlagiarismEvent>> = Default::default();

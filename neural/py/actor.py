@@ -243,7 +243,7 @@ class Actor(nn.Module):
         # b_start = torch.unique(torch.clone(batch))
         # start_num_graphs = b_start.shape[0]
 
-        logp_last = None
+        # logp_last = None
 
         transitions = []
         prev_reward_data = None

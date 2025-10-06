@@ -39,8 +39,8 @@ COPY neural/py/pyproject.toml .
 
 RUN uv venv --python `python3.13 --version 2>&1 | awk '{print $2}'`
 RUN . .venv/bin/activate
-RUN uv pip install torch
-RUN uv sync --no-build-isolation
+# RUN uv pip install torch
+RUN uv sync
 RUN ulimit -n 256000
 
 COPY --from=rust /src/target/release/neural /bin/

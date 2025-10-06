@@ -7,7 +7,6 @@ from typing import Literal, NamedTuple, Optional, cast
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch_scatter
 from diskcache import Cache
 from numpy.typing import NDArray
 from omegaconf.omegaconf import OmegaConf
@@ -281,8 +280,11 @@ def compute_reward(
     # Graph‑wise mean reward
     G = batch.max().item() + 1
     reward_per_graph = torch.zeros(int(G)).to(diou_l.device)
-    reward_per_graph = torch_scatter.scatter_mean(
-        node_reward, batch, dim=0, out=reward_per_graph
+    reward_per_graph = torch.zeros_like(reward_per_graph).scatter_reduce(
+        dim=0,
+        index=batch,
+        src=node_reward,
+        reduce="mean",
     )
 
     if prev_data := prev_data:
@@ -307,7 +309,12 @@ def compute_reward(
         reward_per_graph -= overly_eager_removal_penalty
 
     # Size penalty – encourage fewer nodes
-    num_nodes = torch_scatter.scatter_sum(torch.ones_like(diou_l), batch, dim=0)
+    num_nodes = torch.zeros_like(reward_per_graph).scatter_reduce(
+        index=batch,
+        dim=0,
+        src=torch.ones_like(diou_l),
+        reduce="sum",
+    )
     reward_per_graph -= size_penalty * num_nodes.float()
 
     # Missing graph penalty
@@ -354,7 +361,7 @@ def compute_incremental_reward(
     """
 
     # --- Normalize DIoU so lower = better ---
-    reward_prev = diou_to_reward(diou_prev, mode="log")
+    # reward_prev = diou_to_reward(diou_prev, mode="log")
     reward_curr = diou_to_reward(diou_curr, mode="log")
 
     # --- Aggregate graph-wise mean ---
@@ -362,8 +369,8 @@ def compute_incremental_reward(
     reward_per_graph = torch.zeros(int(G), device=diou_curr.device)
 
     if G > 0:
-        reward_per_graph = torch_scatter.scatter_mean(
-            reward_curr, batch, dim=0, out=reward_per_graph
+        reward_per_graph = torch.zeros_like(reward_per_graph).scatter_reduce(
+            0, batch, reward_curr, reduce="mean"
         )
 
     # --- Incremental improvement: how much better than last step? ---
@@ -373,8 +380,8 @@ def compute_incremental_reward(
 
     # --- Penalize excessive size ---
     if G > 0:
-        num_nodes = torch_scatter.scatter_sum(
-            torch.ones_like(diou_curr), batch, dim=0
+        num_nodes = torch.zeros_like(reward_per_graph).scatter_add(
+            0, batch, torch.ones_like(diou_curr)
         )
         reward_per_graph -= size_penalty * num_nodes.float()
 
@@ -484,8 +491,8 @@ def auxiliary_embedding_loss(
         g = batch[i].item()
 
         # which graphs are positive/negative to g
-        pos_graphs = torch.where(positives_tensor[g])[0]
-        neg_graphs = torch.where(~positives_tensor[g])[0]
+        pos_graphs = torch.where(positives_tensor[g])[0]  # type: ignore
+        neg_graphs = torch.where(~positives_tensor[g])[0]  # type: ignore
 
         if not (torch.any(pos_graphs) and torch.any(neg_graphs)):
             continue
@@ -1178,6 +1185,7 @@ def build_gats_and_layer_norms_with_pooling(
                     min_score=pool_threshold,
                     multiplier=pool_multiplier,
                     GNN=GATv2Conv,  # type: ignore
+                    nonlinearity="softmax",
                 )
             )
         else:

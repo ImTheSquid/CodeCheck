@@ -917,11 +917,7 @@ impl<'input, Input: CharStream<pythonlex::From<'input>>> BasePythonLexer<'input,
     fn get_last_two_chars_of_token<'a>(token: &'a Token<'input>) -> &'a str {
         let token_text = &token.text;
         let len = token_text.len();
-        if len < 2 {
-            ""
-        } else {
-            &token_text[len - 2..]
-        }
+        token_text.get(len - 2..).unwrap_or_default()
     }
 
     fn set_lexer_mode_by_fstring_start(&mut self) {

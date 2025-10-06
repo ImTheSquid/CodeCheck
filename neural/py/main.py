@@ -25,7 +25,6 @@ from torch.utils.data.dataset import Dataset
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
-from torch_geometric.typing import torch_scatter
 
 from actor import Actor, LearningData
 from critic import MergeCritic
@@ -173,14 +172,19 @@ def calculate_node_inside_ranges(
 
     inside = (lines[:, 0] >= r[:, 0]) & (lines[:, 1] <= r[:, 1])
     if mode == "any":
-        return torch_scatter.scatter_add(
-            inside.int(),
+        return torch.zeros(
+            line_associations.shape[0],
+            device=line_associations.device,
+            dtype=torch.long,
+        ).scatter_add(
+            0,
             torch.repeat_interleave(
                 torch.arange(
                     line_associations.shape[0], device=line_associations.device
                 ),
                 ranges.shape[0],
             ),
+            inside.long(),
         )
 
     proportion = (lines[:, 1] - lines[:, 0]) / (r[:, 1] - r[:, 0])
@@ -196,14 +200,17 @@ def calculate_node_inside_ranges(
     )
 
     if mode == "sum":
-        return torch_scatter.scatter_add(
-            proportion,
+        return torch.zeros(
+            line_associations.shape[0], device=line_associations.device
+        ).scatter_add(
+            0,
             torch.repeat_interleave(
                 torch.arange(
                     line_associations.shape[0], device=line_associations.device
                 ),
                 ranges.shape[0],
             ),
+            proportion,
         )
 
     return proportion
@@ -223,9 +230,7 @@ def clustering_loss(
     negative clustering for nodes outside key ranges.
     """
 
-    anchors, positives, negatives = [], [], []
-
-    # filter keys to only those present in this batch
+    # Filter keys to only those present in this batch
     valid_keys = [
         (k, torch.as_tensor(v, device=x.device, dtype=torch.long))
         for k, v in keys.items()
@@ -239,6 +244,7 @@ def clustering_loss(
         print("WARNING: No keys present for batch")
         return torch.tensor(0.0, device=x.device)
 
+    losses = []
     for k, v in valid_keys:
         left_ranges, right_ranges = v[:, [0, 2]], v[:, [1, 3]]
 
@@ -258,14 +264,26 @@ def clustering_loss(
             line_associations[right_mask],
         )
 
-        relevant_left = (
-            calculate_node_inside_ranges(left_assoc, left_ranges, mode="any")
-            > 0
-        )
-        relevant_right = (
-            calculate_node_inside_ranges(right_assoc, right_ranges, mode="any")
-            > 0
-        )
+        # Expand ranges until both have something
+        expansion_amount = 0
+        while True:
+            lr = left_ranges
+            lr[:, 0] -= expansion_amount
+            lr[:, 1] += expansion_amount
+            rr = right_ranges
+            rr[:, 0] -= expansion_amount
+            rr[:, 1] += expansion_amount
+            relevant_left = (
+                calculate_node_inside_ranges(left_assoc, lr, mode="any") > 0
+            )
+            relevant_right = (
+                calculate_node_inside_ranges(right_assoc, rr, mode="any") > 0
+            )
+
+            if torch.any(relevant_left) and torch.any(relevant_right):
+                break
+            else:
+                expansion_amount += 1
 
         pos_left, pos_right = (
             left_nodes[relevant_left],
@@ -296,8 +314,8 @@ def clustering_loss(
         pr = pr.reshape(-1, x.size(-1))
 
         # symmetric anchors/positives
-        anchors.extend([pl, pr])
-        positives.extend([pr, pl])
+        anchors = [pl, pr]
+        positives = [pr, pl]
 
         # --- Negative sampling ---
         def sample_negatives(pool: Tensor, count: int) -> Tensor:
@@ -314,26 +332,31 @@ def clustering_loss(
         neg_r = sample_negatives(neg_right, n_total * negative_k)
         neg_l = sample_negatives(neg_left, n_total * negative_k)
 
-        negatives.extend(
-            [
-                neg_r.view(n_total, negative_k, -1).mean(1),
-                neg_l.view(n_total, negative_k, -1).mean(1),
-            ]
+        negatives = [
+            neg_r.view(n_total, negative_k, -1).mean(1),
+            neg_l.view(n_total, negative_k, -1).mean(1),
+        ]
+
+        anchors = torch.cat(anchors, dim=0)
+        positives = torch.cat(positives, dim=0)
+        negatives = torch.cat(negatives, dim=0)
+
+        # trim negatives if oversampled
+        negatives = negatives[: anchors.size(0)]
+
+        # Divide by expansion amount to reward larger spans
+        losses.append(
+            F.triplet_margin_loss(
+                anchors, positives, negatives, margin=1.0, p=2
+            )
+            / (np.log1p(expansion_amount) + 1)
         )
 
-    if not anchors:
+    if not losses:
         print("WARNING: No anchors present for batch")
         return torch.tensor(0.0, device=x.device)
 
-    anchors = torch.cat(anchors, dim=0)
-    positives = torch.cat(positives, dim=0)
-    negatives = torch.cat(negatives, dim=0)
-
-    # trim negatives if oversampled
-    negatives = negatives[: anchors.size(0)]
-
-    loss_fn = torch.nn.TripletMarginLoss(margin=1.0, p=2)
-    return loss_fn(anchors, positives, negatives)
+    return torch.stack(losses).mean()
 
 
 def relevance_loss(
@@ -362,9 +385,15 @@ def relevance_loss(
         )
         scores[mask] += masked_scores
 
-    return focal_loss(
-        x, scores, alpha=config.focal_alpha, gamma=config.focal_gamma
-    )
+    # Weight loss based on span width, so bigger spans contribute more to the loss and are more important to get correct
+    weights = line_associations[:, 1] - line_associations[:, 0]  # span length
+    loss = (
+        focal_loss(
+            x, scores, alpha=config.focal_alpha, gamma=config.focal_gamma
+        )
+        * torch.log1p(weights)
+    ).mean()
+    return loss
 
 
 class TraditionalModel(nn.Module):
@@ -1553,7 +1582,7 @@ def rust_train(
             # critic = Critic(in_dim=features[0].shape[1], hidden_dim=20, num_heads=8).to(DEVICE)
             model = TraditionalModel(
                 in_dim=embedding_dim,
-                hidden_dims=[embedding_dim // 2] * schema.actor.num_layers
+                hidden_dims=[embedding_dim] * schema.actor.num_layers
                 + [embedding_dim],
                 num_heads=[schema.actor.num_heads] * schema.actor.num_layers
                 + [1],
