@@ -34,7 +34,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
     // Find the visitor file with the necessary trait
     // This expects to be in the root of the Cargo workspace when executed
     let path = env::current_dir().unwrap().join(PathBuf::from(format!(
-        "analysis/src/gen/{}visitor.rs",
+        "ast/src/gen/{}visitor.rs",
         name.to_token_stream().to_string().to_lowercase()
     )));
 
@@ -71,10 +71,9 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             let name = &f.sig.ident;
             let name_str = name.to_string();
 
-            let parser_rule = name_str.split('_').nth(1).unwrap().to_string();
-            let mut parser_rule_chars = parser_rule.chars().collect::<Vec<_>>();
-            parser_rule_chars[0] = parser_rule_chars[0].to_ascii_uppercase();
-            let pascal_case_parser_rule: String = parser_rule_chars.into_iter().collect();
+            let parser_rule = name_str.split_once('_').unwrap().1.to_string();
+            use convert_case::{Case, Casing};
+            let pascal_case_parser_rule: String = parser_rule.to_case(Case::Pascal);
             let pascal_case_parser_rule: Ident = syn::parse_str(&pascal_case_parser_rule).unwrap();
 
             pascal_case_parser_rule
@@ -93,7 +92,7 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
             quote! {
                 fn #name(#args) -> Self::Return {
                     // Open a tree node and make sure it was successful
-                    visitor_result!(self.symbol_tree.open(UniqueItem::new(#tree_enum::#e)));
+                    visitor_result!(self.symbol_tree.open(#tree_enum::#e));
 
                     // Visit children nodes
                     visitor_result!(self.visit_children(ctx).0);
@@ -109,11 +108,39 @@ pub fn auto_visitor(args: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
 
     let trait_name = &visitor_trait.ident;
-    let trait_name: Ident = syn::parse_str(&format!("{}Compat", trait_name)).unwrap();
+    let trait_name: Ident = syn::parse_str(&format!("{trait_name}Compat")).unwrap();
     let res = quote! {
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, ::strum::EnumIter, ::strum::AsRefStr, ::strum::VariantNames)]
         pub enum #tree_enum {
             #(#generated_enum_cases),*
+        }
+
+        impl Ord for #tree_enum {
+            fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+                self.partial_cmp(other).unwrap()
+            }
+        }
+
+        impl PartialOrd for #tree_enum {
+            fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
+                Some(if matches!(self, other) {
+                    ::std::cmp::Ordering::Equal
+                } else {
+                    self.as_ref().cmp(other.as_ref())
+                })
+            }
+        }
+
+        impl From<#tree_enum> for ::ndarray::Array1<f64> {
+            fn from(value: #tree_enum) -> Self {
+                use ::strum::IntoEnumIterator;
+                let num_cases = #tree_enum::iter().len();
+                let mut sorted = #tree_enum::iter().collect::<Vec<_>>();
+                sorted.sort_unstable();
+                let pos = sorted.iter().position(|t| *t == value).expect("value to be part of enum");
+
+                ::ndarray::Array::from_shape_fn((num_cases), |i| if i == pos { 1.0 } else { 0.0 })
+            }
         }
 
         #[allow(non_snake_case)]

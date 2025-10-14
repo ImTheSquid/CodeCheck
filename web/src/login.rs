@@ -23,9 +23,7 @@ async fn validate_login(required_role: Role) -> Result<ValidatedUser, ServerFnEr
         Some(cookie) => cookie,
     };
 
-    let res = match auth::validate_token(&data.database, cookie.value())
-        .await
-    {
+    let res = match auth::validate_token(&data.database, cookie.value()).await {
         Err(e) => {
             leptos_actix::redirect(&format!("/login?next={}", urlencoding::encode(req.path())));
             return Err(ServerFnError::ServerError(e.to_string()));

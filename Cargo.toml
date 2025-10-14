@@ -7,6 +7,10 @@ members = [
     "auth",
     "storage",
     "macros",
+    "neural",
+    "label/src-tauri",
+    "ast",
+    "data",
 ]
 resolver = "2"
 # Defines a size-optimized profile for the WASM bundle in release mode
@@ -19,4 +23,6 @@ panic = "abort"
 
 [profile.release]
 codegen-units = 1
+opt-level = "s"
 lto = "fat"
+debug = true

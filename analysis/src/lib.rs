@@ -7,11 +7,11 @@ use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::{borrow::Cow, path::PathBuf};
 
-use crate::c::{CTree, CTreeItem};
-use crate::cpp::{CppTree, CppTreeItem};
-use antlr_rust::errors::ANTLRError;
 use anyhow::Result;
-use java::{JavaTree, JavaTreeItem};
+use ast::c::{CTree, CTreeItem};
+use ast::cpp::{CppTree, CppTreeItem};
+use ast::java::{JavaTree, JavaTreeItem};
+use ast::{guess_language_from_path, Language, SyntaxTree, TreeParseError};
 use nalgebra::{DMatrix, Dyn, VecStorage};
 use rayon::prelude::*;
 use std::sync::mpsc;
@@ -19,22 +19,6 @@ use syntree::Empty;
 use thiserror::Error;
 
 use fxhash::FxHashMap;
-
-mod c;
-mod cpp;
-mod java;
-#[macro_use]
-mod gen;
-
-#[macro_export]
-macro_rules! visitor_result {
-    ($x:expr) => {
-        match $x {
-            Ok(v) => v,
-            Err(e) => return VisitorReturn(Err(TreeParseError::from(e))),
-        }
-    };
-}
 
 /// Big-O runtime complexity
 pub enum RuntimeComplexity {
@@ -54,157 +38,97 @@ pub enum RuntimeComplexity {
     Factorial,
 }
 
-/// Represents any tree for a specific language
-pub trait SyntaxTree {
-    type Item: PartialEq;
-    fn symbol_tree(
-        self,
-    ) -> Result<syntree::Tree<UniqueItem<Self::Item>, Empty, usize>, TreeParseError>;
-}
+// pub fn detect_plagiarism_in_sources<
+//     Ident: PartialEq + Clone + Send + Sync + 'static,
+//     S: AsRef<str> + Send,
+// >(
+//     sources: Vec<AssociatedStruct<'_, Ident, S>>,
+//     language: Option<Language>,
+//     progress: Option<mpsc::Sender<()>>,
+// ) -> Result<DMatrix<f64>> {
+//     if sources.is_empty() {
+//         return Ok(DMatrix::from_data(VecStorage::new(
+//             Dyn(0),
+//             Dyn(0),
+//             Vec::new(),
+//         )));
+//     }
 
-/// Any errors that may occur when generating a parse tree
-#[derive(Debug, Error)]
-pub enum TreeParseError {
-    #[error(transparent)]
-    FileError(#[from] std::io::Error),
-    #[error("Unknown language")]
-    UnknownLanguage,
-    #[error("Invalid node")]
-    InvalidNode,
-    #[error("Missing node")]
-    MissingNode,
-    #[error(transparent)]
-    TreeError(#[from] syntree::Error),
-    #[error("ANTLR Error: {0}")]
-    AntlrError(String),
-    #[error("This is a placeholder error for a temporary tree result, something else went wrong")]
-    PlaceholderError,
-    #[error("The input was empty")]
-    Empty,
-}
+//     let language = match language {
+//         None => guess_language_from_path(PathBuf::from(sources[0].source.as_ref()))?,
+//         Some(l) => l,
+//     };
 
-impl From<ANTLRError> for TreeParseError {
-    fn from(value: ANTLRError) -> Self {
-        TreeParseError::AntlrError(value.to_string())
-    }
-}
+//     Ok(match language {
+//         Language::Java => TreeCompare::comparison_matrix(
+//             convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources)
+//                 .into_iter()
+//                 .filter_map(Result::ok)
+//                 .collect(),
+//             progress,
+//         ),
+//         Language::C => TreeCompare::comparison_matrix(
+//             convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources)
+//                 .into_iter()
+//                 .filter_map(Result::ok)
+//                 .collect(),
+//             progress,
+//         ),
+//         Language::Cpp => TreeCompare::comparison_matrix(
+//             convert_sources_to_trees::<Ident, S, CppTree, CppTreeItem>(sources)
+//                 .into_iter()
+//                 .filter_map(Result::ok)
+//                 .collect(),
+//             progress,
+//         ),
+//         Language::Python => todo!(),
+//     })
+// }
 
-/// The language to be parsed
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Language {
-    Java,
-    C,
-    Cpp,
-    Python,
-}
+// fn convert_sources_to_trees<'a, 'b, Ident: ToOwned + Sync + Send, S, T, I: Send>(
+//     sources: Vec<AssociatedStruct<'b, Ident, S>>,
+// ) -> Vec<Result<AssociatedStruct<'b, Ident, Tree<I>>, TreeParseError>>
+// where
+//     S: AsRef<str> + Send + 'a,
+//     T: TryFrom<String, Error = TreeParseError> + SyntaxTree<Item = I>,
+// {
+//     // let mut out = Vec::with_capacity(sources.len());
+//     sources
+//         .into_par_iter()
+//         .map(|source| {
+//             let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
+//             match T::try_from(inner_value) {
+//                 Ok(t) => match t.symbol_tree() {
+//                     Ok(st) => Ok(AssociatedStruct {
+//                         owner: source.owner.clone(),
+//                         source: source.source.clone(),
+//                         inner: st,
+//                     }),
+//                     Err(e) => Err(e),
+//                 },
+//                 Err(e) => Err(e),
+//             }
+//         })
+//         .collect::<Vec<_>>()
+//     // for source in sources {
+//     //     let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
+//     //     match T::try_from(inner_value) {
+//     //         Ok(t) => match t.symbol_tree() {
+//     //             Ok(st) => out.push(AssociatedStruct {
+//     //                 owner: source.owner.clone(),
+//     //                 source: source.source.clone(),
+//     //                 inner: st,
+//     //             }),
+//     //             Err(e) => return Err(e),
+//     //         },
+//     //         Err(e) => return Err(e),
+//     //     }
+//     // }
+//     // out
+// }
 
-/// Attempts to guess the language of the file using a path
-fn guess_language_from_path(path: PathBuf) -> Result<Language, TreeParseError> {
-    match path
-        .extension()
-        .ok_or(TreeParseError::UnknownLanguage)?
-        .to_str()
-        .ok_or(TreeParseError::UnknownLanguage)?
-    {
-        "java" => Ok(Language::Java),
-        "py" => Ok(Language::Python),
-        "c" | "h" => Ok(Language::C),
-        "cpp" | "cc" | "hh" | "cxx" | "hpp" | "hxx" => Ok(Language::Cpp),
-        _ => Err(TreeParseError::UnknownLanguage),
-    }
-}
-
-pub fn detect_plagiarism_in_sources<
-    Ident: PartialEq + Clone + Send + Sync + 'static,
-    S: AsRef<str> + Send,
->(
-    sources: Vec<AssociatedStruct<'_, Ident, S>>,
-    language: Option<Language>,
-    progress: Option<mpsc::Sender<()>>,
-) -> Result<DMatrix<f64>> {
-    if sources.is_empty() {
-        return Ok(DMatrix::from_data(VecStorage::new(
-            Dyn(0),
-            Dyn(0),
-            Vec::new(),
-        )));
-    }
-
-    let language = match language {
-        None => guess_language_from_path(PathBuf::from(sources[0].source.as_ref()))?,
-        Some(l) => l,
-    };
-
-    Ok(match language {
-        Language::Java => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, JavaTree, JavaTreeItem>(sources)
-                .into_iter()
-                .filter_map(Result::ok)
-                .collect(),
-            progress,
-        ),
-        Language::C => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CTree, CTreeItem>(sources)
-                .into_iter()
-                .filter_map(Result::ok)
-                .collect(),
-            progress,
-        ),
-        Language::Cpp => TreeCompare::comparison_matrix(
-            convert_sources_to_trees::<Ident, S, CppTree, CppTreeItem>(sources)
-                .into_iter()
-                .filter_map(Result::ok)
-                .collect(),
-            progress,
-        ),
-        Language::Python => todo!(),
-    })
-}
-
-fn convert_sources_to_trees<'a, 'b, Ident: ToOwned + Sync + Send, S, T, I: Send>(
-    sources: Vec<AssociatedStruct<'b, Ident, S>>,
-) -> Vec<Result<AssociatedStruct<'b, Ident, Tree<I>>, TreeParseError>>
-where
-    S: AsRef<str> + Send + 'a,
-    T: TryFrom<String, Error = TreeParseError> + SyntaxTree<Item = I>,
-{
-    // let mut out = Vec::with_capacity(sources.len());
-    sources
-        .into_par_iter()
-        .map(|source| {
-            let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
-            match T::try_from(inner_value) {
-                Ok(t) => match t.symbol_tree() {
-                    Ok(st) => Ok(AssociatedStruct {
-                        owner: source.owner.clone(),
-                        source: source.source.clone(),
-                        inner: st,
-                    }),
-                    Err(e) => Err(e),
-                },
-                Err(e) => Err(e),
-            }
-        })
-        .collect::<Vec<_>>()
-    // for source in sources {
-    //     let inner_value = source.inner.as_ref().to_owned(); // Clone or convert as needed
-    //     match T::try_from(inner_value) {
-    //         Ok(t) => match t.symbol_tree() {
-    //             Ok(st) => out.push(AssociatedStruct {
-    //                 owner: source.owner.clone(),
-    //                 source: source.source.clone(),
-    //                 inner: st,
-    //             }),
-    //             Err(e) => return Err(e),
-    //         },
-    //         Err(e) => return Err(e),
-    //     }
-    // }
-    // out
-}
-
-type Tree<TreeItem> = syntree::Tree<UniqueItem<TreeItem>, Empty, usize>;
-type Node<'a, TreeItem> = syntree::Node<'a, UniqueItem<TreeItem>, Empty, usize>;
+type Tree<TreeItem> = syntree::Tree<UniqueItem<TreeItem>, usize, usize>;
+type Node<'a, TreeItem> = syntree::Node<'a, UniqueItem<TreeItem>, usize, usize>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct UniqueItem<Item> {
@@ -548,7 +472,8 @@ impl<'tree, Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + Part
             return *contain_count;
         }
 
-        let containment = self.trees
+        let containment = self
+            .trees
             .par_iter()
             .filter(|tree| self.subtree_appearances_in_tree(subtree, tree, true) > 0)
             .count();
@@ -644,26 +569,6 @@ impl<'tree, Ident: PartialEq + Sync + Send + Clone, TreeItem: Sync + Send + Part
     ) -> f64 {
         self.cnt(subtree, tree) / self.n(&tree.first().unwrap()) as f64
     }
-}
-
-#[derive(Debug)]
-pub struct VisitorReturn<T>(Result<T, TreeParseError>);
-
-impl<T> Default for VisitorReturn<T> {
-    fn default() -> Self {
-        Self(Err(TreeParseError::PlaceholderError))
-    }
-}
-
-#[cfg(test)]
-#[macro_export]
-macro_rules! test_parse {
-    ($name: ident, $lang: ident, $code: expr) => {
-        #[test]
-        fn $name() {
-            $lang::try_from($code.to_owned()).unwrap();
-        }
-    };
 }
 
 #[cfg(test)]

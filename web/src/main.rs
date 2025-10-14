@@ -6,8 +6,14 @@ async fn main() -> std::io::Result<()> {
     {
         let args = args();
         if args.len() > 1 {
-            let job_data = args.skip(1).next().expect("a second value from the iterator");
-            jobs::job_main(serde_json::from_str(&job_data).expect("job data to have a valid format")).await;
+            let job_data = args
+                .skip(1)
+                .next()
+                .expect("a second value from the iterator");
+            jobs::job_main(
+                serde_json::from_str(&job_data).expect("job data to have a valid format"),
+            )
+            .await;
         }
     }
 

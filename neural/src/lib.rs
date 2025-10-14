@@ -1,0 +1,299 @@
+#![feature(new_range_api)]
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
+
+use std::{
+    collections::{HashMap, HashSet},
+    env::current_exe,
+    ffi::{CStr, CString},
+    fs::read_to_string,
+    io::Cursor,
+    path::PathBuf,
+    range::Range,
+};
+
+use pyo3::{
+    ffi::c_str,
+    intern,
+    prelude::*,
+    types::{PyDict, PyDictMethods, PyList, PySet},
+};
+use util::Mark;
+
+use crate::data::{rust_data, TmpDirDataset};
+
+// pub mod contrastive;
+// pub mod critic;
+pub mod data;
+// pub mod elu;
+// pub mod gat;
+// pub mod loss;
+// pub mod model;
+// pub mod node_process;
+// pub mod sequential;
+
+// fn leaky_gain(slope: f64) -> f64 {
+//     (2.0 / (1.0 + slope.powi(2))).sqrt()
+// }
+
+const AST_NAME_EMBEDDINGS: &[u8] = include_bytes!("ast_name_embeddings.npz");
+
+mod python_files {
+    use std::ffi::CStr;
+
+    use pyo3::ffi::c_str;
+    pub const MAIN: &CStr = c_str!(include_str!("../py/main.py"));
+    pub const ACTOR: &CStr = c_str!(include_str!("../py/actor.py"));
+    pub const CRITIC: &CStr = c_str!(include_str!("../py/critic.py"));
+    pub const GRAPHHAM: &CStr = c_str!(include_str!("../py/graphham.py"));
+    pub const EMBEDDING: &CStr = c_str!(include_str!("../py/embedding.py"));
+    pub const UTILS: &CStr = c_str!(include_str!("../py/utils.py"));
+}
+
+#[allow(unused)]
+fn debug_python_env(py: Python<'_>) {
+    let sys = py.import("sys").unwrap();
+    let version: String = sys.getattr("version").unwrap().extract().unwrap();
+    println!("Python version: {version}");
+
+    let prefix: String = sys.getattr("prefix").unwrap().extract().unwrap();
+    println!("Python prefix: {prefix}");
+
+    let executable: String = sys.getattr("executable").unwrap().extract().unwrap();
+    println!("Python executable: {executable}");
+
+    let python_path = sys.getattr("path").unwrap();
+    let python_path: Vec<String> = python_path.extract().unwrap();
+    println!("Python path: {python_path:?}");
+
+    let os = py.import("os").unwrap();
+    let path: String = os
+        .getattr("getcwd")
+        .unwrap()
+        .call0()
+        .unwrap()
+        .extract()
+        .unwrap();
+    println!("Current directory: {path}");
+}
+
+pub fn add_rust_data(py: Python<'_>) -> PyResult<()> {
+    let rd = rust_data::_PYO3_DEF.make_module(py, rust_data::__PYO3_GIL_USED)?;
+    let sys = PyModule::import(py, "sys")?;
+    let py_modules: Bound<'_, PyDict> = sys.getattr("modules")?.downcast_into()?;
+
+    py_modules.set_item("rust_data", rd)?;
+
+    Ok(())
+}
+
+pub fn mp_mode(py: Python<'_>) -> PyResult<()> {
+    let sys = PyModule::import(py, "sys")?;
+    let argv: Bound<'_, PyList> = sys.getattr("argv")?.downcast_into()?;
+    argv.append("--multiprocessing-fork")?;
+
+    Ok(())
+}
+
+fn force_load_if_given(dir: &Option<PathBuf>, name: &str, alternative: &CStr) -> CString {
+    match dir {
+        Some(dir) => CString::new(
+            read_to_string(dir.join(name))
+                .unwrap_or_else(|_| panic!("Could not find {name} in {dir:?}")),
+        )
+        .expect("valid cstr"),
+        None => alternative.to_owned(),
+    }
+}
+
+pub fn initialize_python(
+    py: Python<'_>,
+    venv_location: Option<PathBuf>,
+    alternative_load_location: Option<PathBuf>,
+) {
+    if let Some(location) = venv_location {
+        let location = location.join("bin/activate_this.py");
+        let location = location.to_string_lossy();
+        let code = format!(
+            r#"
+activate_this = "{location}"
+exec(open(activate_this).read(), {{'__file__': activate_this}})"#
+        );
+
+        py.run(
+            CString::new(code).expect("valid cstr").as_c_str(),
+            None,
+            None,
+        )
+        .unwrap();
+    }
+
+    PyModule::import(py, "sys")
+        .unwrap()
+        .setattr("executable", current_exe().unwrap().to_string_lossy())
+        .unwrap();
+
+    // debug_python_env(py);
+
+    assert!(
+        py.import("math").is_ok(),
+        "Sanity check failed: Something is very wrong, math import failed!"
+    );
+
+    assert!(
+        py.import("_ctypes").is_ok(),
+        "Sanity check failed: Something is very wrong, _ctypes import failed! Make sure venv and system python versions are the same."
+    );
+
+    assert!(
+        py.import("torch").is_ok(),
+        "Sanity check failed: PyTorch not found! Ensure a virtual environment is present with the necessary packages."
+    );
+
+    PyModule::from_code(
+        py,
+        &force_load_if_given(&alternative_load_location, "utils.py", python_files::UTILS),
+        c_str!("utils.py"),
+        c_str!("utils"),
+    )
+    .expect("Import utils");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(&alternative_load_location, "actor.py", python_files::ACTOR),
+        c_str!("actor.py"),
+        c_str!("actor"),
+    )
+    .expect("Import actor");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(
+            &alternative_load_location,
+            "critic.py",
+            python_files::CRITIC,
+        ),
+        c_str!("critic.py"),
+        c_str!("critic"),
+    )
+    .expect("Import critic");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(
+            &alternative_load_location,
+            "graphham.py",
+            python_files::GRAPHHAM,
+        ),
+        c_str!("graphham.py"),
+        c_str!("graphham"),
+    )
+    .expect("Import graphham");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(
+            &alternative_load_location,
+            "embedding.py",
+            python_files::EMBEDDING,
+        ),
+        c_str!("embedding.py"),
+        c_str!("embedding"),
+    )
+    .expect("Import embedding");
+    PyModule::from_code(
+        py,
+        &force_load_if_given(&alternative_load_location, "main.py", python_files::MAIN),
+        c_str!("main.py"),
+        c_str!("codecheck"),
+    )
+    .expect("Import main");
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyData {
+    pub a: usize,
+    pub b: usize,
+    pub marks: Vec<Mark>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EvaluationResult {
+    pub id: usize,
+    pub range: Range<usize>,
+}
+
+pub fn eval(
+    py: Python<'_>,
+    dataset: TmpDirDataset,
+    artifact_dir: &str,
+    config_dir: &str,
+    device: Option<String>,
+) -> PyResult<HashMap<isize, Vec<EvaluationResult>>> {
+    let codecheck = py.import("codecheck")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dataset", dataset)?;
+    kwargs.set_item("artifact_dir", artifact_dir)?;
+    kwargs.set_item("config_dir", config_dir)?;
+    kwargs.set_item("mode", "eval")?;
+    kwargs.set_item("ast_embeddings", None::<usize>)?;
+    kwargs.set_item("top_k", None::<usize>)?;
+    kwargs.set_item("device", device)?;
+
+    let res = codecheck
+        .getattr(intern!(py, "rust_train"))
+        .expect("codecheck module to contain rust entry point")
+        .call((), Some(&kwargs))?;
+
+    let res = res.downcast_into::<PyDict>()?;
+
+    let res = res
+        .iter()
+        .map(|(k, v)| {
+            let k: isize = k.extract()?;
+            let v: HashSet<(usize, usize, usize)> = v.downcast_into::<PySet>()?.extract()?;
+            let v = v
+                .into_iter()
+                .map(|(id, start, end)| EvaluationResult {
+                    id,
+                    range: std::range::Range { start, end },
+                })
+                .collect();
+
+            Ok::<(isize, Vec<EvaluationResult>), PyErr>((k, v))
+        })
+        .collect::<Result<HashMap<isize, Vec<EvaluationResult>>, PyErr>>()?;
+
+    Ok(res)
+}
+
+pub fn train(
+    py: Python<'_>,
+    dataset: TmpDirDataset,
+    mode: &str,
+    artifact_dir: &str,
+    config_dir: &str,
+    top_k: usize,
+    device: Option<String>,
+) -> PyResult<()> {
+    let mut ast_embeddings =
+        ndarray_npy::NpzReader::new(Cursor::new(AST_NAME_EMBEDDINGS)).expect("valid read");
+    let emb: ndarray::Array2<f32> = ast_embeddings
+        .by_name("embeddings")
+        .expect("has embeddings");
+
+    let codecheck = py.import("codecheck")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dataset", dataset)?;
+    kwargs.set_item("artifact_dir", artifact_dir)?;
+    kwargs.set_item("config_dir", config_dir)?;
+    kwargs.set_item("mode", mode)?;
+    kwargs.set_item("ast_embeddings", numpy::PyArray2::from_array(py, &emb))?;
+    kwargs.set_item("top_k", top_k)?;
+    kwargs.set_item("device", device)?;
+
+    codecheck
+        .getattr(intern!(py, "rust_train"))
+        .expect("codecheck module to contain rust entry point")
+        .call((), Some(&kwargs))?;
+
+    Ok(())
+}

@@ -10,7 +10,8 @@ async fn check_setup_status() -> Result<bool, ServerFnError> {
 
     let data: Data<WebState> = extract().await?;
 
-    let complete = data.config
+    let complete = data
+        .config
         .read()
         .expect("Failed to get read lock for config!")
         .setup_complete;
@@ -31,8 +32,7 @@ async fn complete_setup() -> Result<(), ServerFnError> {
         .write()
         .expect("Failed to get write lock for config!");
     write.setup_complete = true;
-    write
-        .write().expect("config write to succeed");
+    write.write().expect("config write to succeed");
     Ok(())
 }
 
@@ -93,8 +93,7 @@ async fn setup_files(vocareum_api_key: String) -> Result<(), ServerFnError> {
     } else {
         Some(vocareum_api_key)
     };
-    write
-        .write().expect("write op to succeed");
+    write.write().expect("write op to succeed");
     Ok(())
 }
 

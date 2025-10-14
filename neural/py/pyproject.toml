@@ -1,0 +1,23 @@
+[project]
+name = "codecheck-py"
+version = "0.1.0"
+description = "The Python portion of the CodeCheck project"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "diskcache>=5.6.3",
+    "matplotlib>=3.10.3",
+    "numpy>=2.3.0",
+    "omegaconf>=2.3.0",
+    "pandas>=2.3.1",
+    "plotly>=6.2.0",
+    "progress>=1.6.1",
+    "scikit-learn>=1.6.1",
+    "seaborn>=0.13.2",
+    "tabulate>=0.9.0",
+    "torch>=2.8",
+    "torch-geometric>=2.6.1",
+]
+
+[tool.pyright]
+reportRedeclaration = "none"

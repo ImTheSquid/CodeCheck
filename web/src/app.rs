@@ -105,7 +105,10 @@ fn NotFound() -> impl IntoView {
 }
 
 #[server(LookupUsers)]
-async fn lookup_users(query: String, role_requirement: RoleRequirement) -> Result<Vec<HumanReadableUser>, ServerFnError> {
+async fn lookup_users(
+    query: String,
+    role_requirement: RoleRequirement,
+) -> Result<Vec<HumanReadableUser>, ServerFnError> {
     use crate::server::WebState;
     use actix_web::web::Data;
     use db::models::User;
@@ -152,18 +155,17 @@ async fn lookup_users(query: String, role_requirement: RoleRequirement) -> Resul
         .map(from_document)
         .try_collect::<Vec<User>>()?
         .into_iter()
-        .filter_map(|user| 
+        .filter_map(|user| {
             if role_requirement.includes_role(user.role) {
-                Some(
-                    HumanReadableUser {
-                        id: user.id.expect("id to exist").to_hex(),
-                        username: user.username,
-                        name: user.name,
+                Some(HumanReadableUser {
+                    id: user.id.expect("id to exist").to_hex(),
+                    username: user.username,
+                    name: user.name,
                 })
             } else {
                 None
             }
-        )
+        })
         .collect();
 
     Ok(found_users)

@@ -1,8 +1,8 @@
+use crate::{HumanReadableUser, RoleRequirement};
 use leptos::{html::Dialog, *};
 use leptos_meta::*;
 use leptos_router::*;
 use styled::style;
-use crate::{HumanReadableUser, RoleRequirement};
 pub mod sidebar;
 
 #[component]
@@ -13,8 +13,9 @@ pub fn Home() -> impl IntoView {
 }
 
 #[component]
-pub fn UserManagementList(users: RwSignal<Vec<HumanReadableUser>>, role_requirement: RoleRequirement) -> impl IntoView {
-    view! {
-
-    }
+pub fn UserManagementList(
+    users: RwSignal<Vec<HumanReadableUser>>,
+    role_requirement: RoleRequirement,
+) -> impl IntoView {
+    view! {}
 }
